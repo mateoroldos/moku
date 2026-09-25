@@ -1,0 +1,24 @@
+{
+  "name": "@moku/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./human-task-directory": "./src/human-task/human-task-directory.ts",
+    "./human-task-store": "./src/human-task/human-task-store.ts",
+    "./test/crypto-deterministic": "./src/test/crypto-deterministic.ts",
+    "./test/human-task-store-memory": "./src/human-task/human-task-store-memory.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@moku/domain": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "vitest": "catalog:"
+  }
+}

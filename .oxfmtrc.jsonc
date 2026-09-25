@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  // Keep upstream skill bundles unchanged; format the project-owned skill.
+  "ignorePatterns": [".agents/skills/*/**", "!.agents/skills/moku/**"],
+}

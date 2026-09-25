@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Knip cannot follow member access through self-named namespace exports.
+  "exclude": ["exports", "types"],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts"],
+    },
+  },
+}

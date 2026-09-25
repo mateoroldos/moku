@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/@effect/tsgo/oxlint-schema.json",
+  "extends": ["./node_modules/@effect/tsgo/oxlint-presets/recommended.json"],
+  "ignorePatterns": [".agents/**", "node_modules/**", "tools/oxlint/anti-slop/**"],
+  "jsPlugins": [
+    { "name": "workspace-boundaries", "specifier": "./tools/oxlint/workspace-boundaries.ts" },
+    { "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" },
+    { "name": "anti-slop-effect", "specifier": "./tools/oxlint/anti-slop/effect/index.ts" }
+  ],
+  "rules": {
+    "workspace-boundaries/no-cross-workspace-imports": "error",
+    "typescript/no-require-imports": "error",
+    "oxc/no-barrel-file": "error",
+    "vitest/no-restricted-vi-methods": [
+      "error",
+      {
+        "mock": "Use substitute Layers instead of module mocks."
+      }
+    ],
+    "anti-slop/no-chained-type-assertions": "error",
+    "anti-slop/no-conditional-empty-object-spread": "error",
+    "anti-slop/no-known-value-widening": "error",
+    "anti-slop/no-module-mocking": "error",
+    "anti-slop/no-object-parameters": "error",
+    "anti-slop/no-reflect-apply": "error",
+    "anti-slop/no-reflect-get": "error",
+    "anti-slop/no-runtime-typeof": "error",
+    "anti-slop/no-shape-in-symbol-names": "error",
+    "anti-slop/no-unknown-parameters": "error",
+    "anti-slop/no-unknown-returns": "error",
+    "anti-slop/no-unknown-type-aliases": "error",
+    "anti-slop/no-unsafe-dictionary-type": "error",
+    "anti-slop/no-widen-then-assert": "error",
+    "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "anti-slop-effect/no-service-constructor-imports": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "scripts/check-guidance.ts",
+        "scripts/check-guidance.test.ts",
+        "scripts/check-workspaces.test.ts"
+      ],
+      "rules": {
+        // These small tooling CLIs/tests use direct filesystem/process I/O; application Effect conventions still apply elsewhere.
+        "effecttsgo/node-builtin-import": "off"
+      }
+    }
+  ]
+}
