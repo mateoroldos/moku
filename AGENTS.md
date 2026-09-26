@@ -11,7 +11,9 @@ Use the [Moku workflow](.agents/skills/moku/SKILL.md) when changing this reposit
 
 ## Validation
 
-Run focused checks while working; finish with `bun run check`.
-Packages export TypeScript source, so there is no build step yet.
-Report commands, failures, and unverified behavior. Keep guidance accurate when
-its owning code changes.
+Run the smallest checks justified by the change. Trivial cosmetic edits may need
+no automated checks; judge the affected behavior, not the number of changed lines.
+Run `bun run check` for broader changes or before landing. For documentation-only
+changes, run `bun run check:guidance`. Build when compilation or bundling is affected.
+Report what was checked, failures, and unverified behavior, or why checks were
+skipped. Keep guidance accurate when its owning code changes.

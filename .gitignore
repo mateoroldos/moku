@@ -3,6 +3,8 @@ node_modules/
 *.tsbuildinfo
 coverage/
 dist/
+.svelte-kit/
+.svelte-check/
 .env
 .env.*
 !.env.example

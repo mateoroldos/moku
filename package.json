@@ -2,10 +2,13 @@
   "name": "moku",
   "private": true,
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "type": "module",
   "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
     "check": "bun run format:check && bun run lint && bun run check:guidance && bun run check:workspaces && bun run knip && bun run check-types && bun run test",
     "check:guidance": "bun scripts/check-guidance.ts",
     "check:workspaces": "bun scripts/check-workspaces.ts",
@@ -36,6 +39,9 @@
   },
   "packageManager": "bun@1.4.0",
   "catalog": {
+    "@tailwindcss/vite": "4.3.3",
+    "svelte": "5.57.0",
+    "tailwindcss": "4.3.3",
     "@effect/vitest": "4.0.0-rc.112",
     "effect": "4.0.0-rc.112",
     "vitest": "4.1.11"

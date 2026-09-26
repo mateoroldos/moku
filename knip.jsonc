@@ -6,5 +6,9 @@
     ".": {
       "entry": ["scripts/*.ts"],
     },
+    "packages/ui": {
+      // svelte-check selects the TypeScript 7 alias through --tsgo.
+      "ignoreDependencies": ["@typescript/native"],
+    },
   },
 }
