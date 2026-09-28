@@ -1,14 +1,15 @@
 # Architecture
 
-| Workspace         | Owns                                                     | Internal dependencies |
-| ----------------- | -------------------------------------------------------- | --------------------- |
-| `packages/domain` | Shared values, schemas, and domain decisions             | None                  |
-| `packages/core`   | Application policy, operation inputs, and required ports | Domain                |
-| `packages/ui`     | Shared Svelte components and visual vocabulary           | None                  |
-| `apps/web`        | Routes, rendering, and browser interactions              | UI                    |
+| Workspace                    | Owns                                                     | Internal dependencies |
+| ---------------------------- | -------------------------------------------------------- | --------------------- |
+| `packages/domain`            | Shared values, schemas, and domain decisions             | None                  |
+| `packages/core`              | Application policy, operation inputs, and required ports | Domain                |
+| `packages/ui`                | Shared Svelte components and visual vocabulary           | None                  |
+| `adapters/database-postgres` | PostgreSQL persistence and migrations                    | Core, domain          |
+| `apps/web`                   | Routes, rendering, and browser interactions              | UI                    |
 
 Domain and core stay independent of frameworks, SQL, and provider SDKs.
-Core owns domain-shaped ports and their expected failures. Future adapters translate
+Core owns domain-shaped ports and their expected failures. Adapters translate
 technology into those contracts; entrypoints choose implementations.
 
 As the [review model](../../../../VISION.md#scope) is implemented, domain owns

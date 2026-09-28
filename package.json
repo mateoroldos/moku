@@ -2,14 +2,21 @@
   "name": "moku",
   "private": true,
   "workspaces": [
+    "adapters/*",
     "apps/*",
     "packages/*"
   ],
   "type": "module",
   "scripts": {
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:generate": "bun run --cwd adapters/database-postgres db:generate",
+    "db:migrate": "bun run --cwd adapters/database-postgres db:migrate",
+    "test:postgres": "bun run --cwd adapters/database-postgres test:postgres",
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "check": "bun run format:check && bun run lint && bun run check:guidance && bun run check:workspaces && bun run knip && bun run check-types && bun run test",
+    "check": "bun run format:check && bun run lint && bun run check:guidance && bun run check:workspaces && bun run db:check && bun run knip && bun run check-types && bun run test",
+    "db:check": "bun scripts/check-migrations.ts",
     "check:guidance": "bun scripts/check-guidance.ts",
     "check:workspaces": "bun scripts/check-workspaces.ts",
     "check-types": "tsc --noEmit && turbo check-types",
@@ -37,8 +44,18 @@
     "typescript": "7.0.2",
     "vitest": "catalog:"
   },
+  "overrides": {
+    "@effect/platform-node-shared": "4.0.0-rc.112"
+  },
   "packageManager": "bun@1.4.0",
   "catalog": {
+    "@effect/platform-node": "4.0.0-rc.112",
+    "@effect/sql-pg": "4.0.0-rc.112",
+    "@effect/sql-pglite": "4.0.0-rc.112",
+    "@electric-sql/pglite": "0.5.7",
+    "drizzle-orm": "1.0.0-rc.5-ab785fc",
+    "drizzle-kit": "1.0.0-rc.5-ab785fc",
+    "pg": "8.23.0",
     "@tailwindcss/vite": "4.3.3",
     "svelte": "5.57.0",
     "tailwindcss": "4.3.3",

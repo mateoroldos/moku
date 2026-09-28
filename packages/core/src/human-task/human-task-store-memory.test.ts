@@ -3,6 +3,11 @@ import { PendingHumanTask, HumanTaskId, HumanTaskTitle } from "@moku/domain/huma
 import { DateTime, Effect, Result } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
+import { HumanTaskStoreContract } from "../test/human-task-store-contract.ts";
+
+it.effect("honors the shared store lifecycle contract", () =>
+  HumanTaskStoreContract.lifecycle.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
 
 it.effect("shares persisted tasks within a build and isolates separate builds", () =>
   Effect.gen(function* () {

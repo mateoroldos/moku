@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17.9-bookworm
+    environment:
+      POSTGRES_USER: moku
+      POSTGRES_PASSWORD: moku
+      POSTGRES_DB: moku
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moku -d moku"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:

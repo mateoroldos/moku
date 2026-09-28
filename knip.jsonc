@@ -3,6 +3,9 @@
   // Knip cannot follow member access through self-named namespace exports.
   "exclude": ["exports", "types"],
   "workspaces": {
+    "adapters/database-postgres": {
+      "entry": ["src/**/*.test.ts"],
+    },
     ".": {
       "entry": ["scripts/*.ts"],
     },

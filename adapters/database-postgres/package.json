@@ -1,0 +1,33 @@
+{
+  "name": "@moku/database-postgres",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/persistence-postgres.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "vitest run src/human-task",
+    "test:postgres": "vitest run --config vitest.postgres.config.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun --env-file=../../.env src/migrate.ts"
+  },
+  "dependencies": {
+    "@effect/sql-pg": "catalog:",
+    "@moku/core": "workspace:*",
+    "@moku/domain": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-pglite": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@electric-sql/pglite": "catalog:",
+    "@types/pg": "8.20.0",
+    "drizzle-kit": "catalog:",
+    "vitest": "catalog:"
+  }
+}

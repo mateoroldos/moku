@@ -7,6 +7,7 @@
     "./human-task-directory": "./src/human-task/human-task-directory.ts",
     "./human-task-store": "./src/human-task/human-task-store.ts",
     "./test/crypto-deterministic": "./src/test/crypto-deterministic.ts",
+    "./test/human-task-store-contract": "./src/test/human-task-store-contract.ts",
     "./test/human-task-store-memory": "./src/human-task/human-task-store-memory.ts"
   },
   "scripts": {

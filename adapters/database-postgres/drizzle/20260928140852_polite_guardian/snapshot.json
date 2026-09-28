@@ -1,0 +1,147 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "9892dc9e-cf5e-409e-b166-02e663adba11",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "human_tasks",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "intent",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "subject",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "context",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "response",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "status",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "result",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "timestamp(3) with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "completed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "human_tasks_pkey",
+      "schema": "public",
+      "table": "human_tasks",
+      "entityType": "pks"
+    },
+    {
+      "value": "(\n    \"status\" = 'pending' AND \"result\" IS NULL AND \"completed_at\" IS NULL\n  ) OR (\n    \"status\" = 'completed' AND \"result\" IS NOT NULL AND \"completed_at\" IS NOT NULL\n  )",
+      "name": "human_tasks_lifecycle",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "human_tasks"
+    }
+  ],
+  "renames": []
+}
