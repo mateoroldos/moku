@@ -7,7 +7,11 @@ interface Workspace {
 export const workspaceScope = "@moku/";
 
 export const workspaces: ReadonlyArray<Workspace> = [
-  { name: "@moku/web", directory: "apps/web", dependencies: ["@moku/ui"] },
+  {
+    name: "@moku/web",
+    directory: "apps/web",
+    dependencies: ["@moku/ui", "@moku/core", "@moku/database-postgres"],
+  },
   {
     name: "@moku/database-postgres",
     directory: "adapters/database-postgres",

@@ -1,9 +1,12 @@
 name: Setup workspace
-description: Install the pinned Bun toolchain and workspace dependencies.
+description: Install Node 24, the pinned Bun toolchain, and workspace dependencies.
 
 runs:
   using: composite
   steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "24"
     - uses: oven-sh/setup-bun@v2
       with:
         bun-version-file: package.json

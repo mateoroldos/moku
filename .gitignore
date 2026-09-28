@@ -4,6 +4,7 @@ node_modules/
 coverage/
 dist/
 .svelte-kit/
+apps/web/build/
 .svelte-check/
 .env
 .env.*

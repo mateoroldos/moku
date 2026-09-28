@@ -3,12 +3,15 @@
   "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "dev": {
+      "passThroughEnv": ["DATABASE_URL"],
       "cache": false,
       "persistent": true
     },
     "build": {
+      "env": ["ORIGIN"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.env", "$TURBO_ROOT$/.env.*"],
       "dependsOn": ["^build"],
-      "outputs": [".svelte-kit/output/**"]
+      "outputs": [".svelte-kit/output/**", "build/**"]
     },
     "check-types": {
       "dependsOn": ["^check-types"]
