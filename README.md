@@ -13,12 +13,11 @@ Read the [vision](VISION.md) for the product's purpose, scope, and priorities.
 
 ## Develop
 
-Based on [Effect Forge](https://github.com/mateoroldos/effect-forge). The SvelteKit
-app currently previews the web shell and shared theme. Domain/core support creating,
-reading, and completing approval tasks with structured results. A PostgreSQL
-adapter provides durable storage. The Node server composes these services, while
-the review UI remains a static shell. PostgreSQL is provider-independent; Neon is
-the preferred managed provider.
+Based on [Effect Forge](https://github.com/mateoroldos/effect-forge). Domain/core
+support creating, reading, and completing approval tasks with structured results.
+PostgreSQL provides durable storage. The web app can review stored
+approval tasks from the home-page inbox or at `/tasks/<id>`. PostgreSQL is
+provider-independent; Neon is the preferred managed provider.
 
 Install [mise](https://mise.jdx.dev/getting-started.html), then from the repository root:
 
@@ -38,6 +37,8 @@ bun run db:migrate
 
 Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
 built server use Node 24 and read root `.env`; exported variables take precedence.
+
+Reviewer authentication is not implemented yet; this is currently a development workflow.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
