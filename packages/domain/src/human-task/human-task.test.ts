@@ -90,6 +90,7 @@ it("accepts approval decisions with optional text feedback only", () => {
     { decision: "approve" },
     { decision: "approved", feedback: undefined },
     { decision: "approved", feedback: 42 },
+    { decision: "approved", completedAt: "2026-01-01T00:00:00Z" },
   ]) {
     assert.isTrue(Result.isFailure(decode(invalid)));
   }

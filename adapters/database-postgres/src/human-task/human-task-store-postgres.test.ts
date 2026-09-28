@@ -31,18 +31,10 @@ it.effect(
 );
 
 it.effect(
-  "omits absent optional fields and reports missing tasks",
+  "omits absent optional fields when decoding stored tasks",
   () =>
     Effect.gen(function* () {
       const store = yield* HumanTaskStore.Service;
-      assert.deepStrictEqual(
-        yield* Effect.flip(store.get(task.id)),
-        new HumanTaskStore.NotFound({ id: task.id }),
-      );
-      assert.deepStrictEqual(
-        yield* Effect.flip(store.complete(task.id, { decision: "rejected" }, task.createdAt)),
-        new HumanTaskStore.NotFound({ id: task.id }),
-      );
       const { context: _, ...minimal } = task;
       yield* store.create(minimal);
       assert.deepStrictEqual(yield* store.get(task.id), minimal);

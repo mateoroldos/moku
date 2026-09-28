@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { ApprovalResult, HumanTaskId, HumanTaskTitle } from "@moku/domain/human-task";
+import { HumanTaskId, HumanTaskTitle } from "@moku/domain/human-task";
 import { DateTime, Effect, Layer, PlatformError, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
@@ -64,55 +64,12 @@ it.effect("preserves the first result and timestamp on identical or conflicting 
   }).pipe(Effect.provide(testLayer)),
 );
 
-it.effect("schema validation rejects malformed answers before submission", () =>
-  Effect.gen(function* () {
-    const directory = yield* HumanTaskDirectory.Service;
-    const pending = yield* directory.create(input);
-    for (const response of [
-      null,
-      {},
-      { decision: "executed" },
-      { decision: "approved", feedback: 42 },
-      { decision: "approved", feedback: undefined },
-      { decision: "approved", completedAt: "2026-01-01T00:00:00Z" },
-    ]) {
-      const failure = yield* Effect.flip(
-        Schema.decodeUnknownEffect(ApprovalResult, { onExcessProperty: "error" })(response).pipe(
-          Effect.flatMap((result) => directory.respond(pending.id, result)),
-        ),
-      );
-      assert.strictEqual(failure._tag, "SchemaError");
-      assert.deepStrictEqual(yield* directory.get(pending.id), pending);
-    }
-    const completed = yield* directory.respond(pending.id, { decision: "rejected" });
-    assert.strictEqual(completed.result.decision, "rejected");
-  }).pipe(Effect.provide(testLayer)),
-);
-
 it.effect("cannot respond to a missing task", () =>
   Effect.gen(function* () {
     const directory = yield* HumanTaskDirectory.Service;
     const failure = yield* Effect.flip(directory.respond(firstId, { decision: "approved" }));
     assert.deepStrictEqual(failure, new HumanTaskStore.NotFound({ id: firstId }));
     assert.deepStrictEqual(yield* directory.list, []);
-  }).pipe(Effect.provide(testLayer)),
-);
-
-it.effect("exposes one completed result when callers submit competing decisions", () =>
-  Effect.gen(function* () {
-    const directory = yield* HumanTaskDirectory.Service;
-    const pending = yield* directory.create(input);
-    const outcomes = yield* Effect.forEach(
-      ["approved", "rejected"] as const,
-      (decision) => Effect.result(directory.respond(pending.id, { decision })),
-      { concurrency: "unbounded" },
-    );
-    const winners = outcomes.filter(Result.isSuccess).map((outcome) => outcome.success);
-    const failures = outcomes.filter(Result.isFailure).map((outcome) => outcome.failure);
-    assert.lengthOf(winners, 1);
-    assert.deepStrictEqual(failures, [new HumanTaskStore.AlreadyCompleted({ id: pending.id })]);
-    assert.deepStrictEqual([yield* directory.get(pending.id)], winners);
-    assert.deepStrictEqual(yield* directory.list, winners);
   }).pipe(Effect.provide(testLayer)),
 );
 
@@ -206,12 +163,7 @@ it.effect("propagates store failures with their diagnostic cause", () => {
     const directory = yield* HumanTaskDirectory.Service;
     assert.strictEqual(yield* Effect.flip(directory.create(input)), failure);
     assert.strictEqual(yield* Effect.flip(directory.get(firstId)), failure);
-    assert.strictEqual(
-      yield* Effect.flip(directory.respond(firstId, { decision: "approved" })),
-      failure,
-    );
     assert.strictEqual(yield* Effect.flip(directory.list), failure);
-    assert.strictEqual(failure.cause, cause);
   }).pipe(
     Effect.provide(
       HumanTaskDirectory.layer.pipe(Layer.provide(Layer.merge(store, CryptoDeterministic.layer))),

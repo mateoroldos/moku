@@ -31,9 +31,9 @@ export const lifecycle = Effect.gen(function* () {
   assert.deepStrictEqual(completed, { ...task, status: "completed", result, completedAt });
   assert.deepStrictEqual(yield* store.get(task.id), completed);
   assert.deepStrictEqual(yield* store.list, [completed]);
-  for (const decision of ["approved", "rejected"] as const) {
+  for (const retry of [result, { decision: "rejected" }] as const) {
     assert.deepStrictEqual(
-      yield* Effect.flip(store.complete(task.id, { decision }, task.createdAt)),
+      yield* Effect.flip(store.complete(task.id, retry, completedAt)),
       new HumanTaskStore.AlreadyCompleted({ id: task.id }),
     );
   }

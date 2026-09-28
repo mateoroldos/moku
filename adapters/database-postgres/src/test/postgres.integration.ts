@@ -63,15 +63,16 @@ it.live("migrates repeatedly, preserves the winning insert, and survives reconne
         assert.instanceOf(failure.failure, HumanTaskStore.PersistenceError);
       const completed = yield* Effect.gen(function* () {
         const store = yield* HumanTaskStore.Service;
+        const pending = yield* store.get(task.id);
         assert.deepStrictEqual(
-          [yield* store.get(task.id)],
+          [pending],
           inserted.filter(Result.isSuccess).map((result) => result.success),
         );
-        return yield* store.complete(
-          task.id,
-          { decision: "approved" },
-          DateTime.makeUnsafe("2026-09-28T13:00:00.456Z"),
-        );
+        const result = { decision: "approved" } as const;
+        const completedAt = DateTime.makeUnsafe("2026-09-28T13:00:00.456Z");
+        const saved = yield* store.complete(task.id, result, completedAt);
+        assert.deepStrictEqual(saved, { ...pending, status: "completed", result, completedAt });
+        return saved;
       }).pipe(Effect.provide(persistence));
       // Every provide above has closed its pool before this new connection reads the result.
       yield* Effect.gen(function* () {

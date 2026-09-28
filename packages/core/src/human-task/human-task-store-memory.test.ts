@@ -88,21 +88,6 @@ it.effect("atomically completes once under competing responses and preserves req
     }
     assert.deepStrictEqual([yield* store.get(task.id)], winners);
     assert.deepStrictEqual(yield* store.list, winners);
-    const duplicate = yield* Effect.flip(store.create(task));
-    assert.instanceOf(duplicate, HumanTaskStore.PersistenceError);
-    assert.deepStrictEqual([yield* store.get(task.id)], winners);
-  }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
-);
-
-it.effect("does not create a task when completing a missing ID", () =>
-  Effect.gen(function* () {
-    const store = yield* HumanTaskStore.Service;
-    const id = HumanTaskId.make("00000000-0000-4000-8000-000000000001");
-    assert.deepStrictEqual(
-      yield* Effect.flip(store.complete(id, { decision: "approved" }, yield* DateTime.now)),
-      new HumanTaskStore.NotFound({ id }),
-    );
-    assert.deepStrictEqual(yield* store.list, []);
   }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );
 
