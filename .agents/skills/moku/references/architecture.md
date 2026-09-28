@@ -1,12 +1,12 @@
 # Architecture
 
-| Workspace                    | Owns                                                     | Internal dependencies        |
-| ---------------------------- | -------------------------------------------------------- | ---------------------------- |
-| `packages/domain`            | Shared values, schemas, and domain decisions             | None                         |
-| `packages/core`              | Application policy, operation inputs, and required ports | Domain                       |
-| `packages/ui`                | Shared Svelte components and visual vocabulary           | None                         |
-| `adapters/database-postgres` | PostgreSQL persistence and migrations                    | Core, domain                 |
-| `apps/web`                   | Server composition, routes, and browser interactions     | UI, core, PostgreSQL adapter |
+| Workspace                    | Owns                                                     | Internal dependencies                |
+| ---------------------------- | -------------------------------------------------------- | ------------------------------------ |
+| `packages/domain`            | Shared values, schemas, and domain decisions             | None                                 |
+| `packages/core`              | Application policy, operation inputs, and required ports | Domain                               |
+| `packages/ui`                | Shared Svelte components and visual vocabulary           | None                                 |
+| `adapters/database-postgres` | PostgreSQL persistence and migrations                    | Core, domain                         |
+| `apps/web`                   | Server composition, routes, and browser interactions     | UI, domain, core, PostgreSQL adapter |
 
 Domain and core stay independent of frameworks, SQL, and provider SDKs.
 Core owns domain-shaped ports and their expected failures. Adapters translate

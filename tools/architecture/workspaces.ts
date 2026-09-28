@@ -10,7 +10,7 @@ export const workspaces: ReadonlyArray<Workspace> = [
   {
     name: "@moku/web",
     directory: "apps/web",
-    dependencies: ["@moku/ui", "@moku/core", "@moku/database-postgres"],
+    dependencies: ["@moku/ui", "@moku/core", "@moku/domain", "@moku/database-postgres"],
   },
   {
     name: "@moku/database-postgres",

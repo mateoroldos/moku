@@ -21,6 +21,18 @@ Effect Schema.
   the runtime after adapter shutdown or development module replacement. Never
   dispose the shared runtime at the end of a request or apply migrations there.
 
+- Remote functions map typed failures to safe Kit errors after Effect execution.
+  Forms keep validation inline and preserve input when a submission fails.
+  Report locally caught unexpected errors; they do not reach Kit's error hooks.
+- Publish authoritative mutation results to detail queries; secondary refresh failure
+  does not undo a recorded decision. Failed submissions offer a native page reload
+  to check persisted state; do not automatically retry writes.
+- Use Kit query overrides for optimistic review presentation. Keep unconfirmed variants
+  in the feature's view type, not domain state. Forms own fields, pending, and validation;
+  use normal query/error boundaries rather than a separate reconciliation workflow.
+- Root error pages handle generic route failures; feature boundaries own task-specific
+  recovery. Offer same-page reload for transient failures and an exit for missing resources.
+
 Follow [root validation](../../AGENTS.md#validation). Choose the smallest relevant
 browser check; trivial cosmetic edits may only need a quick visual inspection.
 Run broader regression checks when shared behavior or a discovered failure warrants
