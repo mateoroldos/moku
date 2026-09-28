@@ -25,6 +25,12 @@ it.effect(
 );
 
 it.effect(
+  "isolates reads and completion by task ID",
+  () => HumanTaskStoreContract.isolation.pipe(Effect.provide(PersistencePglite.layer)),
+  { timeout: 15000 },
+);
+
+it.effect(
   "omits absent optional fields and reports missing tasks",
   () =>
     Effect.gen(function* () {

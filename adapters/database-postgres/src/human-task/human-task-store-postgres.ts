@@ -13,15 +13,20 @@ import { humanTasks } from "./schema.ts";
 
 type Row = typeof humanTasks.$inferSelect;
 
-const decodeRow = (row: Row) => {
+const normalizeRow = (row: Row) => {
   const { context, result, completedAt, ...request } = row;
-  return Schema.decodeUnknownEffect(HumanTask)({
-    ...request,
-    ...(context === null ? undefined : { context }),
-    ...(result === null ? undefined : { result }),
-    ...(completedAt === null ? undefined : { completedAt }),
-  });
+  const normalized: typeof request & {
+    context?: string;
+    result?: Row["result"];
+    completedAt?: string;
+  } = { ...request };
+  if (context !== null) normalized.context = context;
+  if (result !== null) normalized.result = result;
+  if (completedAt !== null) normalized.completedAt = completedAt;
+  return normalized;
 };
+
+const decodeRow = (row: Row) => Schema.decodeUnknownEffect(HumanTask)(normalizeRow(row));
 
 export const layer = Layer.effect(
   HumanTaskStore.Service,
@@ -70,8 +75,7 @@ export const layer = Layer.effect(
         yield* get(id);
         return yield* new HumanTaskStore.AlreadyCompleted({ id });
       }
-      return yield* decodeRow(row).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.toType(CompletedHumanTask))),
+      return yield* Schema.decodeUnknownEffect(CompletedHumanTask)(normalizeRow(row)).pipe(
         Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
       );
     });
