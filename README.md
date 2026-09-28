@@ -38,6 +38,11 @@ bun run db:migrate
 Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
 built server use Node 24 and read root `.env`; exported variables take precedence.
 
+Run `bun run db:seed` to create four example approval tasks and print their review
+URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It uses
+`DATABASE_URL` from root `.env` (or the exported environment), after migrations.
+The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
+
 Reviewer authentication is not implemented yet; this is currently a development workflow.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
