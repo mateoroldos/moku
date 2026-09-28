@@ -14,8 +14,10 @@ Read the [vision](VISION.md) for the product's purpose, scope, and priorities.
 ## Develop
 
 Based on [Effect Forge](https://github.com/mateoroldos/effect-forge). The SvelteKit
-app currently previews the web shell and shared theme. Domain/core provide
-create/read services; the preview is not connected to them yet.
+app currently previews the web shell and shared theme. Domain/core support creating,
+reading, and completing approval tasks with structured results. Persistence is a
+caller-supplied port with a test-only memory implementation; the web shell is not
+connected to these services yet.
 
 Install [mise](https://mise.jdx.dev/getting-started.html), then from the repository root:
 

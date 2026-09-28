@@ -1,8 +1,13 @@
-import type { HumanTask, HumanTaskId } from "@moku/domain/human-task";
+import {
+  CompletedHumanTask,
+  type HumanTask,
+  type HumanTaskId,
+  type PendingHumanTask,
+} from "@moku/domain/human-task";
 import { Effect, Layer, Ref } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
 
-/** Test persistence with atomic insert-only writes and fresh state per layer build. */
+/** Test persistence with atomic writes and fresh state per layer build. */
 export const layer = Layer.effect(
   HumanTaskStore.Service,
   Effect.gen(function* () {
@@ -14,7 +19,7 @@ export const layer = Layer.effect(
           (
             tasks,
           ): readonly [
-            Effect.Effect<HumanTask, HumanTaskStore.PersistenceError>,
+            Effect.Effect<PendingHumanTask, HumanTaskStore.PersistenceError>,
             Map<HumanTaskId, HumanTask>,
           ] =>
             tasks.has(task.id)
@@ -23,6 +28,32 @@ export const layer = Layer.effect(
                   tasks,
                 ]
               : [Effect.succeed(task), new Map(tasks).set(task.id, task)],
+        ).pipe(Effect.flatten),
+      complete: (id, result, completedAt) =>
+        Ref.modify(
+          state,
+          (
+            tasks,
+          ): readonly [
+            Effect.Effect<
+              CompletedHumanTask,
+              HumanTaskStore.NotFound | HumanTaskStore.AlreadyCompleted
+            >,
+            Map<HumanTaskId, HumanTask>,
+          ] => {
+            const task = tasks.get(id);
+            if (task === undefined)
+              return [Effect.fail(new HumanTaskStore.NotFound({ id })), tasks];
+            if (task.status === "completed")
+              return [Effect.fail(new HumanTaskStore.AlreadyCompleted({ id })), tasks];
+            const completed = CompletedHumanTask.make({
+              ...task,
+              status: "completed",
+              result,
+              completedAt,
+            });
+            return [Effect.succeed(completed), new Map(tasks).set(id, completed)];
+          },
         ).pipe(Effect.flatten),
       get: (id) =>
         Ref.get(state).pipe(

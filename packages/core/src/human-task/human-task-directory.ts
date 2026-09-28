@@ -1,17 +1,33 @@
-import { HumanTask, HumanTaskId } from "@moku/domain/human-task";
+import {
+  type ApprovalResult,
+  type CompletedHumanTask,
+  type HumanTask,
+  HumanTaskId,
+  PendingHumanTask,
+} from "@moku/domain/human-task";
 import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
 
 export const CreateInput = Schema.Struct({
-  title: HumanTask.fields.title,
-  description: HumanTask.fields.description,
+  intent: PendingHumanTask.fields.intent,
+  subject: PendingHumanTask.fields.subject,
+  context: PendingHumanTask.fields.context,
+  response: PendingHumanTask.fields.response,
 });
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 
 export interface Interface {
   readonly create: (
     input: CreateInput,
-  ) => Effect.Effect<HumanTask, IdGenerationError | HumanTaskStore.PersistenceError>;
+  ) => Effect.Effect<PendingHumanTask, IdGenerationError | HumanTaskStore.PersistenceError>;
+  /** Accept a schema-validated approval result; atomically complete the task once. */
+  readonly respond: (
+    id: HumanTaskId,
+    result: ApprovalResult,
+  ) => Effect.Effect<
+    CompletedHumanTask,
+    HumanTaskStore.NotFound | HumanTaskStore.AlreadyCompleted | HumanTaskStore.PersistenceError
+  >;
   readonly get: (
     id: HumanTaskId,
   ) => Effect.Effect<HumanTask, HumanTaskStore.NotFound | HumanTaskStore.PersistenceError>;
@@ -34,8 +50,8 @@ export const layer = Layer.effect(
     const crypto = yield* Crypto.Crypto;
 
     const create = Effect.fn("HumanTaskDirectory.create")(function* ({
-      title,
-      ...details
+      subject,
+      ...request
     }: CreateInput) {
       const id = yield* crypto.randomUUIDv4.pipe(
         Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
@@ -43,14 +59,22 @@ export const layer = Layer.effect(
       );
       const createdAt = yield* DateTime.now;
       return yield* store.create(
-        HumanTask.make({ ...details, title, id, createdAt, status: "pending" }),
+        PendingHumanTask.make({ ...request, subject, id, createdAt, status: "pending" }),
       );
     });
     const get = Effect.fn("HumanTaskDirectory.get")(function* (id: HumanTaskId) {
       return yield* store.get(id);
     });
 
-    return Service.of({ create, get, list: store.list });
+    const respond = Effect.fn("HumanTaskDirectory.respond")(function* (
+      id: HumanTaskId,
+      result: ApprovalResult,
+    ) {
+      const completedAt = yield* DateTime.now;
+      return yield* store.complete(id, result, completedAt);
+    });
+
+    return Service.of({ create, get, list: store.list, respond });
   }),
 );
 

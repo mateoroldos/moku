@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { HumanTask, HumanTaskId, HumanTaskTitle } from "@moku/domain/human-task";
+import { PendingHumanTask, HumanTaskId, HumanTaskTitle } from "@moku/domain/human-task";
 import { DateTime, Effect, Result } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
@@ -8,9 +8,11 @@ it.effect("shares persisted tasks within a build and isolates separate builds", 
   Effect.gen(function* () {
     yield* Effect.gen(function* () {
       const store = yield* HumanTaskStore.Service;
-      const task = HumanTask.make({
+      const task = PendingHumanTask.make({
         id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
-        title: HumanTaskTitle.make("Review"),
+        intent: "authorize",
+        subject: { title: HumanTaskTitle.make("Review") },
+        response: { type: "approval" },
         createdAt: yield* DateTime.now,
         status: "pending",
       });
@@ -26,13 +28,89 @@ it.effect("shares persisted tasks within a build and isolates separate builds", 
   }),
 );
 
+it.effect("atomically completes once under competing responses and preserves request data", () =>
+  Effect.gen(function* () {
+    const store = yield* HumanTaskStore.Service;
+    const task = PendingHumanTask.make({
+      id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
+      intent: "authorize",
+      subject: { title: HumanTaskTitle.make("Publish"), description: "The final report" },
+      context: "Leadership review",
+      response: { type: "approval" },
+      createdAt: DateTime.makeUnsafe(1_000),
+      status: "pending",
+    });
+    yield* store.create(task);
+    const candidates = [
+      {
+        result: { decision: "approved", feedback: "Ready" },
+        completedAt: DateTime.makeUnsafe(2_000),
+      },
+      {
+        result: { decision: "rejected", feedback: "Revise" },
+        completedAt: DateTime.makeUnsafe(3_000),
+      },
+    ] as const;
+    const outcomes = yield* Effect.forEach(
+      candidates,
+      ({ result, completedAt }) => Effect.result(store.complete(task.id, result, completedAt)),
+      { concurrency: "unbounded" },
+    );
+    const winners = outcomes.filter(Result.isSuccess).map((outcome) => outcome.success);
+    const failures = outcomes.filter(Result.isFailure).map((outcome) => outcome.failure);
+    assert.lengthOf(winners, 1);
+    assert.deepStrictEqual(failures, [new HumanTaskStore.AlreadyCompleted({ id: task.id })]);
+    for (const winner of winners) {
+      assert.deepStrictEqual(winner, {
+        ...task,
+        status: "completed",
+        result: winner.result,
+        completedAt: winner.completedAt,
+      });
+      assert.isTrue(
+        candidates.some(
+          (candidate) =>
+            candidate.result.decision === winner.result.decision &&
+            candidate.result.feedback === winner.result.feedback &&
+            DateTime.toEpochMillis(candidate.completedAt) ===
+              DateTime.toEpochMillis(winner.completedAt),
+        ),
+      );
+    }
+    assert.deepStrictEqual([yield* store.get(task.id)], winners);
+    assert.deepStrictEqual(yield* store.list, winners);
+    const duplicate = yield* Effect.flip(store.create(task));
+    assert.instanceOf(duplicate, HumanTaskStore.PersistenceError);
+    assert.deepStrictEqual([yield* store.get(task.id)], winners);
+  }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
+
+it.effect("does not create a task when completing a missing ID", () =>
+  Effect.gen(function* () {
+    const store = yield* HumanTaskStore.Service;
+    const id = HumanTaskId.make("00000000-0000-4000-8000-000000000001");
+    assert.deepStrictEqual(
+      yield* Effect.flip(store.complete(id, { decision: "approved" }, yield* DateTime.now)),
+      new HumanTaskStore.NotFound({ id }),
+    );
+    assert.deepStrictEqual(yield* store.list, []);
+  }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
+
 it.effect("allows exactly one competing insert per ID and preserves the winner", () =>
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
     const id = HumanTaskId.make("00000000-0000-4000-8000-000000000001");
     const createdAt = yield* DateTime.now;
     const candidates = ["First proposal", "Second proposal"].map((title) =>
-      HumanTask.make({ id, title: HumanTaskTitle.make(title), createdAt, status: "pending" }),
+      PendingHumanTask.make({
+        id,
+        intent: "authorize",
+        subject: { title: HumanTaskTitle.make(title) },
+        response: { type: "approval" },
+        createdAt,
+        status: "pending",
+      }),
     );
     const results = yield* Effect.forEach(candidates, (task) => Effect.result(store.create(task)), {
       concurrency: "unbounded",
