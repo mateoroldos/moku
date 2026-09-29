@@ -21,6 +21,11 @@ Effect Schema.
   the runtime after adapter shutdown or development module replacement. Never
   dispose the shared runtime at the end of a request or apply migrations there.
 
+- Run named application operations through `locals.run("Remote.<export>", program)`.
+  The request runner owns cancellation, cause-preserving Result conversion, and
+  operation observability; remotes must not pre-convert failures with `Effect.result`
+  or duplicate operation logging. Single typed failures become Results; defects,
+  interruption, and mixed causes reject with the full cause.
 - Remote functions map typed failures to safe Kit errors after Effect execution.
   Forms keep validation inline and preserve input when a submission fails.
   Report locally caught unexpected errors; they do not reach Kit's error hooks.

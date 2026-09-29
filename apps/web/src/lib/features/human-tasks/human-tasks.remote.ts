@@ -19,7 +19,8 @@ export const getHumanTask = query(
   (id): Promise<ReviewTask> =>
     getRequestEvent()
       .locals.run(
-        HumanTaskDirectory.Service.use((directory) => directory.get(id)).pipe(Effect.result),
+        "Remote.getHumanTask",
+        HumanTaskDirectory.Service.use((directory) => directory.get(id)),
       )
       .then(Result.getOrElse(reject))
       .then(Schema.encodeSync(HumanTask)),
@@ -27,7 +28,10 @@ export const getHumanTask = query(
 
 export const listHumanTasks = query(() =>
   getRequestEvent()
-    .locals.run(HumanTaskDirectory.Service.use((directory) => directory.list).pipe(Effect.result))
+    .locals.run(
+      "Remote.listHumanTasks",
+      HumanTaskDirectory.Service.use((directory) => directory.list),
+    )
     .then(Result.getOrElse(() => error(503, "We couldn’t load your tasks. Try again.")))
     .then(Schema.encodeSync(Schema.Array(HumanTask))),
 );
@@ -39,6 +43,7 @@ export const respondToHumanTask = form(
   ({ id, ...answer }) =>
     getRequestEvent()
       .locals.run(
+        "Remote.respondToHumanTask",
         HumanTaskDirectory.Service.use((directory) =>
           directory.respond(id, answer).pipe(
             Effect.map((task) => ({ outcome: "recorded" as const, task })),
@@ -48,7 +53,7 @@ export const respondToHumanTask = form(
                 .pipe(Effect.map((task) => ({ outcome: "already-completed" as const, task }))),
             ),
           ),
-        ).pipe(Effect.result),
+        ),
       )
       .then(Result.getOrElse(reject))
       .then(({ outcome, task }) => {

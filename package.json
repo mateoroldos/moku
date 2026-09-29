@@ -16,6 +16,7 @@
     "test:postgres": "bun run --cwd adapters/database-postgres test:postgres && bun run --cwd apps/web test:postgres",
     "start": "bun run --cwd apps/web start",
     "dev": "turbo run dev",
+    "dev:otel": "OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 turbo run dev",
     "build": "turbo run build",
     "check": "bun run format:check && bun run lint && bun run check:guidance && bun run check:workspaces && bun run db:check && bun run knip && bun run check-types && bun run test",
     "db:check": "bun scripts/check-migrations.ts",
