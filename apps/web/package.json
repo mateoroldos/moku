@@ -5,6 +5,7 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
+    "test": "vitest run --config vitest.config.ts",
     "db:seed": "bun --env-file=../../.env src/seed.ts",
     "start": "node --env-file-if-exists=../../.env build/index.js",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",

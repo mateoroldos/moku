@@ -2,7 +2,9 @@ import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { PgClient } from "@effect/sql-pg";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { PersistencePostgres } from "@moku/database-postgres";
-import { Effect, Layer, ManagedRuntime, type Redacted } from "effect";
+import { Layer, ManagedRuntime, type Redacted } from "effect";
+import { Observability } from "./observability.ts";
+import { RequestRunner } from "./request-runner.ts";
 
 export const layer = (url: Redacted.Redacted) => {
   const postgres = PgClient.layer({
@@ -16,9 +18,15 @@ export const layer = (url: Redacted.Redacted) => {
   return HumanTaskDirectory.layer.pipe(Layer.provide(Layer.merge(persistence, NodeCrypto.layer)));
 };
 
-export const make = (url: Redacted.Redacted) => ManagedRuntime.make(layer(url));
+export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
+  ManagedRuntime.make(layer(url).pipe(Layer.provideMerge(Observability.layer(settings))));
 
 export type Runtime = ReturnType<typeof make>;
-export type Run = <A, E>(program: Effect.Effect<A, E, HumanTaskDirectory.Service>) => Promise<A>;
+export type Run = ReturnType<
+  typeof RequestRunner.make<
+    HumanTaskDirectory.Service,
+    ManagedRuntime.ManagedRuntime.Error<Runtime>
+  >
+>;
 
 export * as WebRuntime from "./runtime.ts";

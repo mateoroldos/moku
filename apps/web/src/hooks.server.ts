@@ -1,14 +1,24 @@
-import { building } from "$app/env";
+import { building, dev } from "$app/env";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
-import { Cause, Config, Effect } from "effect";
+import { Cause, Config, Effect, Option } from "effect";
 import { WebRuntime } from "./lib/server/runtime.ts";
+import { Observability } from "./lib/server/observability.ts";
+import { RequestRunner } from "./lib/server/request-runner.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();
 
 export const init: ServerInit = () => {
   if (building) return;
-  runtime = WebRuntime.make(Effect.runSync(Config.redacted("DATABASE_URL")));
+  const endpoint = Effect.runSync(
+    Config.schema(Observability.CollectorEndpoint, "OTEL_EXPORTER_OTLP_ENDPOINT").pipe(
+      Config.option,
+    ),
+  );
+  runtime = WebRuntime.make(Effect.runSync(Config.redacted("DATABASE_URL")), {
+    ...Option.match(endpoint, { onNone: () => ({}), onSome: (url) => ({ endpoint: url.href }) }),
+    dev,
+  });
   process.once("sveltekit:shutdown", dispose);
   return runtime.runPromise(Effect.void);
 };
@@ -30,7 +40,7 @@ export const handleError: HandleServerError = ({ kind, error, event }) => {
 export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
   if (active === undefined) throw new Error("Application runtime is unavailable");
-  event.locals.run = (program) => active.runPromise(program, { signal: event.request.signal });
+  event.locals.run = RequestRunner.make(active, event.request.signal);
   return resolve(event);
 };
 

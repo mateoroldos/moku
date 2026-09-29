@@ -48,6 +48,18 @@ Reviewer authentication is not implemented yet; this is currently a development 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
 
+### Local traces
+
+Start the local OTLP viewer in a separate terminal (Docker required):
+
+```sh
+docker run --rm -p 127.0.0.1:8000:8000 -p 127.0.0.1:4318:4318 \
+  ghcr.io/ctrlspice/otel-desktop-viewer:v0.5.0 --host 0.0.0.0 --open-browser=false
+```
+
+Run `bun run dev:otel` from the repository root and use the app. View traces at
+`http://localhost:8000` under `moku.web`. Normal development needs no collector.
+
 ## Built server
 
 ```sh
