@@ -22,21 +22,16 @@ Effect Schema.
   dispose the shared runtime at the end of a request or apply migrations there.
 
 - Run named application operations through `locals.run("Remote.<export>", program)`.
-  The request runner owns cancellation, cause-preserving Result conversion, and
-  operation observability; remotes must not pre-convert failures with `Effect.result`
-  or duplicate operation logging. Single typed failures become Results; defects,
-  interruption, and mixed causes reject with the full cause.
-- Remote functions map typed failures to safe Kit errors after Effect execution.
-  Forms keep validation inline and preserve input when a submission fails.
-  Report locally caught unexpected errors; they do not reach Kit's error hooks.
-- Publish authoritative mutation results to detail queries; secondary refresh failure
-  does not undo a recorded decision. Failed submissions offer a native page reload
-  to check persisted state; do not automatically retry writes.
-- Use Kit query overrides for optimistic review presentation. Keep unconfirmed variants
-  in the feature's view type, not domain state. Forms own fields, pending, and validation;
-  use normal query/error boundaries rather than a separate reconciliation workflow.
-- Root error pages handle generic route failures; feature boundaries own task-specific
-  recovery. Offer same-page reload for transient failures and an exit for missing resources.
+  The [request runner](src/lib/server/request-runner.ts) owns cancellation,
+  operation observability, and conversion to Results; remotes map typed failures
+  to safe Kit errors afterward.
+- Keep validation inline and preserve form input on submission failure.
+  Report locally caught unexpected errors; they bypass Kit's error hooks.
+  Route error boundaries own failures that replace the page.
+- Publish authoritative mutation results to detail queries. Secondary refresh
+  failures must not undo confirmed mutations.
+- Use Kit query overrides for optimistic presentation and keep temporary variants
+  in feature view types. Kit owns form fields, pending state, and validation.
 
 Follow [root validation](../../AGENTS.md#validation). Choose the smallest relevant
 browser check; trivial cosmetic edits may only need a quick visual inspection.
