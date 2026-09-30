@@ -17,3 +17,10 @@ Run `bun run check` for broader changes or before landing. For documentation-onl
 changes, run `bun run check:guidance`. Build when compilation or bundling is affected.
 Report what was checked, failures, and unverified behavior, or why checks were
 skipped. Keep guidance accurate when its owning code changes.
+
+## Development status
+
+Moku is pre-release. All Moku development data is disposable. Changes may reset
+development databases, replace migration baselines, and remove obsolete APIs or
+compatibility code. Prefer a coherent current implementation over compatibility
+with previous development versions.
