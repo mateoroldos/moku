@@ -16,6 +16,8 @@ Effect Schema.
   prerelease APIs against installed sources/types before changing configuration.
 - Adapter selection belongs to deployment composition. Discuss consequential
   runtime, persistence, or authentication changes before implementing them.
+- For provider endpoints, sessions, cookies, or auth configuration, follow
+  [authentication boundaries](docs/authentication.md).
 - The Node server owns one [Effect runtime](src/lib/server/runtime.ts) and PostgreSQL
   pool. [Server hooks](src/hooks.server.ts) bind request cancellation and dispose
   the runtime after adapter shutdown or development module replacement. Never
