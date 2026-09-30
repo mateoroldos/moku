@@ -44,7 +44,7 @@ export const make = (
 export type Runtime = ReturnType<typeof make>;
 export type Run = ReturnType<
   typeof RequestRunner.make<
-    HumanTaskDirectory.Service | Authentication.Service,
+    ManagedRuntime.ManagedRuntime.Services<Runtime>,
     ManagedRuntime.ManagedRuntime.Error<Runtime>
   >
 >;
