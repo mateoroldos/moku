@@ -41,7 +41,7 @@
       </div>
     </section>
   {:else}
-    {#each groups as group}
+    {#each groups as group (group.title)}
       <section aria-label={group.title} class="overflow-hidden rounded-xl border bg-card">
         <div class="flex items-center justify-between gap-3 border-b px-5 py-4 sm:px-6">
           <h2 class="text-sm font-medium">{group.title}</h2>

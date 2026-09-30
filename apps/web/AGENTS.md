@@ -4,7 +4,11 @@ SvelteKit owns routes, rendering, and browser interactions. Keep remote
 `query`/`form` functions with their feature and validate operation inputs with
 Effect Schema.
 
-- Reuse [shared UI](../../packages/ui/AGENTS.md) tokens and components.
+- Reuse [shared UI](../../packages/ui/AGENTS.md) tokens and components. For Svelte
+  components/modules, load [Svelte core practices](../../.agents/skills/svelte-core-bestpractices/SKILL.md)
+  and validate with the [Svelte code writer](../../.agents/skills/svelte-code-writer/SKILL.md)
+  autofixer, passing `--async`. Its documentation covers stable Kit, not this Kit 3 prerelease.
+- Follow [DESIGN.md](../../DESIGN.md) for visual and interaction decisions.
 - Follow the [review model](../../VISION.md#initial-review-experiences): center the
   subject and requested judgment. Render supported semantics, not agent-supplied
   component trees. Keep decision-critical evidence and consequences visible.
@@ -35,5 +39,7 @@ Effect Schema.
 
 Follow [root validation](../../AGENTS.md#validation). Choose the smallest relevant
 browser check; trivial cosmetic edits may only need a quick visual inspection.
+Verify changed UI in light and dark themes, at about 375px and 1280px wide, by
+keyboard, and in each affected state.
 Run broader regression checks when shared behavior or a discovered failure warrants
 them. Report browser checks separately from automated checks.

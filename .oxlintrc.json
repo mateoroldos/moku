@@ -37,6 +37,7 @@
   "overrides": [
     {
       "files": [
+        "packages/ui/eslint.config.js",
         "scripts/check-guidance.ts",
         "scripts/check-migrations.ts",
         "scripts/check-guidance.test.ts",

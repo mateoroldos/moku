@@ -68,10 +68,10 @@
           </div>
         {/if}
         <div class="flex flex-col gap-3 sm:flex-row">
-          <Button {...response.fields.decision.as("submit", "approved")} disabled={response.pending > 0} class="min-h-11 px-5">
+          <Button {...response.fields.decision.as("submit", "approved")} disabled={response.pending > 0} size="lg" class="min-h-11">
             <CheckIcon weight="regular" aria-hidden="true" /> Approve
           </Button>
-          <Button {...response.fields.decision.as("submit", "rejected")} variant="outline" disabled={response.pending > 0} class="min-h-11 px-5">
+          <Button {...response.fields.decision.as("submit", "rejected")} variant="outline" disabled={response.pending > 0} size="lg" class="min-h-11">
             <XIcon weight="regular" aria-hidden="true" /> Reject
           </Button>
         </div>

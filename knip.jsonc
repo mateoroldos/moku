@@ -8,6 +8,12 @@
     },
     ".": {
       "entry": ["scripts/*.ts"],
+      // Pinned CLI used by the svelte-code-writer skill.
+      "ignoreDependencies": ["@sveltejs/mcp"],
+    },
+    "apps/web": {
+      // @shadcn/lint builds the app theme with the app's own Tailwind.
+      "ignoreDependencies": ["tailwindcss"],
     },
     "packages/ui": {
       // svelte-check selects the TypeScript 7 alias through --tsgo.

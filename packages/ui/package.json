@@ -9,12 +9,14 @@
   "exports": {
     "./cn": "./src/cn/cn.ts",
     "./cn.js": "./src/cn/cn.ts",
+    "./eslint.config.js": "./eslint.config.js",
     "./theme.css": "./src/theme.css",
     "./ui/*": "./src/ui/*/index.ts",
     "./ui/*/index.js": "./src/ui/*/index.ts"
   },
   "scripts": {
-    "check-types": "svelte-check --tsgo --tsconfig ./tsconfig.json"
+    "check-types": "svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "lint": "eslint"
   },
   "dependencies": {
     "clsx": "2.1.1",
@@ -23,7 +25,12 @@
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
+    "@shadcn/lint": "0.2.0",
+    "@typescript-eslint/parser": "8.71.0",
     "@typescript/native": "npm:typescript@7.0.2",
+    "eslint": "10.11.0",
+    "eslint-plugin-oxlint": "1.78.0",
+    "eslint-plugin-svelte": "3.23.0",
     "svelte": "catalog:",
     "svelte-check": "4.7.6",
     "typescript": "6.0.3"
