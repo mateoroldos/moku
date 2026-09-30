@@ -35,7 +35,9 @@ bun run db:up
 bun run db:migrate
 ```
 
-Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
+Set `AUTH_ORIGIN=http://127.0.0.1:5173` and generate `AUTH_SECRET` with
+`openssl rand -base64 32` in your `.env`. Then run `bun run dev` and open
+`http://127.0.0.1:5173`. Both development and the
 built server use Node 24 and read root `.env`; exported variables take precedence.
 
 Run `bun run db:seed` to create four example approval tasks and print their review
@@ -43,7 +45,9 @@ URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It u
 `DATABASE_URL` from root `.env` (or the exported environment), after migrations.
 The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
 
-Reviewer authentication is not implemented yet; this is currently a development workflow.
+The [authentication foundation](apps/web/docs/authentication.md) supports provider
+sessions; task authorization and account onboarding are still being implemented.
+The task inbox remains a development workflow.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
@@ -64,10 +68,11 @@ Run `bun run dev:otel` from the repository root and use the app. View traces at
 
 ```sh
 ORIGIN=http://127.0.0.1:3000 bun run build
-HOST=127.0.0.1 bun run start
+AUTH_ORIGIN=http://127.0.0.1:3000 HOST=127.0.0.1 bun run start
 ```
 
-Set `ORIGIN` to the public URL **at build time**; the pinned Kit 3 adapter uses
+Set `AUTH_ORIGIN` to the server's public origin at startup and `ORIGIN` to the same
+public URL **at build time**; the pinned Kit 3 adapter uses
 `paths.origin`, rather than the Kit 2 runtime `ORIGIN` setting. `DATABASE_URL` is
 read at server startup; building needs no database connection. Apply migrations
 explicitly before starting each deployment. `HOST` and `PORT` configure the listener

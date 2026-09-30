@@ -4,6 +4,7 @@ import { Cause, Config, Effect, Option } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 import { Observability } from "#lib/server/observability.ts";
 import { RequestRunner } from "#lib/server/request-runner.ts";
+import { AuthConfig } from "#lib/server/auth-config.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();
@@ -15,10 +16,14 @@ export const init: ServerInit = () => {
       Config.option,
     ),
   );
-  runtime = WebRuntime.make(Effect.runSync(Config.redacted("DATABASE_URL")), {
-    ...Option.match(endpoint, { onNone: () => ({}), onSome: (url) => ({ endpoint: url.href }) }),
-    dev,
-  });
+  runtime = WebRuntime.make(
+    Effect.runSync(Config.redacted("DATABASE_URL")),
+    Effect.runSync(AuthConfig.load),
+    {
+      ...Option.match(endpoint, { onNone: () => ({}), onSome: (url) => ({ endpoint: url.href }) }),
+      dev,
+    },
+  );
   process.once("sveltekit:shutdown", dispose);
   return runtime.runPromise(Effect.void);
 };

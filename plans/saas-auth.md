@@ -1,6 +1,6 @@
 # Verified identities and tenant-safe human review
 
-Track: big feature + auth/data stakes · Status: approved scope; implementation details remain
+Track: big feature + auth/data stakes · Status: slice 1 implemented; awaiting stack approval
 
 Moku needs verified human identities, organization membership, and enforceable
 task access. A teammate works within an organization; an external reviewer sees
@@ -13,7 +13,7 @@ only explicitly shared tasks. Both use the same identity and session system.
 - `apps/web/src/lib/features/human-tasks/human-tasks.remote.ts` exposes reads and
   responses without authentication. Protecting layouts alone cannot solve this.
 - Moku runs SvelteKit 3.0.0-next.30, Effect 4.0.0-rc.112, and a process-owned Node
-  runtime/pool. Better Auth is not yet installed.
+  runtime/pool. Slice 1 adds Better Auth 1.7.4.
 - `../effect-forge` pins Better Auth and its Drizzle adapter to 1.7.4 and uses the
   same Effect release. Its identity/membership decoding, core permission checks,
   and inaccessible-organization handling are useful precedents. Its per-request
@@ -257,7 +257,9 @@ integration decision requires checking the installed provider's callback semanti
 
 ### Slice 1 implementation decisions
 
-- Two jj changes: additive auth schema/tooling, then its runtime/HTTP consumers.
+- Three review-sized jj changes: additive auth schema/tooling, provider/configuration
+  contracts and integration tests, then shared-pool runtime/HTTP wiring. Review as
+  sequential PRs so generated schema and runtime lifecycle changes remain focused.
 - Pin Better Auth, its CLI, and the relations-v2 Drizzle adapter to 1.7.4.
   Generate core user/session/account/verification/rate-limit tables now; organization
   plugin schema accompanies the organization slice, before its consumers.
@@ -274,19 +276,31 @@ integration decision requires checking the installed provider's callback semanti
   falls back to a shared per-path bucket until deployment proxy trust is configured.
 - Schema rollback means rolling back the consumer while retaining harmless additive
   tables; applied migration history is not rewritten.
+- Better Auth's optional SvelteKit peer range still names Kit 2. The integration
+  uses the native Request/Response handler, not Kit-specific provider helpers.
+  Kit 3 compilation and a running built-server sign-in/session/sign-out smoke test
+  establish compatibility for this surface. Browser/action integrations remain unverified.
+- Negative tests explicitly keep origin/CSRF checks enabled under the provider's
+  test environment; test-mode defaults would otherwise bypass origin enforcement.
 
 Slices are sequential unless their ownership and contracts are demonstrably
 independent. Each feature slice includes its frontend; screens are not deferred to
 one final UI phase. Schema changes precede consumers in dedicated changes. Incomplete
 auth stages are not a production-ready multi-tenant release.
 
-- [ ] **1. Establish provider/database compatibility and auth schema.** Pin a
+- [x] **1. Establish provider/database compatibility and auth schema.** Pin a
       supported Better Auth/adapter pair (Forge's 1.7.4 is the starting candidate),
       verify installed APIs against Kit 3/Drizzle prereleases, and add reproducible
       provider schema generation/migrations. Resolve connection ownership and cookies.
   - Proof: production migrations in PGlite and PostgreSQL; auth handler/session
     integration through the real provider; schema drift check; build/type checks.
   - This is the technical feasibility gate before broad feature implementation.
+  - Evidence: full `bun run check` (zero lint warnings), build, migrated PGlite
+    provider tests, PostgreSQL migration/runtime tests, and a built Node HTTP smoke
+    test. Security-focused Codex review identified the development-origin mismatch;
+    fixed the example to port 5173 and made the built-server origin explicit.
+    Configuration tests additionally own rejected origins and secret redaction;
+    these failures arise before the provider integration seam.
 - [ ] **2. Verified account onboarding and recovery.** Add email adapters, signup,
       login/logout, OTP confirmation/resend, password recovery, and verified-user guards.
   - Proof: entrypoint integration `unverified users cannot enter the application`,
@@ -368,6 +382,7 @@ the pinned candidate. Recheck installed options/source in slice 1, especially OT
 storage, organization authorization hooks, transaction guarantees, and cookie refresh.
 
 The user approved the scope and recommendations, with the explicit requirement
-that organization deletion preserves every user account. Next: begin slice 1;
-resolve operational prerequisites with their owning slices and retention/recovery
-details before slice 8. No product implementation has begun.
+that organization deletion preserves every user account. Slice 1 is implemented
+in separate schema, provider, and runtime changes. Next: review/approve that stack, then
+build slice 2. Resolve operational prerequisites with their owning slices and
+retention/recovery details before slice 8.
