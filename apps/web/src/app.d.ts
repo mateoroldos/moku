@@ -1,4 +1,4 @@
-import type { WebRuntime } from "./lib/server/runtime.ts";
+import type { WebRuntime } from "#lib/server/runtime.ts";
 
 declare global {
   namespace App {

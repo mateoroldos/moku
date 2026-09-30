@@ -1,8 +1,8 @@
 <script lang="ts">
   import TrayIcon from 'phosphor-svelte/lib/TrayIcon';
   import ArrowRightIcon from 'phosphor-svelte/lib/ArrowRightIcon';
-  import { listHumanTasks } from '../lib/features/human-tasks/human-tasks.remote';
-  import { formatUtcDateTime } from '../lib/dates';
+  import { listHumanTasks } from '#lib/features/human-tasks/human-tasks.remote.ts';
+  import { formatUtcDateTime } from '#lib/dates.ts';
 
   const tasks = $derived(await listHumanTasks());
   const groups = $derived([
