@@ -4,6 +4,7 @@ Read [VISION.md](VISION.md) for purpose and scope.
 Use the [Moku workflow](.agents/skills/moku/SKILL.md) when changing this repository.
 
 - For ownership or dependencies, read [architecture](.agents/skills/moku/references/architecture.md).
+- Before changing how UI looks, read [DESIGN.md](DESIGN.md).
 - Before editing documentation or skills, read [guidance maintenance](.agents/skills/moku/references/documentation.md).
 - Before writing Effect code, read `node_modules/effect/AGENTS.md` completely and
   follow its relevant links. Use installed documentation and `node_modules/effect/src`

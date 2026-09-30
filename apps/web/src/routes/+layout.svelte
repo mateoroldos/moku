@@ -26,7 +26,7 @@
 <div class="flex min-h-svh flex-col bg-background">
   <header class="border-b bg-card/80">
     <div class="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-3 sm:px-8">
-      <a href="/" class="rounded-sm font-mono text-sm font-medium tracking-[0.14em] uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" aria-label="Moku home">Moku</a>
+      <a href="/" class="rounded-sm font-mono text-sm font-medium tracking-widest uppercase focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring" aria-label="Moku home">Moku</a>
       <nav aria-label="Main navigation" class="flex items-center gap-3 sm:gap-6">
         <a href="/" aria-current={page.url.pathname === '/' ? 'page' : undefined} class="rounded-sm text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Inbox</a>
         <Button variant="ghost" size="icon-lg" onclick={toggleMode} aria-label="Toggle color theme">

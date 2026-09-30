@@ -12,6 +12,7 @@
     "dev": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js dev --host 127.0.0.1",
     "build": "vite build",
     "check-types": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint",
     "prepare": "svelte-kit sync"
   },
   "dependencies": {
@@ -31,8 +32,10 @@
     "@sveltejs/kit": "3.0.0-next.30",
     "@sveltejs/vite-plugin-svelte": "7.3.0",
     "@tailwindcss/vite": "catalog:",
+    "eslint": "10.11.0",
     "svelte": "catalog:",
     "svelte-check": "4.7.6",
+    "tailwindcss": "catalog:",
     "typescript": "6.0.3",
     "vite": "8.2.2",
     "vitest": "catalog:"

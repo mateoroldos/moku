@@ -16,6 +16,10 @@
     "check-types": {
       "dependsOn": ["^check-types"]
     },
+    "lint": {
+      "dependsOn": ["^lint"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.oxlintrc.json"]
+    },
     "test": {
       "dependsOn": ["^test"]
     }
