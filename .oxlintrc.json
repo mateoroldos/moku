@@ -39,6 +39,7 @@
       "files": [
         "scripts/check-guidance.ts",
         "scripts/check-migrations.ts",
+        "scripts/check-auth-schema.ts",
         "scripts/check-guidance.test.ts",
         "scripts/check-workspaces.test.ts"
       ],

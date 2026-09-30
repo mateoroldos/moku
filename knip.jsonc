@@ -3,11 +3,16 @@
   // Knip cannot follow member access through self-named namespace exports.
   "exclude": ["exports", "types"],
   "workspaces": {
+    "apps/web": {
+      "entry": ["auth.config.ts"],
+    },
     "adapters/database-postgres": {
       "entry": ["src/**/*.test.ts"],
     },
     ".": {
       "entry": ["scripts/*.ts"],
+      // check-auth-schema invokes the pinned CLI through its local binary path.
+      "ignoreDependencies": ["auth"],
     },
     "packages/ui": {
       // svelte-check selects the TypeScript 7 alias through --tsgo.

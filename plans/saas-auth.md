@@ -255,6 +255,26 @@ integration decision requires checking the installed provider's callback semanti
 
 ## Delivery slices and evidence
 
+### Slice 1 implementation decisions
+
+- Two jj changes: additive auth schema/tooling, then its runtime/HTTP consumers.
+- Pin Better Auth, its CLI, and the relations-v2 Drizzle adapter to 1.7.4.
+  Generate core user/session/account/verification/rate-limit tables now; organization
+  plugin schema accompanies the organization slice, before its consumers.
+- Reuse a single process-owned `pg.Pool` via installed Effect `PgClient.fromPool`
+  and Drizzle's Promise client. Preserve application temporal codecs and prove both
+  clients work with the same pool and release it at runtime shutdown.
+- Expose only sign-in, sign-out, and session lookup in this foundation. Signup is
+  disabled, verified email is required, and deletion is disabled. Tests provision
+  verified credentials directly; no onboarding or tenant protection is implied.
+- Seven-day sessions have an absolute lifetime: no sliding renewal, no cookie
+  cache. Cookies are returned by the provider HTTP handler; internal session reads
+  cannot refresh cookies. HTTP origins require explicit configuration; production
+  uses HTTPS. No forwarded IP headers are trusted yet, so provider rate limiting
+  falls back to a shared per-path bucket until deployment proxy trust is configured.
+- Schema rollback means rolling back the consumer while retaining harmless additive
+  tables; applied migration history is not rewritten.
+
 Slices are sequential unless their ownership and contracts are demonstrably
 independent. Each feature slice includes its frontend; screens are not deferred to
 one final UI phase. Schema changes precede consumers in dedicated changes. Incomplete
