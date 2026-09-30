@@ -2,7 +2,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { ApprovalResult } from "@moku/domain/human-task";
 import { Config, Console, Effect, Layer, Schema } from "effect";
-import { WebRuntime } from "./lib/server/runtime.ts";
+import { WebRuntime } from "#lib/server/runtime.ts";
 
 const examples = Schema.decodeSync(
   Schema.Array(

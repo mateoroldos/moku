@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatUtcDateTime } from "../../dates";
+  import { formatUtcDateTime } from "#lib/dates.ts";
   import ApprovalResponseForm from "./ApprovalResponseForm.svelte";
   import { getHumanTask } from "./human-tasks.remote";
 

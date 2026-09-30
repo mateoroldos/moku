@@ -1,9 +1,9 @@
 import { building, dev } from "$app/env";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
 import { Cause, Config, Effect, Option } from "effect";
-import { WebRuntime } from "./lib/server/runtime.ts";
-import { Observability } from "./lib/server/observability.ts";
-import { RequestRunner } from "./lib/server/request-runner.ts";
+import { WebRuntime } from "#lib/server/runtime.ts";
+import { Observability } from "#lib/server/observability.ts";
+import { RequestRunner } from "#lib/server/request-runner.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();

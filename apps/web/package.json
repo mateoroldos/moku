@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "sideEffects": false,
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
     "db:seed": "bun --env-file=../../.env src/seed.ts",

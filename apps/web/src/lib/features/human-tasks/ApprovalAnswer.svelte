@@ -1,7 +1,7 @@
 <script lang="ts">
   import CheckIcon from "phosphor-svelte/lib/CheckIcon";
   import XIcon from "phosphor-svelte/lib/XIcon";
-  import { formatUtcDateTime } from "../../dates";
+  import { formatUtcDateTime } from "#lib/dates.ts";
   import type { ReviewTask } from "./review-task";
 
   let { task }: { task: Exclude<ReviewTask, { status: "pending" }> } = $props();

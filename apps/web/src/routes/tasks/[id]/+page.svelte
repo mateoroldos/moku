@@ -1,5 +1,5 @@
 <script lang="ts">
-  import HumanTaskReview from '../../../lib/features/human-tasks/HumanTaskReview.svelte';
+  import HumanTaskReview from '#lib/features/human-tasks/HumanTaskReview.svelte';
   import type { PageProps } from './$types';
 
   let { params }: PageProps = $props();
