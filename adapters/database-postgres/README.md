@@ -28,6 +28,21 @@ editing one already applied to a database. `db:check` generates against a
 temporary copy and fails on drift. Apply checked-in migrations once per deployment
 before serving traffic; repeated migration runs leave applied migrations intact.
 
+### Authentication schema
+
+Better Auth owns [its generated schema](src/auth/schema.ts). Change the shared
+[provider options](../../apps/web/src/lib/server/better-auth-options.ts), then run:
+
+```sh
+bun run auth:schema:generate
+bun run db:generate
+bun run auth:schema:check
+bun run db:check
+```
+
+The pinned CLI generates without database access. `auth:schema:check` compares
+the formatted output with the checked-in schema; `db:check` checks its SQL migration.
+
 ## Verify
 
 `bun run check` includes migrated PGlite tests. For real driver, reconnection, and

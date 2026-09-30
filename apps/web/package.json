@@ -18,12 +18,15 @@
     "prepare": "svelte-kit sync"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-pg": "catalog:",
     "@moku/core": "workspace:*",
     "@moku/database-postgres": "workspace:*",
     "@moku/domain": "workspace:*",
     "@moku/ui": "workspace:*",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "mode-watcher": "1.1.0",
     "phosphor-svelte": "3.1.0"
