@@ -1,6 +1,6 @@
 # Verified identities and tenant-safe human review
 
-Track: big feature + auth/data stakes · Status: slice 1 implemented; awaiting stack approval
+Track: big feature + auth/data stakes · Status: slice 2 approved for implementation
 
 Moku needs verified human identities, organization membership, and enforceable
 task access. A teammate works within an organization; an external reviewer sees
@@ -245,15 +245,99 @@ account / organization deletion
   -> revoke access -> clear client state -> safe destination
 ```
 
-Do not hold SQL transactions open across email HTTP requests. Before the mail slice,
-choose a truthful delivery strategy: durable queue/outbox if crash-resilient
-acceptance is promised, otherwise bounded awaited delivery with explicit resend
-and persisted-state recovery. Avoid detached request fibers and automatic retries
-of uncertain non-idempotent sends. Public auth responses must not disclose account
-existence through message differences; examine timing as well as content. This
-integration decision requires checking the installed provider's callback semantics.
+Send auth email in application-owned background fibers through the existing Node
+managed runtime. Background execution is not durable delivery: a process crash can
+lose a send, and the person recovers through explicit resend. Do not hold SQL
+transactions open across email HTTP requests or retry uncertain sends automatically.
+Public auth responses must not disclose account existence through message differences;
+examine timing as well as content. Do not claim delivery or durable queue acceptance.
 
 ## Delivery slices and evidence
+
+### Slice 2 implementation contract
+
+**Approved:** application-owned background email, bounded sends, sanitized failure
+reporting, generic public responses, and explicit resend. An outbox and crash-safe
+delivery are deferred. No further delivery-policy gate is needed before implementation.
+
+#### Established integration constraints
+
+- Installed Better Auth 1.7.4 `api/routes/sign-up.mjs` wraps credential creation
+  and the verification callback in `runWithTransaction`. Background email must not
+  keep that transaction open for network delivery. Failure or loss of a send does
+  not roll back persisted auth state; resend is the recovery path.
+- Its email-OTP plugin supports hashed storage, rotating resends, configurable
+  lifetime/attempts, and the password-reset session-revocation option. The endpoint
+  allowlist must exclude passwordless sign-in and change-email paths in this slice.
+- OTP issuance persists verification state before calling the email callback.
+  Unknown-address requests can return without a callback. Asynchronous delivery
+  removes mail-provider latency from that difference; it does not by itself prove
+  account-enumeration resistance or transactional consistency.
+- Cloudflare's REST send endpoint reports `delivered`, `queued`, and
+  `permanent_bounces`. Its published request contract documents no idempotency key.
+  HTTP success alone is not evidence of delivery or even acceptance for a recipient.
+
+#### Outcomes and ownership
+
+```ts
+type AuthMailPurpose = "verify-email" | "recover-password";
+type DeliveryOutcome =
+  | { readonly _tag: "Accepted" }
+  | { readonly _tag: "Rejected"; readonly reason: "bounce" | "configuration" | "invalid-message" }
+  | { readonly _tag: "Uncertain" };
+```
+
+- Better Auth continues to own credentials, OTP hashes/attempts, and sessions.
+  Moku owns delivery, admission limits, and the guarded application boundary.
+- Core owns the minimal email delivery port and expected failures. PostgreSQL owns
+  shared admission persistence if the provider's limits cannot enforce the agreed
+  per-address cooldown. Web composes the provider bridge and application runtime;
+  console and Cloudflare adapters implement delivery.
+- The existing managed runtime owns send fibers independently of request cancellation.
+  Bound each send and handle its failure explicitly. No separate runtime per message,
+  durable queue, encryption key, or message-history table is needed.
+- No message body or code enters telemetry. Console email is a development-only
+  exception, not an OTLP log. Production requires configured Cloudflare delivery.
+- Explicit resend after the cooldown issues a fresh OTP; an already in-flight
+  message may still arrive, but its old code must be rejected. Do not automatically
+  retry ambiguous provider outcomes.
+- Use the same conditional public wording for existing and unknown accounts;
+  offer resend after 60 seconds. Background failures are reported operationally,
+  not exposed through a public per-address delivery-status lookup.
+
+#### Implementation sequence and proofs
+
+1. **2a. Establish email delivery and shared admission.** Implement the minimal
+   email port, console and Cloudflare adapters, and any necessary shared cooldown
+   schema before its consumers. Prove HTTP failure translation, timeout, provider
+   response decoding, and production refusal to fall back to console.
+2. **2b. Own background sends.** Integrate sends with the existing managed runtime.
+   Prove request cancellation does not cancel delivery, failures are observed, and
+   runtime shutdown releases resources. Do not claim recovery after process death.
+3. **2c. Enable verified onboarding and recovery.** Integrate the real OTP plugin,
+   atomic admission/cooldown, background delivery, session revocation, and request-local
+   verified-identity guards. Extend provider tests for replay, wrong purpose, expiry,
+   exhausted attempts, resend invalidation, duplicate signup, and unknown accounts.
+   Prove anonymous/unverified direct task remotes fail closed, not merely layouts.
+4. **2d. Complete the account frontend.** Signup/login, OTP paste and resend
+   countdown, recovery/reset, logout, retained non-secret input, and safe local
+   return destinations. Browser proof covers normal flow, expiry, failed requests,
+   delayed delivery/resend, and revoked sessions. Verify build and the complete stack.
+
+Guarding existing tasks by verified identity is only an intermediate boundary;
+tenant isolation remains slice 4. Until then this is a development-only stage.
+
+#### External prerequisites
+
+- Keep the existing no-forwarded-IP trust policy until a deployment proxy is chosen.
+  Shared admission limits must still apply across instances; choose concrete
+  public-rollout source/volume limits with the deployment configuration.
+- Live Cloudflare proof requires a configured account/domain and an approved
+  recipient. Adapter contract tests and console browser journeys can run beforehand.
+
+Sources: installed `better-auth/dist/plugins/email-otp/index.mjs`, `routes.mjs`,
+`types.d.mts`, `better-auth/dist/api/routes/sign-up.mjs`, and
+[Cloudflare REST email API](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/).
 
 ### Slice 1 implementation decisions
 
@@ -269,8 +353,8 @@ integration decision requires checking the installed provider's callback semanti
 - Expose only sign-in, sign-out, and session lookup in this foundation. Signup is
   disabled, verified email is required, and deletion is disabled. Tests provision
   verified credentials directly; no onboarding or tenant protection is implied.
-- Seven-day sessions have an absolute lifetime: no sliding renewal, no cookie
-  cache. Cookies are returned by the provider HTTP handler; internal session reads
+- Sessions have a seven-day maximum lifetime: no sliding renewal, no cookie
+  cache. Non-remembered sessions expire after one day. Cookies are returned by the provider HTTP handler; internal session reads
   cannot refresh cookies. HTTP origins require explicit configuration; production
   uses HTTPS. No forwarded IP headers are trusted yet, so provider rate limiting
   falls back to a shared per-path bucket until deployment proxy trust is configured.
@@ -383,6 +467,6 @@ storage, organization authorization hooks, transaction guarantees, and cookie re
 
 The user approved the scope and recommendations, with the explicit requirement
 that organization deletion preserves every user account. Slice 1 is implemented
-in separate schema, provider, and runtime changes. Next: review/approve that stack, then
-build slice 2. Resolve operational prerequisites with their owning slices and
+in separate schema, provider, and runtime PRs. Slice 2 uses approved application-owned
+background delivery and resend. Next: implement and verify that slice; resolve
 retention/recovery details before slice 8.
