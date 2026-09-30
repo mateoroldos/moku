@@ -14,13 +14,10 @@ const application = HumanTaskDirectory.layer.pipe(
   Layer.provide(Layer.merge(PersistencePostgres.layer, NodeCrypto.layer)),
 );
 
-export const layer = (url: Redacted.Redacted) =>
-  application.pipe(Layer.provide(Postgres.layer(url)));
-
-export const make = (
+const layer = (
   url: Redacted.Redacted,
   auth: AuthConfig.Settings,
-  settings: Observability.Settings = {},
+  settings: Observability.Settings,
 ) => {
   const authentication = Layer.effect(
     Authentication.Service,
@@ -32,13 +29,17 @@ export const make = (
       );
     }),
   );
-  return ManagedRuntime.make(
-    Layer.merge(application, authentication).pipe(
-      Layer.provide(Postgres.layer(url)),
-      Layer.provideMerge(Observability.layer(settings)),
-    ),
+  return Layer.merge(application, authentication).pipe(
+    Layer.provide(Postgres.layer(url)),
+    Layer.provideMerge(Observability.layer(settings)),
   );
 };
+
+export const make = (
+  url: Redacted.Redacted,
+  auth: AuthConfig.Settings,
+  settings: Observability.Settings = {},
+) => ManagedRuntime.make(layer(url, auth, settings));
 
 export type Runtime = ReturnType<typeof make>;
 export type Run = ReturnType<
