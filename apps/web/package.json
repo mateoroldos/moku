@@ -29,14 +29,17 @@
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "mode-watcher": "1.1.0",
+    "pg": "catalog:",
     "phosphor-svelte": "3.1.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
+    "@electric-sql/pglite": "catalog:",
     "@sveltejs/adapter-node": "6.0.0-next.15",
     "@sveltejs/kit": "3.0.0-next.30",
     "@sveltejs/vite-plugin-svelte": "7.3.0",
     "@tailwindcss/vite": "catalog:",
+    "@types/pg": "8.20.0",
     "svelte": "catalog:",
     "svelte-check": "4.7.6",
     "typescript": "6.0.3",
