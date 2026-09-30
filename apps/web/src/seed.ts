@@ -1,8 +1,10 @@
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { PersistencePostgres } from "@moku/database-postgres";
 import { ApprovalResult } from "@moku/domain/human-task";
 import { Config, Console, Effect, Layer, Schema } from "effect";
-import { WebRuntime } from "#lib/server/runtime.ts";
+import { Postgres } from "#lib/server/postgres.ts";
 
 const examples = Schema.decodeSync(
   Schema.Array(
@@ -79,7 +81,12 @@ NodeRuntime.runMain(
     yield* Console.log("Added four example tasks. Existing tasks and decisions were preserved.");
   }).pipe(
     Effect.provide(
-      Layer.unwrap(Config.redacted("DATABASE_URL").pipe(Effect.map(WebRuntime.layer))),
+      HumanTaskDirectory.layer.pipe(
+        Layer.provide(Layer.merge(PersistencePostgres.layer, NodeCrypto.layer)),
+        Layer.provide(
+          Layer.unwrap(Config.redacted("DATABASE_URL").pipe(Effect.map(Postgres.layer))),
+        ),
+      ),
     ),
   ),
 );
