@@ -10,3 +10,4 @@ apps/web/build/
 .env.*
 !.env.example
 .DS_Store
+*.scratch.*

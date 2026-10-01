@@ -1,35 +1,32 @@
 # Verified identity and tenant-safe tasks
 
-Track: big feature + auth/data stakes · Status: shaping · Appetite: ~7 PRs · PRs: 0/7 · Issue: #8
+Track: big feature + auth/data stakes · Status: building · Appetite: ~8 PRs · PRs: 0/8 · Issue: #8
 
 A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today anyone can read and answer every task.
 Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
 
 ## Needs you
 
-- Approve this plan. The spike sizes PRs 1–2 before any code; anything over about 400 lines gets split here first.
-- Session lifetime: approve a fixed seven days, with no sliding renewal?
+- Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
+- Before PR 2: approve the seeded-only, globally shared inbox until PR 3, and decide cookie/origin/proxy protections before enabling login.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
-- Before PR 7: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
+- Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
 
 ## Shape
-
-New names are proposals; the spike may change them.
 
 ```text
 packages/domain/src/      + organization/    UserId, OrganizationId, OrganizationRole
                           ~ human-task/      TaskRef { organizationId, taskId }, ResponseAttribution
 packages/core/src/        + access/          VerifiedPrincipal, role policy, membership port
                           ~ human-task/      directory and store take (principal, TaskRef)
-adapters/database-postgres/src/  + auth/     Better Auth users, sessions, organizations
+adapters/database-postgres/src/  + auth/     AuthStorage.Service (Better Auth factory), four-table schema
+                                + postgres-connection.ts  PostgresConnection.layer(options) → PgClient + AuthStorage.Service
                           ~ human-task/      tasks.organization_id required, scoped SQL
 apps/web/src/             ~ hooks.server.ts  session → request-local principal
                           + lib/server/auth  Better Auth bridge, permitted operations
-                          ~ features/human-tasks/human-tasks.remote.ts  session + TaskRef
+                          ~ lib/features/human-tasks/human-tasks.remote.ts  session + TaskRef
                           + routes/login, routes/[org]/…  login, scoped inbox and tasks
 ```
-
-Answering a task; every task remote follows the same path:
 
 ```diff
  respondToHumanTask(form): web remote
@@ -53,23 +50,24 @@ Answering a task; every task remote follows the same path:
 
 ## Risks
 
-- Better Auth 1.7.4 may not fit SvelteKit 3 next.30, our Drizzle version, or our process-owned pool → spike in scratch files before PR 1.
-- Better Auth's membership writes may not join our transactions, which would break the removed-member rule → prove it in the spike; its membership endpoints stay disabled until then.
-- Waiting for email may reveal whether an account exists through response time → measure it in the spike, before PR 6.
+- SvelteKit 3 next.30 handler and cookie behavior needs a real app check in PR 2; the PostgreSQL spike proves Better Auth 1.7.4 with Drizzle rc.5 and Effect rc.112, not Kit integration.
+- Better Auth membership writes escape Effect transactions even on the same pool → keep membership endpoints disabled; PR 3 must check membership and write tasks through the same Effect transaction.
+- Waiting for email may reveal whether an account exists through response time → measure before PR 7.
 
 ## Trunk path
 
 No PR removes the working inbox.
 
-| PR  | Trunk gains                                     | Users see                    | Technique       | Undo                    | Mode | Status   |
-| --- | ----------------------------------------------- | ---------------------------- | --------------- | ----------------------- | ---- | -------- |
-| 1   | Seeded login protects read and answer           | Working inbox after login    | skeleton · live | revert                  | ask  | proposed |
-| 2   | Tenant scope, role policy, attribution          | Scoped inbox and answers     | skeleton · live | revert, reset dev data  | ask  | proposed |
-| 3   | Task creation in the app                        | Create → review → answer     | split · live    | revert                  | ask  | proposed |
-| 4   | Organization list and switcher                  | Switch seeded organizations  | split · live    | revert                  | ask  | proposed |
-| 5   | Organization creation                           | Create org → inbox           | split · live    | revert                  | ask  | proposed |
-| 6   | Signup, email code, console email               | Verify → create org → review | split · live    | revert                  | ask  | proposed |
-| 7   | Cloudflare email; docs; plan deleted; #8 closed | Code arrives in a real inbox | split · live    | revert; sent mail stays | ask  | proposed |
+| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Status        |
+| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------------- |
+| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ready locally |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | proposed      |
+| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  | proposed      |
+| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  | proposed      |
+| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  | proposed      |
+| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  | proposed      |
+| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  | proposed      |
+| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  | proposed      |
 
 Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
 
@@ -79,17 +77,21 @@ Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10
 - Better Auth stores accounts, sessions, codes, and memberships; Moku owns task permissions. No second membership table.
 - One role per membership: owner, admin, member, viewer. Viewers read; the others also create and answer.
 - The organization comes from the URL over a saved "active organization", which never grants access.
-- Seeded accounts before signup over signup first: the inbox works from PR 1.
+- Seeded accounts before signup over signup first: the protected inbox works from PR 2.
 - Replacing the task schema and resetting dev data over a migration: there are no users yet.
 - Email code: six digits, five minutes, three tries, single use, stored hashed; resend waits 60 seconds.
 - Console email in development, Cloudflare in production, behind one email port.
 - Keep the process-owned database pool over Forge's separate client; never cast the Effect client to a Promise client.
+- Sessions expire seven days after login, with no sliding renewal or cookie cache.
+- PR 1 uses Better Auth's CLI to generate `user`, `account`, `session`, and `verification`, then Drizzle generates SQL/snapshot. It leaves `human_tasks`, seeding, and read/answer behavior intact; no auth endpoints or accounts are enabled.
+- `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
+- PR 1 proof: real PostgreSQL login/session round-trip through auth storage, SQL visibility on the shared pool, rejection of orphan/duplicate auth rows, rollback, and connection release; existing task/runtime suites prove inbox compatibility. Migration lands as a separate change before wiring; code rollback retains unused tables.
 
 ## References
 
 | Source                                                                                                                                                         | Use it for                                                  | Trust     |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------- |
-| `node_modules/better-auth` 1.7.4, once installed                                                                                                               | what the provider really does: cookies, hooks, transactions | truth     |
+| `adapters/database-postgres/node_modules/better-auth` 1.7.4                                                                                                    | what the provider really does: cookies, hooks, transactions | truth     |
 | [Better Auth: SvelteKit](https://www.better-auth.com/docs/integrations/svelte-kit)                                                                             | wiring the handler and session into hooks                   | truth     |
 | [Better Auth: email OTP](https://www.better-auth.com/docs/plugins/email-otp) and [organization](https://www.better-auth.com/docs/plugins/organization) plugins | code options and membership endpoints to enable or deny     | truth     |
 | [Cloudflare Email Service](https://developers.cloudflare.com/email-service/)                                                                                   | sending from Node over REST; account and sender setup       | truth     |
