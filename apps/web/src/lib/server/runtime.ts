@@ -1,17 +1,15 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { PgClient } from "@effect/sql-pg";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { PersistencePostgres } from "@moku/database-postgres";
+import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { Layer, ManagedRuntime, type Redacted } from "effect";
 import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
 
 export const layer = (url: Redacted.Redacted) => {
-  const postgres = PgClient.layer({
+  const postgres = PostgresConnection.layer({
     url,
-    types: PersistencePostgres.typeParsers,
     applicationName: "moku-web",
-    connectTimeout: "5 seconds",
     maxConnections: 10,
   });
   const persistence = PersistencePostgres.layer.pipe(Layer.provide(postgres));

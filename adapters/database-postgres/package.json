@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/persistence-postgres.ts"
+    ".": "./src/persistence-postgres.ts",
+    "./auth-storage": "./src/auth/auth-storage.ts",
+    "./postgres-connection": "./src/postgres-connection.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",
