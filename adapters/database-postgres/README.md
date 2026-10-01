@@ -22,11 +22,19 @@ bun run db:check
 bun run db:migrate
 ```
 
-Edit [the schema](src/human-task/schema.ts), generate and review the SQL, and commit
+Edit [the task schema](src/human-task/schema.ts), generate and review the SQL, and commit
 the migration directory including its snapshot. Add a new migration rather than
 editing one already applied to a database. `db:check` generates against a
 temporary copy and fails on drift. Apply checked-in migrations once per deployment
 before serving traffic; repeated migration runs leave applied migrations intact.
+
+Generate [the auth schema](src/auth/schema.ts) with Better Auth rather than editing
+it by hand. Web owns [Better Auth options](../../apps/web/src/lib/server/better-auth-options.ts)
+and [the CLI entrypoint](../../apps/web/auth.config.ts). Run
+`bun run --cwd apps/web auth:generate` before `db:generate`.
+`db:check` also regenerates the Better Auth schema in a temporary directory and
+rejects differences from the checked-in schema.
+The generation config uses a mock Drizzle client and never connects to a database.
 
 ## Verify
 

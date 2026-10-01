@@ -17,6 +17,45 @@ const postgres = Layer.unwrap(
 );
 const persistence = PersistencePostgres.layer.pipe(Layer.provideMerge(postgres));
 
+it.live("auth migrations reject duplicate identities and orphan credentials and sessions", () =>
+  Effect.gen(function* () {
+    const database = yield* makeWithDefaults();
+    yield* migrate(database, migrationConfig);
+    const sql = yield* PgClient.PgClient;
+    const cleanup = Effect.gen(function* () {
+      yield* sql`DELETE FROM session WHERE id IN ('auth-schema-session', 'auth-schema-duplicate', 'auth-orphan')`;
+      yield* sql`DELETE FROM account WHERE id = 'auth-orphan'`;
+      yield* sql`DELETE FROM "user" WHERE id IN ('auth-schema-test', 'auth-schema-duplicate')`;
+    });
+    yield* cleanup;
+    yield* Effect.gen(function* () {
+      yield* sql`INSERT INTO "user" (id, name, email)
+        VALUES ('auth-schema-test', 'Schema test', 'schema-test@example.test')`;
+      const duplicate = yield* Effect.flip(sql`INSERT INTO "user" (id, name, email)
+        VALUES ('auth-schema-duplicate', 'Duplicate', 'schema-test@example.test')`);
+      assert.strictEqual(duplicate.reason._tag, "UniqueViolation");
+      assert.propertyVal(duplicate.reason.cause, "constraint", "user_email_key");
+      const orphanAccount = yield* Effect.flip(sql`INSERT INTO account
+        (id, account_id, provider_id, user_id, updated_at)
+        VALUES ('auth-orphan', 'auth-missing-user', 'credential', 'auth-missing-user', now())`);
+      assert.propertyVal(orphanAccount.reason.cause, "code", "23503");
+      assert.propertyVal(orphanAccount.reason.cause, "constraint", "account_user_id_user_id_fkey");
+      const orphanSession = yield* Effect.flip(sql`INSERT INTO session
+        (id, token, user_id, expires_at, updated_at)
+        VALUES ('auth-orphan', 'auth-orphan-token', 'auth-missing-user', now(), now())`);
+      assert.propertyVal(orphanSession.reason.cause, "code", "23503");
+      assert.propertyVal(orphanSession.reason.cause, "constraint", "session_user_id_user_id_fkey");
+      yield* sql`INSERT INTO session (id, token, user_id, expires_at, updated_at)
+        VALUES ('auth-schema-session', 'auth-schema-token', 'auth-schema-test', now(), now())`;
+      const duplicateToken = yield* Effect.flip(sql`INSERT INTO session
+        (id, token, user_id, expires_at, updated_at)
+        VALUES ('auth-schema-duplicate', 'auth-schema-token', 'auth-schema-test', now(), now())`);
+      assert.strictEqual(duplicateToken.reason._tag, "UniqueViolation");
+      assert.propertyVal(duplicateToken.reason.cause, "constraint", "session_token_key");
+    }).pipe(Effect.ensuring(cleanup.pipe(Effect.orDie)));
+  }).pipe(Effect.provide(postgres)),
+);
+
 it.live("migrates repeatedly, preserves the winning insert, and survives reconnection", () =>
   Effect.gen(function* () {
     yield* Effect.gen(function* () {

@@ -12,6 +12,7 @@
       "ignoreDependencies": ["@sveltejs/mcp"],
     },
     "apps/web": {
+      "entry": ["auth.config.ts"],
       // @shadcn/lint builds the app theme with the app's own Tailwind.
       "ignoreDependencies": ["tailwindcss"],
     },

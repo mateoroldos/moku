@@ -19,7 +19,7 @@
     "dev:otel": "OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 turbo run dev",
     "build": "turbo run build",
     "check": "bun run format:check && bun run lint && bun run check:guidance && bun run check:workspaces && bun run db:check && bun run knip && bun run check-types && bun run test",
-    "db:check": "bun scripts/check-migrations.ts",
+    "db:check": "bun scripts/check-auth-schema.ts && bun scripts/check-migrations.ts",
     "check:guidance": "bun scripts/check-guidance.ts",
     "check:workspaces": "bun scripts/check-workspaces.ts",
     "check-types": "tsc --noEmit && turbo check-types",

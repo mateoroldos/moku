@@ -36,10 +36,18 @@
   },
   "overrides": [
     {
+      "files": ["adapters/database-postgres/src/auth/schema.ts"],
+      "rules": {
+        // Better Auth generates Date callbacks for Drizzle's timestamp columns.
+        "effecttsgo/global-date": "off"
+      }
+    },
+    {
       "files": [
         "packages/ui/eslint.config.js",
         "scripts/check-guidance.ts",
         "scripts/check-migrations.ts",
+        "scripts/check-auth-schema.ts",
         "scripts/check-guidance.test.ts",
         "scripts/check-workspaces.test.ts"
       ],
