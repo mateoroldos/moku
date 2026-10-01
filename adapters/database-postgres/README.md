@@ -3,6 +3,12 @@
 Implements `HumanTaskStore` with Drizzle and Effect SQL. Supply the PostgreSQL
 client with `PersistencePostgres.typeParsers` for Drizzle's temporal codecs.
 
+The web runtime uses `PostgresConnection.layer` to supply Effect SQL and
+`AuthStorage.Service` from one scoped pool. Auth storage is a Better Auth database
+factory; it does not expose the raw pool or Drizzle clients. Sharing a pool does
+not share transactions: task permissions and writes must use the same Effect SQL
+transaction, rather than mixing in Better Auth writes.
+
 ## Develop
 
 Follow the root [database setup](../../README.md#develop). Run the commands below
