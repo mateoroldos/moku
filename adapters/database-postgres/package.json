@@ -14,6 +14,7 @@
     "db:migrate": "bun --env-file=../../.env src/migrate.ts"
   },
   "dependencies": {
+    "@better-auth/drizzle-adapter": "1.7.4",
     "@effect/sql-pg": "catalog:",
     "@moku/core": "workspace:*",
     "@moku/domain": "workspace:*",
@@ -27,6 +28,7 @@
     "@effect/vitest": "catalog:",
     "@electric-sql/pglite": "catalog:",
     "@types/pg": "8.20.0",
+    "better-auth": "1.7.4",
     "drizzle-kit": "catalog:",
     "vitest": "catalog:"
   }

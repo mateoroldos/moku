@@ -58,16 +58,16 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 
 No PR removes the working inbox.
 
-| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Status        |
-| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------------- |
-| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ready locally |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | proposed      |
-| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  | proposed      |
-| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  | proposed      |
-| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  | proposed      |
-| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  | proposed      |
-| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  | proposed      |
-| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  | proposed      |
+| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Status    |
+| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | --------- |
+| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | in review |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | proposed  |
+| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  | proposed  |
+| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  | proposed  |
+| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  | proposed  |
+| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  | proposed  |
+| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  | proposed  |
+| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  | proposed  |
 
 Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
 
@@ -83,7 +83,7 @@ Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10
 - Console email in development, Cloudflare in production, behind one email port.
 - Keep the process-owned database pool over Forge's separate client; never cast the Effect client to a Promise client.
 - Sessions expire seven days after login, with no sliding renewal or cookie cache.
-- PR 1 uses Better Auth's CLI to generate `user`, `account`, `session`, and `verification`, then Drizzle generates SQL/snapshot. It leaves `human_tasks`, seeding, and read/answer behavior intact; no auth endpoints or accounts are enabled.
+- PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
 - PR 1 proof: real PostgreSQL login/session round-trip through auth storage, SQL visibility on the shared pool, rejection of orphan/duplicate auth rows, rollback, and connection release; existing task/runtime suites prove inbox compatibility. Migration lands as a separate change before wiring; code rollback retains unused tables.
 
