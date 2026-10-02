@@ -1,6 +1,6 @@
 # Verified identity and tenant-safe tasks
 
-Track: big feature + auth/data stakes · Status: building · Appetite: ~8 PRs · PRs: 0/8 · Issue: #8
+Track: big feature + auth/data stakes · Status: building · Appetite: ~8 PRs · Issue: #8
 
 A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today anyone can read and answer every task.
 Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
