@@ -1,16 +1,34 @@
 # Verified identity and tenant-safe tasks
 
-Track: big feature + auth/data stakes · Status: building · Appetite: ~8 PRs · Issue: #8
+Issue: #8 · Appetite: ~8 PRs
 
 A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today anyone can read and answer every task.
+
 Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
 
-## Needs you
+## ⚠️ Needs you
 
 - Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
 - Before PR 2: approve the seeded-only, globally shared inbox until PR 3, and decide cookie/origin/proxy protections before enabling login.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
+
+## Trunk path
+
+No PR removes the working inbox.
+
+| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done   |
+| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------ |
+| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14 |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  |        |
+| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |        |
+| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |        |
+| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |        |
+| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  |        |
+| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  |        |
+| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  |        |
+
+Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
 
 ## Shape
 
@@ -54,23 +72,6 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 - Better Auth membership writes escape Effect transactions even on the same pool → keep membership endpoints disabled; PR 3 must check membership and write tasks through the same Effect transaction.
 - Waiting for email may reveal whether an account exists through response time → measure before PR 7.
 
-## Trunk path
-
-No PR removes the working inbox.
-
-| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Status    |
-| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | --------- |
-| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | in review |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | proposed  |
-| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  | proposed  |
-| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  | proposed  |
-| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  | proposed  |
-| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  | proposed  |
-| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  | proposed  |
-| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  | proposed  |
-
-Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
-
 ## Decisions
 
 - Better Auth over our own: credentials and sessions aren't our product, and `../effect-forge` already runs it with our Effect version.
@@ -85,7 +86,6 @@ Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10
 - Sessions expire seven days after login, with no sliding renewal or cookie cache.
 - PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
-- PR 1 proof: real PostgreSQL login/session round-trip through auth storage, SQL visibility on the shared pool, rejection of orphan/duplicate auth rows, rollback, and connection release; existing task/runtime suites prove inbox compatibility. Migration lands as a separate change before wiring; code rollback retains unused tables.
 
 ## References
 
