@@ -1,10 +1,14 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
+import { Principal, UserId } from "@moku/domain/identity";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema, type Result } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
 
-const User = Schema.Struct({ id: Schema.NonEmptyString, emailVerified: Schema.Boolean });
-const Session = Schema.NullOr(Schema.Struct({ user: User }));
+const ProviderSession = Schema.NullOr(
+  Schema.Struct({
+    user: Schema.Struct({ id: UserId, emailVerified: Schema.Boolean }),
+  }),
+);
 
 const Origin = Schema.URLFromString.check(
   Schema.makeFilter((url) =>
@@ -21,7 +25,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Authenticati
 }) {}
 
 export interface Interface {
-  readonly authenticate: (headers: Headers) => Effect.Effect<typeof User.Type | null, Unavailable>;
+  readonly authenticate: (headers: Headers) => Effect.Effect<Principal | null, Unavailable>;
   readonly handle: (
     request: Request,
     clientAddress: string,
@@ -30,7 +34,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@moku/web/Authentication") {}
 
-export type AuthResult = Result.Result<typeof User.Type | null, Unavailable>;
+export type AuthResult = Result.Result<Principal | null, Unavailable>;
 
 export const layer = Layer.effect(
   Service,
@@ -53,19 +57,21 @@ export const layer = Layer.effect(
         try: () => auth.api.getSession({ headers }),
         catch: unavailable,
       });
-      const session = yield* Schema.decodeUnknownEffect(Session)(result).pipe(
+      const session = yield* Schema.decodeUnknownEffect(ProviderSession)(result).pipe(
         Effect.mapError(unavailable),
       );
-      return session?.user ?? null;
+      return session === null
+        ? null
+        : Principal.make({
+            userId: session.user.id,
+            emailVerified: session.user.emailVerified,
+          });
     }, Effect.uninterruptible);
 
     const handle = Effect.fn("Authentication.handle")(function* (
       request: Request,
       clientAddress: string,
     ) {
-      if (request.method === "POST" && request.headers.get("origin") !== origin.origin)
-        return new Response(null, { status: 403 });
-
       const headers = new Headers(request.headers);
       headers.set("x-moku-client-ip", clientAddress);
       const response = yield* Effect.tryPromise({

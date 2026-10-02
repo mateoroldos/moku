@@ -3,9 +3,9 @@ import { AuthGuard } from "#lib/server/auth-guard.ts";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = (event) => {
-  event.setHeaders({ "cache-control": "private, no-store" });
+  event.setHeaders({ "cache-control": "no-store" });
   return event.locals
-    .run("Load.authenticated", AuthGuard.requireVerified(event.locals))
+    .run("Load.authenticated", AuthGuard.requireVerified(event.locals.auth))
     .then(Result.getOrElse(AuthGuard.reject))
     .then((viewer) => ({ viewer }));
 };

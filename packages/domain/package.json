@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./human-task": "./src/human-task/human-task.ts"
+    "./human-task": "./src/human-task/human-task.ts",
+    "./identity": "./src/identity/identity.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit",

@@ -26,9 +26,6 @@ Effect Schema.
   dispose the shared runtime at the end of a request or apply migrations there.
 - Follow [authentication boundaries](docs/authentication.md) when protecting an
   entrypoint or changing sessions, provider endpoints, cookies, or origins.
-- Hooks resolve identity into required `locals.auth` once per dynamic request.
-  Protected entrypoints enforce access with `AuthGuard.requireVerified(locals)`;
-  a layout guard does not protect independent remote calls.
 
 - Run named application operations through `locals.run("Remote.<export>", program)`.
   The [request runner](src/lib/server/request-runner.ts) owns cancellation,

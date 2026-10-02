@@ -53,8 +53,7 @@ URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It u
 `DATABASE_URL` from root `.env` (or the exported environment), after migrations.
 The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
 
-Sign in with the seeded account to read and answer tasks. See
-[authentication](apps/web/docs/authentication.md) for session and request boundaries.
+See [authentication boundaries](apps/web/docs/authentication.md) when changing access checks.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
@@ -96,8 +95,8 @@ bun run build
 
 `check` runs formatting, lint, guidance, workspace and migration checks, Knip, typechecks,
 and tests. `test:postgres` additionally verifies the real database adapter and web
-runtime and authentication against a migrated disposable database. Library packages export TypeScript
-source; the Node build bundles internal packages into the server output.
+runtime and authentication against a migrated disposable database. Library packages
+export TypeScript source; the Node build bundles internal packages into the server output.
 
 - [Domain](packages/domain/src/human-task/human-task.ts): HumanTask schemas.
 - [Core](packages/core/src/human-task/human-task-directory.ts): directory service and store port.

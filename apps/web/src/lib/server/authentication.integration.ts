@@ -67,12 +67,12 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
   };
 });
 
-const verifiedUser = { id: "authentication-test", emailVerified: true };
+const verifiedPrincipal = { userId: "authentication-test", emailVerified: true };
 
-it.live("decodes stored identity and rejects an expired session", () =>
+it.live("maps provider identity to a principal and rejects an expired session", () =>
   Effect.gen(function* () {
     const { auth, sql, headers } = yield* fixture("192.0.2.1");
-    assert.deepStrictEqual(yield* auth.authenticate(headers), verifiedUser);
+    assert.deepStrictEqual(yield* auth.authenticate(headers), verifiedPrincipal);
     yield* sql`UPDATE session SET expires_at = '2000-01-01' WHERE user_id = 'authentication-test'`;
     assert.strictEqual(yield* auth.authenticate(headers), null);
   }).pipe(Effect.scoped, Effect.provide(postgres)),
@@ -88,7 +88,7 @@ it.live("keeps lookup outages distinct from an absent session", () =>
       "Authentication.Unavailable",
     );
     setUnavailable(false);
-    assert.deepStrictEqual(yield* auth.authenticate(headers), verifiedUser);
+    assert.deepStrictEqual(yield* auth.authenticate(headers), verifiedPrincipal);
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
@@ -102,19 +102,17 @@ it.live("signs out through the provider and invalidates the previous session", (
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("requires the configured Origin for POSTs", () =>
+it.live("uses provider CSRF checks, including trusted Referer fallback", () =>
   Effect.gen(function* () {
-    const auth = yield* Authentication.Service;
-    const missing = request("sign-in/email", new Headers(), JSON.stringify(credentials));
-    missing.headers.delete("origin");
-    assert.strictEqual((yield* auth.handle(missing, "127.0.0.1")).status, 403);
-    const external = request(
-      "sign-in/email",
-      new Headers({ origin: "https://outsider.test" }),
-      JSON.stringify(credentials),
-    );
+    const { auth, headers } = yield* fixture("192.0.2.6");
+    const external = request("sign-out", headers, "{}");
+    external.headers.set("origin", "https://outsider.test");
     assert.strictEqual((yield* auth.handle(external, "127.0.0.1")).status, 403);
-  }).pipe(Effect.provide(Authentication.layer.pipe(Layer.provide(postgres)))),
+    const referred = request("sign-out", headers, "{}");
+    referred.headers.delete("origin");
+    referred.headers.set("referer", `${origin}/`);
+    assert.strictEqual((yield* auth.handle(referred, "127.0.0.1")).status, 200);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
 it.live("uses the supplied transport address instead of caller IP headers for throttling", () =>

@@ -5,5 +5,5 @@ export const betterAuthOptions = {
   session: { expiresIn: 604800, disableSessionRefresh: true, cookieCache: { enabled: false } },
   logger: { disabled: true },
   onAPIError: { throw: true },
-  advanced: { trustedProxyHeaders: false, ipAddress: { ipAddressHeaders: ["x-moku-client-ip"] } },
+  advanced: { ipAddress: { ipAddressHeaders: ["x-moku-client-ip"] } },
 } satisfies BetterAuthOptions;

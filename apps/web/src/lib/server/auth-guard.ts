@@ -1,17 +1,15 @@
 import { error, redirect } from "@sveltejs/kit";
 import { Effect, Match, Schema } from "effect";
-import { Authentication } from "./authentication.ts";
+import type { Authentication } from "./authentication.ts";
 
 export class Required extends Schema.TaggedError<Required>()("AuthGuard.Required", {}) {}
 export class Unverified extends Schema.TaggedError<Unverified>()("AuthGuard.Unverified", {}) {}
 
-export const requireVerified = Effect.fnUntraced(function* (locals: {
-  readonly auth: Authentication.AuthResult;
-}) {
-  const user = yield* Effect.fromResult(locals.auth);
-  if (user === null) return yield* new Required({});
-  if (!user.emailVerified) return yield* new Unverified({});
-  return user;
+export const requireVerified = Effect.fnUntraced(function* (auth: Authentication.AuthResult) {
+  const principal = yield* Effect.fromResult(auth);
+  if (principal === null) return yield* new Required({});
+  if (!principal.emailVerified) return yield* new Unverified({});
+  return principal;
 });
 
 export type Failure = Effect.Error<ReturnType<typeof requireVerified>>;
