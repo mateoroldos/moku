@@ -29,6 +29,11 @@ Effect Schema.
   The [request runner](src/lib/server/request-runner.ts) owns cancellation,
   operation observability, and conversion to Results; remotes map typed failures
   to safe Kit errors afterward.
+- Require [verified identity](src/lib/server/auth-guard.ts) inside every protected
+  Effect operation. Layout redirects and caller-controlled paths are not authorization
+  boundaries. Hooks bind request-local authentication; identity is resolved lazily
+  once per request. The [auth endpoint](src/routes/api/auth/[...path]/+server.ts)
+  owns provider HTTP responses. Keep provider failures redacted in diagnostics.
 - Keep validation inline and preserve form input on submission failure.
   Report locally caught unexpected errors; they bypass Kit's error hooks.
   Route error boundaries own failures that replace the page.

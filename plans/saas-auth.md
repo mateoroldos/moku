@@ -2,14 +2,13 @@
 
 Issue: #8 · Appetite: ~8 PRs
 
-A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today anyone can read and answer every task.
+A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. PR 2 provides seeded verified login with a shared pre-release inbox.
 
 Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
 
 ## ⚠️ Needs you
 
 - Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
-- Before PR 2: approve the seeded-only, globally shared inbox until PR 3, and decide cookie/origin/proxy protections before enabling login.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
 
@@ -17,16 +16,16 @@ Not: password recovery and sessions (#9), invitations and members (#10), guests 
 
 No PR removes the working inbox.
 
-| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done   |
-| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------ |
-| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14 |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  |        |
-| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |        |
-| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |        |
-| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |        |
-| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  |        |
-| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  |        |
-| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  |        |
+| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done     |
+| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | -------- |
+| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14   |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | Open #17 |
+| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |          |
+| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |          |
+| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |          |
+| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  |          |
+| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  |          |
+| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  |          |
 
 Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
 
@@ -79,12 +78,26 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 - One role per membership: owner, admin, member, viewer. Viewers read; the others also create and answer.
 - The organization comes from the URL over a saved "active organization", which never grants access.
 - Seeded accounts before signup over signup first: the protected inbox works from PR 2.
+- PR 2 exposes one shared pre-release inbox to verified accounts, without a whitelist.
+  Signup stays disabled until PR 7; organization permissions and attribution start in PR 3.
+- Authentication is request-local over the process-owned provider and pool. Protected
+  Effects require verified identity; hooks only bind the request runner. Layouts own
+  navigation and `/api/auth/[...path]` owns provider HTTP responses.
+- One explicit `ORIGIN` at build and startup; exact Origin required for auth POSTs.
+  Host-only, HttpOnly, SameSite=Lax cookies; Secure on HTTPS. HTTP is local-only and
+  forwarded headers are not trusted. Only sign-in, sign-out and get-session are exposed.
+  Rate limiting uses Kit's transport address, overwriting any caller-supplied client-IP header.
+- Signout runs in the provider's validated endpoint pipeline and expires cookies only
+  after successful session deletion. Provider failures retain redacted diagnostic causes
+  and map to safe unavailable responses; login returns to `/`.
 - Replacing the task schema and resetting dev data over a migration: there are no users yet.
 - Email code: six digits, five minutes, three tries, single use, stored hashed; resend waits 60 seconds.
 - Console email in development, Cloudflare in production, behind one email port.
 - Keep the process-owned database pool over Forge's separate client; never cast the Effect client to a Promise client.
 - Sessions expire seven days after login, with no sliding renewal or cookie cache.
-- PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
+- Web-owned Better Auth options and CLI config generate `user`, `account`, `session`,
+  and `verification` in the database adapter, then Drizzle generates SQL/snapshot.
+  Runtime auth consumes the same options.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
 
 ## References
