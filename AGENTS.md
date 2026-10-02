@@ -28,8 +28,4 @@ with previous development versions.
 
 ## Roadmap
 
-The [Moku roadmap](https://github.com/users/mateoroldos/projects/3) shows the big picture: parent issues, and features without a parent. Never sub-issues or pull requests.
-
-- Add each new parent issue: `gh project item-add 3 --owner mateoroldos --url <issue URL>`.
-- Move it to In Progress when its first feature starts (`gh project item-edit`). GitHub moves it to Done when it closes.
-- The next feature is the open issue that nothing blocks: `gh issue list --search "is:open -is:blocked"`.
+The roadmap is the [Moku roadmap](https://github.com/users/mateoroldos/projects/3) board: project `3`, owner `mateoroldos`.
