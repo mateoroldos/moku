@@ -1,19 +1,19 @@
 import { assert, it } from "@effect/vitest";
 import { UserId } from "@moku/domain/identity";
-import { Effect, Redacted, Result } from "effect";
+import { Effect, Redacted } from "effect";
 import { Authentication } from "./authentication.ts";
 import { AuthGuard } from "./auth-guard.ts";
 
 const unavailable = new Authentication.Unavailable({ cause: Redacted.make(new Error("offline")) });
 
 it.effect.each([
-  { name: "anonymous", auth: Result.succeed(null), tag: "AuthGuard.Required" },
+  { name: "anonymous", auth: Effect.succeed(null), tag: "AuthGuard.Required" },
   {
     name: "unverified",
-    auth: Result.succeed({ userId: UserId.make("alice"), emailVerified: false }),
+    auth: Effect.succeed({ userId: UserId.make("alice"), emailVerified: false }),
     tag: "AuthGuard.Unverified",
   },
-  { name: "unavailable", auth: Result.fail(unavailable), tag: "Authentication.Unavailable" },
+  { name: "unavailable", auth: Effect.fail(unavailable), tag: "Authentication.Unavailable" },
 ])("rejects $name identity without treating outages as signout", ({ auth, tag }) =>
   Effect.gen(function* () {
     const failure = yield* Effect.flip(AuthGuard.requireVerified(auth));
@@ -24,7 +24,7 @@ it.effect.each([
 it.effect("allows a verified principal", () =>
   Effect.gen(function* () {
     const principal = yield* AuthGuard.requireVerified(
-      Result.succeed({ userId: UserId.make("alice"), emailVerified: true }),
+      Effect.succeed({ userId: UserId.make("alice"), emailVerified: true }),
     );
     assert.deepStrictEqual(principal, { userId: "alice", emailVerified: true });
   }),

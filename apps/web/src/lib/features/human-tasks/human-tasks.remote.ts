@@ -14,7 +14,7 @@ export const getHumanTask = query(
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          yield* AuthGuard.requireVerified(event.locals.auth);
+          yield* AuthGuard.requireVerified(event.locals.authenticate);
           const directory = yield* HumanTaskDirectory.Service;
           return yield* directory.get(id);
         }),
@@ -41,7 +41,7 @@ export const listHumanTasks = query(() => {
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        yield* AuthGuard.requireVerified(event.locals.auth);
+        yield* AuthGuard.requireVerified(event.locals.authenticate);
         const directory = yield* HumanTaskDirectory.Service;
         return yield* directory.list;
       }),
@@ -70,7 +70,7 @@ export const respondToHumanTask = form(
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          yield* AuthGuard.requireVerified(event.locals.auth);
+          yield* AuthGuard.requireVerified(event.locals.authenticate);
           const directory = yield* HumanTaskDirectory.Service;
           return yield* directory.respond(id, answer).pipe(
             Effect.map((task) => ({ outcome: "recorded" as const, task })),

@@ -65,19 +65,15 @@ export const handle: Handle = ({ event, resolve }) => {
               if (!event.isRemoteRequest && event.route.id !== null)
                 span.attribute("http.route", route);
               event.locals.run = RequestRunner.make(active, event.request.signal, span);
-              return event.locals
-                .run(
-                  "Authentication.request",
+              event.locals.authenticate = Effect.runSync(
+                Effect.cached(
                   Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
-                )
-                .then((auth) => {
-                  event.locals.auth = auth;
-                  return resolve(event);
-                })
-                .then((response) => {
-                  span.attribute("http.response.status_code", response.status);
-                  return response;
-                });
+                ),
+              );
+              return resolve(event).then((response) => {
+                span.attribute("http.response.status_code", response.status);
+                return response;
+              });
             },
             catch: (cause) => cause,
           }),

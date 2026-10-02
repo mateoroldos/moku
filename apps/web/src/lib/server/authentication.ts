@@ -1,7 +1,7 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { Principal, UserId } from "@moku/domain/identity";
 import { betterAuth } from "better-auth/minimal";
-import { Config, Context, Effect, Layer, Redacted, Schema, type Result } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
 
 const ProviderSession = Schema.NullOr(
@@ -34,7 +34,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@moku/web/Authentication") {}
 
-export type AuthResult = Result.Result<Principal | null, Unavailable>;
+export type IdentityLookup = Effect.Effect<Principal | null, Unavailable, Service>;
 
 export const layer = Layer.effect(
   Service,

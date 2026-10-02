@@ -2,12 +2,13 @@
 
 For account seeding and server configuration, see [setup](../../../README.md#develop).
 
-The hook resolves each request's identity into `locals.auth`: a domain `Principal`,
-absence, or an unavailable error. Better Auth skips session storage when no valid
-session cookie exists. Requests carrying one wait for the lookup, including public
-pages. Login/signout changes are reflected on the next request.
+The hook allocates a lazy `locals.authenticate` Effect for each request. Its first
+consumer resolves a domain `Principal`, absence, or an unavailable error; concurrent
+and later consumers share that result. Requests that never consume identity skip
+the lookup. Better Auth also skips session storage without a valid session cookie.
+Login/signout changes are reflected on the next request.
 
-Protected entrypoints call `AuthGuard.requireVerified(locals.auth)`. A principal
+Protected entrypoints call `AuthGuard.requireVerified(locals.authenticate)`. A principal
 identifies the caller; it does not prove verification or grant task permissions.
 Layout loads can be reused during client navigation, so each protected remote needs
 its own guard. Future membership checks for writes belong inside the transaction.

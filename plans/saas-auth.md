@@ -40,7 +40,7 @@ packages/core/src/        + access/          VerifiedPrincipal, role policy, mem
 adapters/database-postgres/src/  + auth/     AuthStorage.Service (Better Auth factory), four-table schema
                                 + postgres-connection.ts  PostgresConnection.layer(options) → PgClient + AuthStorage.Service
                           ~ human-task/      tasks.organization_id required, scoped SQL
-apps/web/src/             ~ hooks.server.ts  resolve identity into locals.auth
+apps/web/src/             ~ hooks.server.ts  allocate lazy request-local identity
                           + lib/server/authentication.ts  shared provider service
                           + lib/server/auth-guard.ts  verified identity policy
                           ~ lib/features/human-tasks/human-tasks.remote.ts  session + TaskRef
@@ -89,7 +89,7 @@ apps/web/src/             ~ hooks.server.ts  resolve identity into locals.auth
 - One `ORIGIN` matches the browser at build and startup. Use native provider/Kit CSRF checks, including the provider's trusted Referer fallback. Cookies are host-only, HttpOnly, SameSite=Lax, and Secure on HTTPS; HTTP is allowed only on loopback hosts.
 - Caller-supplied IP/forwarded headers are untrusted. Authentication uses Kit's transport address for provider throttling; trusted-proxy hosting is decided in PR 8.
 - Use native Better Auth signout: attempt server revocation and clear the browser cookie even when storage fails. Prefer provider semantics over a custom confirmed-revocation endpoint; a copied token may remain valid until expiry after failed deletion.
-- PR 2 establishes domain-owned `Principal` and `UserId`; a principal identifies the caller without granting permissions. The hook resolves identity and entrypoints enforce access as described in [authentication boundaries](../apps/web/docs/authentication.md). PR 3 brings principals into core authorization.
+- PR 2 establishes domain-owned `Principal` and `UserId`; a principal identifies the caller without granting permissions. The hook allocates lazy request-local identity and entrypoints enforce access as described in [authentication boundaries](../apps/web/docs/authentication.md). PR 3 brings principals into core authorization.
 - PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
 
