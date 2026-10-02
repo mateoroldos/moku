@@ -10,6 +10,7 @@
   "scripts": {
     "test": "vitest run --config vitest.config.ts",
     "db:seed": "bun --env-file=../../.env src/seed.ts",
+    "auth:seed": "bun --env-file=../../.env src/seed-auth.ts",
     "auth:generate": "auth generate --config ./auth.config.ts --output ../../adapters/database-postgres/src/auth/schema.ts --yes && bun run --cwd ../.. oxfmt adapters/database-postgres/src/auth/schema.ts",
     "start": "node --env-file-if-exists=../../.env build/index.js",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",

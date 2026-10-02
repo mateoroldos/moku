@@ -5,6 +5,7 @@ import { PostgresConnection } from "@moku/database-postgres/postgres-connection"
 import { Layer, ManagedRuntime, type Redacted } from "effect";
 import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
+import { Authentication } from "./authentication.ts";
 
 export const layer = (url: Redacted.Redacted) => {
   const postgres = PostgresConnection.layer({
@@ -13,7 +14,10 @@ export const layer = (url: Redacted.Redacted) => {
     maxConnections: 10,
   });
   const persistence = PersistencePostgres.layer.pipe(Layer.provide(postgres));
-  return HumanTaskDirectory.layer.pipe(Layer.provide(Layer.merge(persistence, NodeCrypto.layer)));
+  return Layer.merge(
+    HumanTaskDirectory.layer.pipe(Layer.provide(Layer.merge(persistence, NodeCrypto.layer))),
+    Authentication.layer.pipe(Layer.provide(postgres)),
+  );
 };
 
 export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
@@ -22,7 +26,7 @@ export const make = (url: Redacted.Redacted, settings: Observability.Settings = 
 export type Runtime = ReturnType<typeof make>;
 export type Run = ReturnType<
   typeof RequestRunner.make<
-    HumanTaskDirectory.Service,
+    HumanTaskDirectory.Service | Authentication.Service,
     ManagedRuntime.ManagedRuntime.Error<Runtime>
   >
 >;

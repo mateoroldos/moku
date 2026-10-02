@@ -13,6 +13,7 @@
     "db:generate": "bun run --cwd adapters/database-postgres db:generate",
     "db:migrate": "bun run --cwd adapters/database-postgres db:migrate",
     "db:seed": "bun run --cwd apps/web db:seed",
+    "auth:seed": "bun run --cwd apps/web auth:seed",
     "test:postgres": "bun run --cwd adapters/database-postgres test:postgres && bun run --cwd apps/web test:postgres",
     "start": "bun run --cwd apps/web start",
     "dev": "turbo run dev",

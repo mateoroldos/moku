@@ -3,7 +3,12 @@
   "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "dev": {
-      "passThroughEnv": ["DATABASE_URL", "OTEL_EXPORTER_OTLP_ENDPOINT"],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "ORIGIN",
+        "BETTER_AUTH_SECRET",
+        "OTEL_EXPORTER_OTLP_ENDPOINT"
+      ],
       "cache": false,
       "persistent": true
     },

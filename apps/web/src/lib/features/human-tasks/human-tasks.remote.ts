@@ -4,6 +4,13 @@ import { ApprovalResult, HumanTask, HumanTaskId } from "@moku/domain/human-task"
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import type { ReviewTask } from "./review-task.ts";
+import { Authentication } from "#lib/server/authentication.ts";
+
+const request = () => {
+  const event = getRequestEvent();
+  Authentication.requireVerified(event.locals.user);
+  return event;
+};
 
 type Failure = Effect.Error<ReturnType<HumanTaskDirectory.Interface["get"]>>;
 
@@ -17,7 +24,7 @@ const reject = (failure: Failure): never =>
 export const getHumanTask = query(
   Schema.toStandardSchemaV1(HumanTaskId),
   (id): Promise<ReviewTask> =>
-    getRequestEvent()
+    request()
       .locals.run(
         "Remote.getHumanTask",
         HumanTaskDirectory.Service.use((directory) => directory.get(id)),
@@ -27,7 +34,7 @@ export const getHumanTask = query(
 );
 
 export const listHumanTasks = query(() =>
-  getRequestEvent()
+  request()
     .locals.run(
       "Remote.listHumanTasks",
       HumanTaskDirectory.Service.use((directory) => directory.list),
@@ -41,7 +48,7 @@ export const respondToHumanTask = form(
     parseOptions: { onExcessProperty: "error" },
   }),
   ({ id, ...answer }) =>
-    getRequestEvent()
+    request()
       .locals.run(
         "Remote.respondToHumanTask",
         HumanTaskDirectory.Service.use((directory) =>
