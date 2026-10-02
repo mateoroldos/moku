@@ -25,7 +25,7 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Authenticati
 }) {}
 
 export interface Interface {
-  readonly authenticate: (headers: Headers) => Effect.Effect<Principal | null, Unavailable>;
+  readonly authenticate: (headers: Headers) => IdentityLookup<never>;
   readonly handle: (
     request: Request,
     clientAddress: string,
@@ -34,7 +34,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@moku/web/Authentication") {}
 
-export type IdentityLookup = Effect.Effect<Principal | null, Unavailable, Service>;
+export type IdentityLookup<R> = Effect.Effect<Principal | null, Unavailable, R>;
 
 export const layer = Layer.effect(
   Service,

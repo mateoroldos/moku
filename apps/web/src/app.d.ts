@@ -5,7 +5,7 @@ declare global {
   namespace App {
     interface Locals {
       run: WebRuntime.Run;
-      authenticate: Authentication.IdentityLookup;
+      authenticate: Authentication.IdentityLookup<Authentication.Service>;
     }
   }
 }

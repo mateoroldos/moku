@@ -1,5 +1,4 @@
 import { error, redirect } from "@sveltejs/kit";
-import type { Principal } from "@moku/domain/identity";
 import { Effect, Match, Schema } from "effect";
 import type { Authentication } from "./authentication.ts";
 
@@ -7,7 +6,7 @@ export class Required extends Schema.TaggedError<Required>()("AuthGuard.Required
 export class Unverified extends Schema.TaggedError<Unverified>()("AuthGuard.Unverified", {}) {}
 
 export const requireVerified = Effect.fn("AuthGuard.requireVerified")(function* <R>(
-  authenticate: Effect.Effect<Principal | null, Authentication.Unavailable, R>,
+  authenticate: Authentication.IdentityLookup<R>,
 ) {
   const principal = yield* authenticate;
   if (principal === null) return yield* new Required({});
