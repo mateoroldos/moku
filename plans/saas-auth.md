@@ -39,7 +39,8 @@ packages/core/src/        + access/          VerifiedPrincipal, role policy, mem
 adapters/database-postgres/src/  + auth/     AuthStorage.Service (Better Auth factory), four-table schema
                                 + postgres-connection.ts  PostgresConnection.layer(options) → PgClient + AuthStorage.Service
                           ~ human-task/      tasks.organization_id required, scoped SQL
-apps/web/src/             + lib/server/authentication.ts  shared provider service, request-local session lookup
+apps/web/src/             ~ hooks.server.ts  resolve identity into locals.auth
+                          + lib/server/authentication.ts  shared provider service
                           + lib/server/auth-guard.ts  verified identity policy
                           ~ lib/features/human-tasks/human-tasks.remote.ts  session + TaskRef
                           + routes/login, routes/[org]/…  login, scoped inbox and tasks
@@ -87,7 +88,7 @@ apps/web/src/             + lib/server/authentication.ts  shared provider servic
 - One explicit `ORIGIN` matches browser scheme/host/port at build and startup. Auth POSTs require that exact Origin; retain provider/Kit CSRF checks. Cookies are host-only, HttpOnly, SameSite=Lax, and Secure on HTTPS. HTTP is allowed only on loopback hosts.
 - Caller-supplied IP/forwarded headers are untrusted. Authentication uses Kit's transport address for provider throttling; trusted-proxy hosting is decided in PR 8.
 - Use native Better Auth signout: attempt server revocation and clear the browser cookie even when storage fails. Prefer provider semantics over a custom confirmed-revocation endpoint; a copied token may remain valid until expiry after failed deletion.
-- Authentication is process-owned. Its internal `session(event)` helper lazily caches the lookup in request locals; each protected remote calls `AuthGuard.requireVerified(event)` inside its Effect. Hooks and the request runner do not own authentication policy. Future transactional membership checks must remain fresh.
+- Authentication is process-owned. The hook resolves identity once per dynamic request into required `locals.auth`, preserving absence and lookup failure as distinct results. Better Auth skips session storage when no valid session cookie exists. Protected entrypoints call `AuthGuard.requireVerified(locals)` inside their Effects; public entrypoints may ignore the result. Future transactional membership checks must remain fresh.
 - PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
 

@@ -7,12 +7,12 @@ Organization scope, roles, and attribution come in the next auth slice.
 ## Request boundary
 
 ```text
-protected layout or remote → locals.run(name, Effect)
-  → AuthGuard.requireVerified(event)
-    → Authentication.session(event): lazy cached lookup in locals.authSession
-      → process-owned Authentication.Service.authenticate(headers)
-  → task operation
-→ typed Result → Kit redirect/error
+handle → locals.run → Authentication.Service.authenticate(headers)
+  → locals.auth: Result<User | null, Authentication.Unavailable>
+  → resolve(event)
+    → protected layout or remote → locals.run(name, Effect)
+      → AuthGuard.requireVerified(locals) → task operation
+    → typed Result → Kit redirect/error
 ```
 
 Every protected remote must call the guard; a layout check does not authorize
@@ -20,9 +20,16 @@ remote calls. Request locals share one session lookup, including concurrent
 consumers. New requests see revocation and identity changes. Provider failures
 remain unavailable errors, distinct from absent identity.
 
-The shared runtime owns authentication and one scoped PostgreSQL pool. Hooks bind
-the request runner without authenticating public pages. Cache identity only;
-future membership checks for writes belong inside the task transaction.
+The hook resolves identity for every dynamic request before calling `resolve`.
+Better Auth returns absent identity without reading session storage when there is
+no valid session cookie. Public consumers can ignore an unavailable result;
+requests carrying a session cookie still wait for the lookup. The snapshot describes
+the incoming request; login/signout changes are observed on the next request.
+
+The shared runtime owns authentication and one scoped PostgreSQL pool. Each
+protected entrypoint enforces access using the hook's result. Layout loads may be
+reused on client navigation; they do not replace guards in remotes. Future
+membership checks for writes belong inside the task transaction.
 Authenticated layout responses use `private, no-store`.
 
 ## Provider boundary
@@ -54,9 +61,10 @@ Propagated provider failures become sanitized 503 responses with redacted causes
 
 ## Verification owners
 
-- `auth-guard.test.ts`: identity policy and request-local lookup sharing/lifetime.
+- `auth-guard.test.ts`: identity policy over the resolved request result.
 - `authentication.integration.ts`: real provider/storage, expiry, outage translation,
-  native signout integration, origin restrictions, transport-address throttling.
+  cookie-less lookup during outages, native signout integration, origin restrictions,
+  transport-address throttling.
 - Real Kit/browser checks: auth endpoint allowlist and session cache headers,
   protected list/read/answer calls (including a spoofed
   `x-sveltekit-pathname`), cookie integration, login → review → signout, and visible failures.

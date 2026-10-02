@@ -1,6 +1,6 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { betterAuth } from "better-auth/minimal";
-import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema, type Result } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
 
 const User = Schema.Struct({ id: Schema.NonEmptyString, emailVerified: Schema.Boolean });
@@ -30,17 +30,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@moku/web/Authentication") {}
 
-export type SessionLookup = Effect.Effect<typeof User.Type | null, Unavailable, Service>;
-
-export interface RequestContext {
-  readonly request: Request;
-  readonly locals: { authSession?: SessionLookup };
-}
-
-export const session = ({ request, locals }: RequestContext): SessionLookup =>
-  (locals.authSession ??= Effect.runSync(
-    Effect.cached(Service.use((auth) => auth.authenticate(request.headers))),
-  ));
+export type AuthResult = Result.Result<typeof User.Type | null, Unavailable>;
 
 export const layer = Layer.effect(
   Service,

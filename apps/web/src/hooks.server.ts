@@ -4,6 +4,7 @@ import { Cause, Config, Effect, Option } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 import { Observability } from "#lib/server/observability.ts";
 import { RequestRunner } from "#lib/server/request-runner.ts";
+import { Authentication } from "#lib/server/authentication.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();
@@ -41,7 +42,15 @@ export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
   if (active === undefined) throw new Error("Application runtime is unavailable");
   event.locals.run = RequestRunner.make(active, event.request.signal);
-  return resolve(event);
+  return event.locals
+    .run(
+      "Authentication.request",
+      Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
+    )
+    .then((auth) => {
+      event.locals.auth = auth;
+      return resolve(event);
+    });
 };
 
 if (import.meta.hot) {

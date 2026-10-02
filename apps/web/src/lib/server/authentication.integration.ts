@@ -82,6 +82,7 @@ it.live("keeps lookup outages distinct from an absent session", () =>
   Effect.gen(function* () {
     const { auth, headers, setUnavailable } = yield* fixture("192.0.2.2");
     setUnavailable(true);
+    assert.strictEqual(yield* auth.authenticate(new Headers()), null);
     assert.strictEqual(
       (yield* Effect.flip(auth.authenticate(headers)))._tag,
       "Authentication.Unavailable",
