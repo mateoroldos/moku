@@ -5,7 +5,9 @@ import type { Authentication } from "./authentication.ts";
 export class Required extends Schema.TaggedError<Required>()("AuthGuard.Required", {}) {}
 export class Unverified extends Schema.TaggedError<Unverified>()("AuthGuard.Unverified", {}) {}
 
-export const requireVerified = Effect.fnUntraced(function* (auth: Authentication.AuthResult) {
+export const requireVerified = Effect.fn("AuthGuard.requireVerified")(function* (
+  auth: Authentication.AuthResult,
+) {
   const principal = yield* Effect.fromResult(auth);
   if (principal === null) return yield* new Required({});
   if (!principal.emailVerified) return yield* new Unverified({});
