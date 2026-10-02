@@ -16,3 +16,6 @@ runs:
     - name: Patch Effect tooling
       shell: bash
       run: bunx effect-tsgo patch --oxlint
+    - name: Generate SvelteKit configuration
+      shell: bash
+      run: bun run --cwd apps/web prepare
