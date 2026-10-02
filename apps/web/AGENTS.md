@@ -24,11 +24,17 @@ Effect Schema.
   pool. [Server hooks](src/hooks.server.ts) bind request cancellation and dispose
   the runtime after adapter shutdown or development module replacement. Never
   dispose the shared runtime at the end of a request or apply migrations there.
+- Follow [authentication boundaries](docs/authentication.md) when protecting an
+  entrypoint or changing sessions, provider endpoints, cookies, or origins.
 
 - Run named application operations through `locals.run("Remote.<export>", program)`.
   The [request runner](src/lib/server/request-runner.ts) owns cancellation,
   operation observability, and conversion to Results; remotes map typed failures
   to safe Kit errors afterward.
+- Use named, exhaustive failure mappers at remote boundaries. Share equivalent
+  mappings; preserve operation-specific messages and recovery instructions when
+  they differ. Delegate auth failures to `AuthGuard.reject`; recover expected
+  operation outcomes inside the Effect.
 - Keep validation inline and preserve form input on submission failure.
   Report locally caught unexpected errors; they bypass Kit's error hooks.
   Route error boundaries own failures that replace the page.
