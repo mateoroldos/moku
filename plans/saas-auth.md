@@ -9,7 +9,6 @@ Not: password recovery and sessions (#9), invitations and members (#10), guests 
 ## ⚠️ Needs you
 
 - Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
-- Before PR 2: approve the seeded-only, globally shared inbox until PR 3, and decide cookie/origin/proxy protections before enabling login.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
 
@@ -20,7 +19,7 @@ No PR removes the working inbox.
 | PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done   |
 | --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------ |
 | 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14 |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  |        |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | ✅ #16 |
 | 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |        |
 | 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |        |
 | 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |        |
@@ -79,6 +78,9 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 - One role per membership: owner, admin, member, viewer. Viewers read; the others also create and answer.
 - The organization comes from the URL over a saved "active organization", which never grants access.
 - Seeded accounts before signup over signup first: the protected inbox works from PR 2.
+- PR 2 is a pre-release shared inbox for verified accounts, with no user whitelist. Public signup stays disabled until PR 7; organization scoping starts in PR 3.
+- PR 2 uses one explicit `ORIGIN` for Kit and Better Auth, exact-origin auth POSTs, and enabled CSRF checks. Host-only cookies are HttpOnly, SameSite=Lax, and Secure on HTTPS. HTTP is allowed only on loopback; forwarded headers are not trusted. Auth exposes only email login, session lookup, and signout.
+- Signout confirms database revocation before expiring cookies: Better Auth 1.7.4 otherwise swallows database failures. Provider errors pass through a sanitized boundary so credentials and SQL parameters cannot enter logs.
 - Replacing the task schema and resetting dev data over a migration: there are no users yet.
 - Email code: six digits, five minutes, three tries, single use, stored hashed; resend waits 60 seconds.
 - Console email in development, Cloudflare in production, behind one email port.

@@ -35,15 +35,20 @@ bun run db:up
 bun run db:migrate
 ```
 
-Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
+Set `BETTER_AUTH_SECRET` in `.env` using `openssl rand -hex 32`. Set `SEED_EMAIL`
+and `SEED_PASSWORD`, then run `bun run auth:seed` to create a verified login account.
+Repeated runs preserve existing credentials. Public signup is disabled.
+
+Then run `bun run dev`, open `http://127.0.0.1:5173`, and sign in. Both development and the
 built server use Node 24 and read root `.env`; exported variables take precedence.
+`ORIGIN` must match the browser URL exactly, including the port.
 
 Run `bun run db:seed` to create four example approval tasks and print their review
 URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It uses
 `DATABASE_URL` from root `.env` (or the exported environment), after migrations.
 The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
 
-Reviewer authentication is not implemented yet; this is currently a development workflow.
+Verified accounts share the development inbox until organization scoping is implemented.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
@@ -64,11 +69,12 @@ Run `bun run dev:otel` from the repository root and use the app. View traces at
 
 ```sh
 ORIGIN=http://127.0.0.1:3000 bun run build
-HOST=127.0.0.1 bun run start
+ORIGIN=http://127.0.0.1:3000 HOST=127.0.0.1 bun run start
 ```
 
-Set `ORIGIN` to the public URL **at build time**; the pinned Kit 3 adapter uses
-`paths.origin`, rather than the Kit 2 runtime `ORIGIN` setting. `DATABASE_URL` is
+Set the same `ORIGIN` at build time and server startup. Kit 3 embeds `paths.origin`;
+authentication reads `ORIGIN` at startup. Use HTTPS except on loopback; forwarded
+headers are not trusted. `DATABASE_URL` and `BETTER_AUTH_SECRET` are
 read at server startup; building needs no database connection. Apply migrations
 explicitly before starting each deployment. `HOST` and `PORT` configure the listener
 (defaults: `0.0.0.0:3000`). Send SIGTERM/SIGINT for graceful shutdown.
