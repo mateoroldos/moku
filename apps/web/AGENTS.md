@@ -31,9 +31,8 @@ Effect Schema.
   The [request runner](src/lib/server/request-runner.ts) owns cancellation,
   operation observability, and conversion to Results; remotes map typed failures
   to safe Kit errors afterward.
-- Use named, exhaustive failure mappers at remote boundaries. Share equivalent
-  mappings; preserve operation-specific messages and recovery instructions when
-  they differ. Delegate auth failures to `AuthGuard.reject`; recover expected
+- Inline exhaustive failure mapping and operation-specific messages in each remote
+  after `locals.run`. Delegate auth failures to `AuthGuard.reject`; recover expected
   operation outcomes inside the Effect.
 - Keep validation inline and preserve form input on submission failure.
   Report locally caught unexpected errors; they bypass Kit's error hooks.

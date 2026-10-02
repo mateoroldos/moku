@@ -1,28 +1,10 @@
 import { form, getRequestEvent, query } from "$app/server";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
-import { HumanTaskStore } from "@moku/core/human-task-store";
 import { ApprovalResult, HumanTask, HumanTaskId } from "@moku/domain/human-task";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import type { ReviewTask } from "./review-task.ts";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
-
-type Failure = AuthGuard.Failure | HumanTaskStore.NotFound | HumanTaskStore.PersistenceError;
-
-const reject = (
-  failure: Failure,
-  persistenceMessage = "We couldn’t confirm the task’s state. Refresh before trying again.",
-): never =>
-  Match.valueTags(failure, {
-    "AuthGuard.Required": AuthGuard.reject,
-    "AuthGuard.Unverified": AuthGuard.reject,
-    "Authentication.Unavailable": AuthGuard.reject,
-    "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
-    "HumanTaskStore.PersistenceError": () => error(503, persistenceMessage),
-  });
-
-const rejectList = (failure: Failure): never =>
-  reject(failure, "We couldn’t load your tasks. Try again.");
 
 export const getHumanTask = query(
   Schema.toStandardSchemaV1(HumanTaskId),
@@ -37,7 +19,18 @@ export const getHumanTask = query(
           return yield* directory.get(id);
         }),
       )
-      .then(Result.getOrElse(reject))
+      .then(
+        Result.getOrElse((failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "AuthGuard.Unverified": AuthGuard.reject,
+            "Authentication.Unavailable": AuthGuard.reject,
+            "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
+            "HumanTaskStore.PersistenceError": () =>
+              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
+          }),
+        ),
+      )
       .then(Schema.encodeSync(HumanTask));
   },
 );
@@ -53,7 +46,17 @@ export const listHumanTasks = query(() => {
         return yield* directory.list;
       }),
     )
-    .then(Result.getOrElse(rejectList))
+    .then(
+      Result.getOrElse((failure) =>
+        Match.valueTags(failure, {
+          "AuthGuard.Required": AuthGuard.reject,
+          "AuthGuard.Unverified": AuthGuard.reject,
+          "Authentication.Unavailable": AuthGuard.reject,
+          "HumanTaskStore.PersistenceError": () =>
+            error(503, "We couldn’t load your tasks. Try again."),
+        }),
+      ),
+    )
     .then(Schema.encodeSync(Schema.Array(HumanTask)));
 });
 
@@ -79,7 +82,18 @@ export const respondToHumanTask = form(
           );
         }),
       )
-      .then(Result.getOrElse(reject))
+      .then(
+        Result.getOrElse((failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "AuthGuard.Unverified": AuthGuard.reject,
+            "Authentication.Unavailable": AuthGuard.reject,
+            "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
+            "HumanTaskStore.PersistenceError": () =>
+              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
+          }),
+        ),
+      )
       .then(({ outcome, task }) => {
         getHumanTask(id).set(Schema.encodeSync(HumanTask)(task));
         return listHumanTasks()
