@@ -3,7 +3,6 @@ import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks"
 import { Cause, Config, Effect, Option } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 import { Observability } from "#lib/server/observability.ts";
-import { RequestRunner } from "#lib/server/request-runner.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();
@@ -40,8 +39,10 @@ export const handleError: HandleServerError = ({ kind, error, event }) => {
 export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
   if (active === undefined) throw new Error("Application runtime is unavailable");
-  event.locals.run = RequestRunner.make(active, event.request.signal);
-  return resolve(event);
+  return WebRuntime.request(active, event.request, event.getClientAddress()).then((run) => {
+    event.locals.run = run;
+    return resolve(event);
+  });
 };
 
 if (import.meta.hot) {
