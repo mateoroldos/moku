@@ -41,41 +41,24 @@ export const handleError: HandleServerError = ({ kind, error, event }) => {
 export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
   if (active === undefined) throw new Error("Application runtime is unavailable");
-  const kind = event.isRemoteRequest ? "Remote" : event.isDataRequest ? "Data" : "Request";
-  const route =
-    event.route.id === null
-      ? "unmatched"
-      : event.route.id.replace(/\/\([^/)]+\)(?=\/|$)/g, "") || "/";
-  const name = `${kind} · ${event.request.method}${event.isRemoteRequest ? "" : ` ${route}`}`;
   return active
     .runPromise(
-      Effect.useSpan(
-        name,
+      Observability.request(
         {
-          kind: "server",
-          attributes: {
-            "http.request.method": event.request.method,
-            "app.request.kind": kind.toLowerCase(),
-            "app.span.kind": "request_scope",
-          },
+          method: event.request.method,
+          routeId: event.route.id,
+          kind: event.isRemoteRequest ? "remote" : event.isDataRequest ? "data" : "request",
         },
         (span) =>
-          Effect.tryPromise({
-            try: () => {
-              if (!event.isRemoteRequest && event.route.id !== null)
-                span.attribute("http.route", route);
-              event.locals.run = RequestRunner.make(active, event.request.signal, span);
-              event.locals.authenticate = Effect.runSync(
-                Effect.cached(
-                  Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
-                ),
-              );
-              return resolve(event).then((response) => {
-                span.attribute("http.response.status_code", response.status);
-                return response;
-              });
-            },
-            catch: (cause) => cause,
+          Effect.gen(function* () {
+            event.locals.run = RequestRunner.make(active, event.request.signal, span);
+            event.locals.authenticate = yield* Effect.cached(
+              Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
+            );
+            return yield* Effect.tryPromise({
+              try: () => resolve(event),
+              catch: (cause) => cause,
+            });
           }),
       ).pipe(Effect.result),
     )

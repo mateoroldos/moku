@@ -1,4 +1,4 @@
-import { Cause, Clock, Effect, Exit, Layer, Logger, Schema } from "effect";
+import { Cause, Clock, Effect, Exit, Layer, Logger, Schema, type Tracer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 
@@ -13,6 +13,46 @@ export const CollectorEndpoint = Schema.URLFromString.check(
       : "Expected an HTTP(S) collector base URL without credentials, query or fragment",
   ),
 );
+
+interface RequestMetadata {
+  readonly method: string;
+  readonly routeId: string | null;
+  readonly kind: "request" | "data" | "remote";
+}
+
+export const request = <E, R>(
+  metadata: RequestMetadata,
+  resolve: (span: Tracer.Span) => Effect.Effect<Response, E, R>,
+): Effect.Effect<Response, E, R> => {
+  const route =
+    metadata.routeId === null
+      ? "unmatched"
+      : metadata.routeId.replace(/\/\([^/)]+\)(?=\/|$)/g, "") || "/";
+  const kind = { request: "Request", data: "Data", remote: "Remote" }[metadata.kind];
+  const name = `${kind} · ${metadata.method}${metadata.kind === "remote" ? "" : ` ${route}`}`;
+  return Effect.useSpan(
+    name,
+    {
+      kind: "server",
+      attributes: {
+        "http.request.method": metadata.method,
+        "app.request.kind": metadata.kind,
+        "app.span.kind": "request_scope",
+      },
+    },
+    (span) => {
+      if (metadata.kind !== "remote" && metadata.routeId !== null)
+        span.attribute("http.route", route);
+      return resolve(span).pipe(
+        Effect.tap((response) =>
+          Effect.sync(() => {
+            span.attribute("http.response.status_code", response.status);
+          }),
+        ),
+      );
+    },
+  );
+};
 
 /** One summary per application operation; Effect owns the span and original result. */
 export const operation =
