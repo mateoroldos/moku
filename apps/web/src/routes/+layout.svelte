@@ -1,12 +1,35 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { ModeWatcher, toggleMode } from 'mode-watcher';
   import CircleHalfIcon from 'phosphor-svelte/lib/CircleHalfIcon';
   import { Button } from '@moku/ui/ui/button';
   import favicon from '../favicon.svg';
   import '../app.css';
+  import { authClient } from '#lib/features/auth/client.ts';
 
   let { children } = $props();
+  let signingOut = $state(false);
+  let signoutError = $state<string | null>(null);
+
+  const signOut = async () => {
+    if (signingOut) return;
+    signingOut = true;
+    signoutError = null;
+    try {
+      const { error } = await authClient.signOut();
+      if (error) {
+        signoutError = 'We couldn’t sign you out. Try again.';
+        return;
+      }
+      await goto('/login', { refreshAll: true });
+    } catch {
+      console.error('Sign-out request failed');
+      signoutError = 'We couldn’t sign you out. Check your connection and try again.';
+    } finally {
+      signingOut = false;
+    }
+  };
 </script>
 
 <svelte:head>
@@ -32,9 +55,13 @@
         <Button variant="ghost" size="icon-lg" onclick={toggleMode} aria-label="Toggle color theme">
           <CircleHalfIcon weight="regular" aria-hidden="true" />
         </Button>
+        {#if page.data.viewer}
+          <Button variant="ghost" disabled={signingOut} onclick={signOut}>{signingOut ? 'Signing out…' : 'Sign out'}</Button>
+        {/if}
       </nav>
     </div>
   </header>
+  {#if signoutError}<p role="alert" class="mx-auto w-full max-w-6xl px-5 pt-4 text-sm text-destructive sm:px-8">{signoutError}</p>{/if}
 
   <main id="main" tabindex="-1" class="mx-auto w-full max-w-6xl flex-1 px-5 py-10 sm:px-8 sm:py-16">
     {@render children()}

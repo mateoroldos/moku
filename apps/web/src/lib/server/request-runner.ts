@@ -1,10 +1,11 @@
-import { Cause, Effect, Exit, ManagedRuntime, Result } from "effect";
+import { Cause, Effect, Exit, ManagedRuntime, Result, type Tracer } from "effect";
 import { Observability } from "./observability.ts";
 
 /** Executes request operations without reducing mixed causes to a single typed failure. */
 export function make<Services, InitializationError>(
   runtime: ManagedRuntime.ManagedRuntime<Services, InitializationError>,
   signal: AbortSignal,
+  parent?: Tracer.AnySpan,
 ) {
   // oxlint-disable-next-line effecttsgo/async-function -- This boundary translates Effect exits into Promise results and rejections.
   return async function run<Value, Failure extends { readonly _tag: string }>(
@@ -20,6 +21,7 @@ export function make<Services, InitializationError>(
         Effect.tapError((failure) => Effect.annotateCurrentSpan("error.type", failure._tag)),
         Observability.operation(name),
         Effect.exit,
+        (effect) => (parent === undefined ? effect : effect.pipe(Effect.withParentSpan(parent))),
       ),
       { signal },
     );

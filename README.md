@@ -35,6 +35,16 @@ bun run db:up
 bun run db:migrate
 ```
 
+Set `BETTER_AUTH_SECRET` in `.env` to a private value from `openssl rand -base64 32`.
+Create a verified reviewer account from the root:
+
+```sh
+SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run auth:seed
+```
+
+Repeated seeds preserve existing credentials. Public signup is disabled; all verified
+accounts share the inbox until organization scoping is implemented.
+
 Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
 built server use Node 24 and read root `.env`; exported variables take precedence.
 
@@ -43,7 +53,7 @@ URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It u
 `DATABASE_URL` from root `.env` (or the exported environment), after migrations.
 The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
 
-Reviewer authentication is not implemented yet; this is currently a development workflow.
+See [authentication boundaries](apps/web/docs/authentication.md) when changing access checks.
 
 See [PostgreSQL development](adapters/database-postgres/README.md) for migrations,
 database tests, and connection configuration.
@@ -64,12 +74,13 @@ Run `bun run dev:otel` from the repository root and use the app. View traces at
 
 ```sh
 ORIGIN=http://127.0.0.1:3000 bun run build
-HOST=127.0.0.1 bun run start
+ORIGIN=http://127.0.0.1:3000 HOST=127.0.0.1 bun run start
 ```
 
-Set `ORIGIN` to the public URL **at build time**; the pinned Kit 3 adapter uses
-`paths.origin`, rather than the Kit 2 runtime `ORIGIN` setting. `DATABASE_URL` is
-read at server startup; building needs no database connection. Apply migrations
+Set `ORIGIN` to the exact browser origin **at build time and startup**. Kit 3 embeds
+`paths.origin` in the build; authentication reads `ORIGIN` at startup. Use HTTPS
+except on loopback hosts. `DATABASE_URL` and `BETTER_AUTH_SECRET` are read at server
+startup; building needs no database connection or auth secret. Apply migrations
 explicitly before starting each deployment. `HOST` and `PORT` configure the listener
 (defaults: `0.0.0.0:3000`). Send SIGTERM/SIGINT for graceful shutdown.
 
@@ -84,8 +95,8 @@ bun run build
 
 `check` runs formatting, lint, guidance, workspace and migration checks, Knip, typechecks,
 and tests. `test:postgres` additionally verifies the real database adapter and web
-runtime against a migrated disposable database. Library packages export TypeScript
-source; the Node build bundles internal packages into the server output.
+runtime and authentication against a migrated disposable database. Library packages
+export TypeScript source; the Node build bundles internal packages into the server output.
 
 - [Domain](packages/domain/src/human-task/human-task.ts): HumanTask schemas.
 - [Core](packages/core/src/human-task/human-task-directory.ts): directory service and store port.

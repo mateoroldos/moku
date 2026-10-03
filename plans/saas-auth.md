@@ -9,7 +9,6 @@ Not: password recovery and sessions (#9), invitations and members (#10), guests 
 ## ⚠️ Needs you
 
 - Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
-- Before PR 2: approve the seeded-only, globally shared inbox until PR 3, and decide cookie/origin/proxy protections before enabling login.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
 
@@ -33,15 +32,17 @@ Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10
 ## Shape
 
 ```text
-packages/domain/src/      + organization/    UserId, OrganizationId, OrganizationRole
+packages/domain/src/      + identity/        UserId, Principal
+                          + organization/    OrganizationId, OrganizationRole
                           ~ human-task/      TaskRef { organizationId, taskId }, ResponseAttribution
 packages/core/src/        + access/          VerifiedPrincipal, role policy, membership port
                           ~ human-task/      directory and store take (principal, TaskRef)
 adapters/database-postgres/src/  + auth/     AuthStorage.Service (Better Auth factory), four-table schema
                                 + postgres-connection.ts  PostgresConnection.layer(options) → PgClient + AuthStorage.Service
                           ~ human-task/      tasks.organization_id required, scoped SQL
-apps/web/src/             ~ hooks.server.ts  session → request-local principal
-                          + lib/server/auth  Better Auth bridge, permitted operations
+apps/web/src/             ~ hooks.server.ts  allocate lazy request-local identity
+                          + lib/server/authentication.ts  shared provider service
+                          + lib/server/auth-guard.ts  verified identity policy
                           ~ lib/features/human-tasks/human-tasks.remote.ts  session + TaskRef
                           + routes/login, routes/[org]/…  login, scoped inbox and tasks
 ```
@@ -63,7 +64,7 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 - Someone outside the organization gets "not found", never "forbidden", so tasks can't be discovered.
 - A removed member loses access on their next request; every write rechecks membership inside its transaction.
 - The first answer wins and records who answered and with which role.
-- If auth or the database is down, the app says unavailable; it never signs you out or lets you in.
+- If an identity lookup fails, protected operations say unavailable; they never treat the failure as absence or let you in. Explicit signout follows native provider semantics below.
 - Logs and events never hold passwords, codes, tokens, or email bodies; production refuses to start with console email.
 
 ## Risks
@@ -83,7 +84,12 @@ apps/web/src/             ~ hooks.server.ts  session → request-local principal
 - Email code: six digits, five minutes, three tries, single use, stored hashed; resend waits 60 seconds.
 - Console email in development, Cloudflare in production, behind one email port.
 - Keep the process-owned database pool over Forge's separate client; never cast the Effect client to a Promise client.
-- Sessions expire seven days after login, with no sliding renewal or cookie cache.
+- Sessions expire seven days after login by default (24 hours with native `rememberMe: false`), with no sliding renewal or cookie cache.
+- PR 2 uses privately seeded verified accounts and a globally shared inbox, without public signup or a whitelist. Login returns to `/`; tenant scope and attribution wait for PR 3.
+- One `ORIGIN` matches the browser at build and startup. Use native provider/Kit CSRF checks, including the provider's trusted Referer fallback. Cookies are host-only, HttpOnly, SameSite=Lax, and Secure on HTTPS; HTTP is allowed only on loopback hosts.
+- Caller-supplied IP/forwarded headers are untrusted. Authentication uses Kit's transport address for provider throttling; trusted-proxy hosting is decided in PR 8.
+- Use native Better Auth signout: attempt server revocation and clear the browser cookie even when storage fails. Prefer provider semantics over a custom confirmed-revocation endpoint; a copied token may remain valid until expiry after failed deletion.
+- PR 2 establishes domain-owned `Principal` and `UserId`; a principal identifies the caller without granting permissions. The hook allocates lazy request-local identity and entrypoints enforce access as described in [authentication boundaries](../apps/web/docs/authentication.md). PR 3 brings principals into core authorization.
 - PR 1 uses web-owned Better Auth options and CLI config to generate `user`, `account`, `session`, and `verification` in the database adapter, then Drizzle generates SQL/snapshot. Runtime auth must consume the same options in PR 2. Existing task behavior remains; no auth endpoints or accounts are enabled.
 - `WebRuntime.layer` supplies `PostgresConnection.layer` with URL and application name. It acquires one scoped pool and exposes `PgClient.fromPool` plus `AuthStorage.Service`; raw pool and Drizzle clients stay private. Pool closure waits for borrowed clients after consumers finish.
 

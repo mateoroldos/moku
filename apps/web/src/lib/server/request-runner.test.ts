@@ -1,6 +1,6 @@
 /* oxlint-disable effecttsgo/async-function -- Tests exercise the runner's public Promise boundary. */
 import { assert, describe, expect, it, onTestFinished } from "vitest";
-import { Cause, Deferred, Effect, Layer, Logger, ManagedRuntime, Result } from "effect";
+import { Cause, Deferred, Effect, Layer, Logger, ManagedRuntime, Option, Result } from "effect";
 import { RequestRunner } from "./request-runner.ts";
 
 const fixture = <E = never>(layer: Layer.Layer<never, E> = Layer.empty) => {
@@ -21,6 +21,41 @@ const fixture = <E = never>(layer: Layer.Layer<never, E> = Layer.empty) => {
 };
 
 describe("RequestRunner", () => {
+  it("keeps concurrent requests separate while parenting their operations to one request span", async () => {
+    const { runtime } = fixture();
+    const bothStarted = Deferred.makeUnsafe<void>();
+    let started = 0;
+    const request = () =>
+      runtime.runPromise(
+        Effect.useSpan("Request · GET /", (parent) =>
+          Effect.promise(async () => {
+            const run = RequestRunner.make(runtime, new AbortController().signal, parent);
+            const first = await run(
+              "Authentication.request",
+              Effect.gen(function* () {
+                started++;
+                if (started === 2) yield* Deferred.succeed(bothStarted, undefined);
+                yield* Deferred.await(bothStarted);
+                return yield* Effect.currentSpan;
+              }),
+            );
+            const second = await run("Remote.listHumanTasks", Effect.currentSpan);
+            assert(Result.isSuccess(first));
+            assert(Result.isSuccess(second));
+            for (const span of [first.success, second.success]) {
+              assert.strictEqual(span.traceId, parent.traceId);
+              assert.strictEqual(Option.getOrThrow(span.parent).spanId, parent.spanId);
+            }
+            return parent;
+          }),
+        ),
+      );
+    const [first, second] = await Promise.all([request(), request()]);
+    assert.notStrictEqual(first.traceId, second.traceId);
+    assert.strictEqual(first.status._tag, "Ended");
+    assert.strictEqual(second.status._tag, "Ended");
+  });
+
   it("returns values and typed failures with correlated, payload-free summaries", async () => {
     const { run, entries } = fixture();
     const value = { title: "Review the proposal" };
