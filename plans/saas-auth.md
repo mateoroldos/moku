@@ -2,13 +2,13 @@
 
 Issue: #8 · Appetite: ~8 PRs
 
-A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today anyone can read and answer every task.
+A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. Today privately seeded verified accounts share one inbox.
 
 Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
 
 ## ⚠️ Needs you
 
-- Before PR 3: size tenant enforcement; split anything over about 400 handwritten lines here first.
+- Before PR 3: approve the authorization and transaction design, size tenant enforcement, and split anything over about 400 handwritten lines here first. Land schema prerequisites separately while preserving the working protected inbox; the schema transition is not yet designed.
 - Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
 
@@ -19,7 +19,7 @@ No PR removes the working inbox.
 | PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done   |
 | --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------ |
 | 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14 |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  |        |
+| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | ✅ #18 |
 | 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |        |
 | 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |        |
 | 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |        |
@@ -69,7 +69,7 @@ apps/web/src/             ~ hooks.server.ts  allocate lazy request-local identit
 
 ## Risks
 
-- SvelteKit 3 next.30 handler and cookie behavior needs a real app check in PR 2; the PostgreSQL spike proves Better Auth 1.7.4 with Drizzle rc.5 and Effect rc.112, not Kit integration.
+- PR 2 verified the real Node/Kit login, guards, signout, lazy identity, and request tracing. Deployed HTTPS and trusted-proxy behavior remain for PR 8.
 - Better Auth membership writes escape Effect transactions even on the same pool → keep membership endpoints disabled; PR 3 must check membership and write tasks through the same Effect transaction.
 - Waiting for email may reveal whether an account exists through response time → measure before PR 7.
 
