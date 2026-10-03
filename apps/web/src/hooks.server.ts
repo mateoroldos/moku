@@ -11,15 +11,19 @@ const dispose = () => runtime?.dispose();
 
 export const init: ServerInit = () => {
   if (building) return;
-  const endpoint = Effect.runSync(
-    Config.schema(Observability.CollectorEndpoint, "OTEL_EXPORTER_OTLP_ENDPOINT").pipe(
-      Config.option,
-    ),
+  runtime = Effect.runSync(
+    Effect.gen(function* () {
+      const endpoint = yield* Config.schema(
+        Observability.CollectorEndpoint,
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+      ).pipe(Config.option);
+      const url = yield* Config.redacted("DATABASE_URL");
+      const settings: Observability.Settings = Option.isSome(endpoint)
+        ? { dev, endpoint: endpoint.value.href }
+        : { dev };
+      return WebRuntime.make(url, settings);
+    }),
   );
-  runtime = WebRuntime.make(Effect.runSync(Config.redacted("DATABASE_URL")), {
-    ...Option.match(endpoint, { onNone: () => ({}), onSome: (url) => ({ endpoint: url.href }) }),
-    dev,
-  });
   process.once("sveltekit:shutdown", dispose);
   return runtime.runPromise(Effect.void);
 };
@@ -41,35 +45,32 @@ export const handleError: HandleServerError = ({ kind, error, event }) => {
 export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
   if (active === undefined) throw new Error("Application runtime is unavailable");
-  return active
-    .runPromise(
-      Observability.request(
-        {
-          method: event.request.method,
-          routeId: event.route.id,
-          kind: event.isRemoteRequest ? "remote" : event.isDataRequest ? "data" : "request",
-        },
-        (span) =>
-          Effect.gen(function* () {
-            event.locals.run = RequestRunner.make(active, event.request.signal, span);
-            event.locals.authenticate = yield* Effect.cached(
-              Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
-            );
-            return yield* Effect.tryPromise({
-              try: () => resolve(event),
-              catch: (cause) => cause,
-            });
-          }),
-      ).pipe(Effect.result),
-    )
-    .then(
-      Result.match({
-        onSuccess: (response) => response,
-        onFailure: (cause) => {
-          throw cause;
-        },
+  const request = Observability.request(
+    {
+      method: event.request.method,
+      routeId: event.route.id,
+      kind: event.isRemoteRequest ? "remote" : event.isDataRequest ? "data" : "request",
+    },
+    (span) =>
+      Effect.gen(function* () {
+        event.locals.run = RequestRunner.make(active, event.request.signal, span);
+        event.locals.authenticate = yield* Effect.cached(
+          Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
+        );
+        return yield* Effect.tryPromise({
+          try: () => resolve(event),
+          catch: (cause) => cause,
+        });
       }),
-    );
+  );
+  return active.runPromise(request.pipe(Effect.result)).then(
+    Result.match({
+      onSuccess: (response) => response,
+      onFailure: (cause) => {
+        throw cause;
+      },
+    }),
+  );
 };
 
 if (import.meta.hot) {

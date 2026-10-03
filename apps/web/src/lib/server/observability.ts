@@ -22,7 +22,7 @@ interface RequestMetadata {
 
 export const request = <E, R>(
   metadata: RequestMetadata,
-  resolve: (span: Tracer.Span) => Effect.Effect<Response, E, R>,
+  run: (span: Tracer.Span) => Effect.Effect<Response, E, R>,
 ): Effect.Effect<Response, E, R> => {
   const route =
     metadata.routeId === null
@@ -40,17 +40,14 @@ export const request = <E, R>(
         "app.span.kind": "request_scope",
       },
     },
-    (span) => {
-      if (metadata.kind !== "remote" && metadata.routeId !== null)
-        span.attribute("http.route", route);
-      return resolve(span).pipe(
-        Effect.tap((response) =>
-          Effect.sync(() => {
-            span.attribute("http.response.status_code", response.status);
-          }),
-        ),
-      );
-    },
+    (span) =>
+      Effect.gen(function* () {
+        if (metadata.kind !== "remote" && metadata.routeId !== null)
+          span.attribute("http.route", route);
+        const response = yield* run(span);
+        span.attribute("http.response.status_code", response.status);
+        return response;
+      }),
   );
 };
 
