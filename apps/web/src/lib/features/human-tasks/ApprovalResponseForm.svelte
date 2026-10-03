@@ -8,7 +8,7 @@
   import type { ReviewTask } from "./review-task";
 
   let { task }: { task: ReviewTask } = $props();
-  const query = $derived(getHumanTask(task.id));
+  const query = $derived(getHumanTask({ taskId: task.id, organizationId: task.organizationId }));
   const response = $derived(respondToHumanTask.for(task.id));
   let submissionFailed = $state(false);
 </script>
@@ -51,6 +51,7 @@
         }
       })}>
         <input {...response.fields.id.as("hidden", task.id)} />
+        <input {...response.fields.organizationId.as("hidden", task.organizationId)} />
         <div class="flex flex-col gap-2">
           <label for="feedback" class="text-sm font-medium">Feedback <span class="font-normal text-muted-foreground">(optional)</span></label>
           <textarea {...response.fields.feedback.as("text")} id="feedback" rows="4" aria-describedby="feedback-hint" disabled={response.pending > 0}
@@ -63,7 +64,7 @@
         {#if submissionFailed}
           <div class="flex flex-col items-start gap-2">
             <p role="alert" class="text-sm text-destructive">We couldn’t confirm your response. Reload to check the task’s status.</p>
-            <Button href="/tasks/{task.id}" variant="outline" data-sveltekit-reload>Reload task</Button>
+            <Button href="/org/{encodeURIComponent(task.organizationId)}/tasks/{task.id}" variant="outline" data-sveltekit-reload>Reload task</Button>
             <p class="text-xs text-muted-foreground">Reloading clears unsaved feedback.</p>
           </div>
         {/if}

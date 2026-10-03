@@ -1,10 +1,18 @@
 import { Schema } from "effect";
+import { UserId } from "../identity/identity.ts";
+import { OrganizationId, OrganizationRole } from "../organization/organization.ts";
 
 export const HumanTaskId = Schema.String.pipe(
   Schema.check(Schema.isUUID(4)),
   Schema.brand("HumanTaskId"),
 );
 export type HumanTaskId = typeof HumanTaskId.Type;
+
+export const TaskRef = Schema.Struct({ organizationId: OrganizationId, taskId: HumanTaskId });
+export interface TaskRef extends Schema.Schema.Type<typeof TaskRef> {}
+
+export const ResponseAttribution = Schema.Struct({ userId: UserId, role: OrganizationRole });
+export interface ResponseAttribution extends Schema.Schema.Type<typeof ResponseAttribution> {}
 
 export const HumanTaskTitle = Schema.String.pipe(
   Schema.check(Schema.isTrimmed(), Schema.isMinLength(1)),
@@ -31,6 +39,7 @@ export interface ApprovalResult extends Schema.Schema.Type<typeof ApprovalResult
 
 const fields = {
   id: HumanTaskId,
+  organizationId: OrganizationId,
   intent: Schema.Literal("authorize"),
   subject: HumanTaskSubject,
   context: Schema.optionalKey(Schema.String),
@@ -43,6 +52,7 @@ export const PendingHumanTask = Schema.Struct({
   status: Schema.Literal("pending"),
   result: Schema.optionalKey(Schema.Never),
   completedAt: Schema.optionalKey(Schema.Never),
+  attribution: Schema.optionalKey(Schema.Never),
 });
 export interface PendingHumanTask extends Schema.Schema.Type<typeof PendingHumanTask> {}
 
@@ -51,6 +61,7 @@ export const CompletedHumanTask = Schema.Struct({
   status: Schema.Literal("completed"),
   result: ApprovalResult,
   completedAt: Schema.DateTimeUtcFromString,
+  attribution: ResponseAttribution,
 });
 export interface CompletedHumanTask extends Schema.Schema.Type<typeof CompletedHumanTask> {}
 

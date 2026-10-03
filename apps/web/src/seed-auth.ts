@@ -55,7 +55,33 @@ NodeRuntime.runMain(
     }
     if (!user.emailVerified)
       yield* provider(() => context.internalAdapter.updateUser(user.id, { emailVerified: true }));
+    const slug = yield* Config.string("SEED_ORGANIZATION_SLUG").pipe(Config.withDefault("moku"));
+    const organizations = yield* provider(() =>
+      context.adapter.findMany({ model: "organization", where: [{ field: "slug", value: slug }] }),
+    );
+    const existingOrganization = yield* Schema.decodeUnknownEffect(
+      Schema.Array(Schema.Struct({ id: Schema.String })),
+    )(organizations);
+    const organizationId =
+      existingOrganization[0]?.id ??
+      (yield* provider(() =>
+        auth.api.createOrganization({ body: { name: slug, slug, userId: user.id } }),
+      )).id;
+    const members = yield* provider(() =>
+      context.adapter.findMany({
+        model: "member",
+        where: [
+          { field: "organizationId", value: organizationId },
+          { field: "userId", value: user.id },
+        ],
+      }),
+    );
+    if (members.length === 0)
+      yield* provider(() =>
+        auth.api.addMember({ body: { organizationId, userId: user.id, role: "owner" } }),
+      );
     yield* Console.log("Verified login account ready. Existing credentials were preserved.");
+    yield* Console.log(`SEED_USER_ID=${user.id}\nSEED_ORGANIZATION_ID=${organizationId}`);
   }).pipe(
     Effect.uninterruptible,
     Effect.provide(

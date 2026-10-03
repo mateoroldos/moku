@@ -1,6 +1,8 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { ApprovalResult } from "@moku/domain/human-task";
+import { Principal, UserId } from "@moku/domain/identity";
+import { OrganizationId } from "@moku/domain/organization";
 import { Config, Console, Effect, Layer, Schema } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 
@@ -69,11 +71,19 @@ NodeRuntime.runMain(
       Config.withDefault(new URL("http://127.0.0.1:5173")),
     );
     const directory = yield* HumanTaskDirectory.Service;
+    const principal = Principal.make({
+      userId: yield* Config.schema(UserId, "SEED_USER_ID"),
+      emailVerified: true,
+    });
+    const organizationId = yield* Config.schema(OrganizationId, "SEED_ORGANIZATION_ID");
     for (const { request, result } of examples) {
-      const pending = yield* directory.create(request);
-      const task = result === undefined ? pending : yield* directory.respond(pending.id, result);
+      const pending = yield* directory.create(principal, organizationId, request);
+      const task =
+        result === undefined
+          ? pending
+          : yield* directory.respond(principal, { organizationId, taskId: pending.id }, result);
       yield* Console.log(
-        `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/tasks/${task.id}`, baseUrl).href}`,
+        `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(organizationId)}/tasks/${task.id}`, baseUrl).href}`,
       );
     }
     yield* Console.log("Added four example tasks. Existing tasks and decisions were preserved.");

@@ -13,5 +13,5 @@
   {#if page.status >= 500}
     <Button href={page.url.pathname + page.url.search} data-sveltekit-reload>Refresh task</Button>
   {/if}
-  <Button href="/" variant="outline">Back to inbox</Button>
+  <Button href={page.params.organizationId ? `/org/${encodeURIComponent(page.params.organizationId)}` : '/'} variant="outline">Back to inbox</Button>
 </div>

@@ -7,8 +7,10 @@ import { DateTime, Effect, Result } from "effect";
 import { Database } from "../internal/database.ts";
 import { PersistencePglite } from "../test/persistence-pglite.ts";
 import { humanTasks } from "./schema.ts";
+const { organizationId, ref, attribution } = HumanTaskStoreContract;
 
 const task = PendingHumanTask.make({
+  organizationId,
   id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
   intent: "authorize",
   subject: { title: HumanTaskTitle.make("Publish report"), description: "Line one\nLine two" },
@@ -37,8 +39,13 @@ it.effect(
       const store = yield* HumanTaskStore.Service;
       const { context: _, ...minimal } = task;
       yield* store.create(minimal);
-      assert.deepStrictEqual(yield* store.get(task.id), minimal);
-      const completed = yield* store.complete(task.id, { decision: "rejected" }, task.createdAt);
+      assert.deepStrictEqual(yield* store.get(ref(task.id)), minimal);
+      const completed = yield* store.complete(
+        ref(task.id),
+        { decision: "rejected" },
+        task.createdAt,
+        attribution,
+      );
       assert.notProperty(completed, "context");
       assert.notProperty(completed.result, "feedback");
     }).pipe(Effect.provide(PersistencePglite.layer)),
@@ -56,14 +63,28 @@ it.effect(
         database.update(humanTasks).set({ status: "completed" }).where(eq(humanTasks.id, task.id)),
       );
       assert.isTrue(Result.isFailure(invalidState));
-      assert.deepStrictEqual(yield* store.get(task.id), task);
+      const missingAttribution = yield* Effect.result(
+        database
+          .update(humanTasks)
+          .set({
+            status: "completed",
+            result: { decision: "approved" },
+            completedAt: DateTime.formatIso(task.createdAt),
+          })
+          .where(eq(humanTasks.id, task.id)),
+      );
+      assert.isTrue(Result.isFailure(missingAttribution));
+      assert.deepStrictEqual(yield* store.get(ref(task.id)), task);
       yield* database
         .update(humanTasks)
         .set({ subject: { title: " " } })
         .where(eq(humanTasks.id, task.id));
-      const failure = yield* Effect.flip(store.get(task.id));
+      const failure = yield* Effect.flip(store.get(ref(task.id)));
       assert.instanceOf(failure, HumanTaskStore.PersistenceError);
-      assert.instanceOf(yield* Effect.flip(store.list), HumanTaskStore.PersistenceError);
+      assert.instanceOf(
+        yield* Effect.flip(store.list(organizationId)),
+        HumanTaskStore.PersistenceError,
+      );
     }).pipe(Effect.provide(PersistencePglite.layer)),
   { timeout: 15000 },
 );

@@ -17,6 +17,7 @@ it.effect("round-trips pending tasks and rejects invalid time or unsupported sta
   Effect.gen(function* () {
     const encoded = {
       id: "00000000-0000-4000-8000-000000000001",
+      organizationId: "test-org",
       intent: "authorize",
       subject: { title: "Publish the weekly report", description: "The report to distribute." },
       context: "Leadership requested this summary.",
@@ -33,6 +34,11 @@ it.effect("round-trips pending tasks and rejects invalid time or unsupported sta
       { ...encoded, status: "cancelled" },
       { ...encoded, status: "pending", result: { decision: "approved" } },
       { ...encoded, status: "pending", completedAt: encoded.createdAt },
+      { ...encoded, attribution: { userId: "user", role: "member" } },
+      { ...encoded, organizationId: "" },
+      { ...encoded, context: undefined },
+      { ...encoded, context: null },
+      { ...encoded, context: 42 },
       { ...encoded, response: { type: "selection" } },
       { ...encoded, intent: "execute" },
       { ...encoded, subject: { title: " " } },
@@ -48,6 +54,7 @@ it.effect("round-trips completed tasks with structured results and requires comp
   Effect.gen(function* () {
     const encoded = {
       id: "00000000-0000-4000-8000-000000000001",
+      organizationId: "test-org",
       intent: "authorize",
       subject: { title: "Publish the report" },
       response: { type: "approval" },
@@ -58,6 +65,7 @@ it.effect("round-trips completed tasks with structured results and requires comp
         feedback: "Correct the revenue figures first.\nKeep the appendix.",
       },
       completedAt: "2026-09-25T13:00:00.000Z",
+      attribution: { userId: "user", role: "member" },
     } as const;
     const task = yield* Schema.decodeEffect(HumanTask)(encoded);
     assert.strictEqual(task.status, "completed");
@@ -67,6 +75,8 @@ it.effect("round-trips completed tasks with structured results and requires comp
     assert.deepStrictEqual(yield* Schema.encodeEffect(HumanTask)(task), encoded);
     for (const invalid of [
       { ...encoded, result: undefined },
+      { ...encoded, attribution: undefined },
+      { ...encoded, attribution: { userId: "user", role: "superuser" } },
       { ...encoded, completedAt: undefined },
       { ...encoded, completedAt: "invalid" },
       { ...encoded, result: { decision: "executed" } },

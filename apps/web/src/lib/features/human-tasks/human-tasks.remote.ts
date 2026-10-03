@@ -1,29 +1,34 @@
 import { form, getRequestEvent, query } from "$app/server";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
-import { ApprovalResult, HumanTask, HumanTaskId } from "@moku/domain/human-task";
+import { ApprovalResult, HumanTask, HumanTaskId, TaskRef } from "@moku/domain/human-task";
+import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import type { ReviewTask } from "./review-task.ts";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
 
 export const getHumanTask = query(
-  Schema.toStandardSchemaV1(HumanTaskId),
-  (id): Promise<ReviewTask> => {
+  Schema.toStandardSchemaV1(TaskRef),
+  (ref): Promise<ReviewTask> => {
     const event = getRequestEvent();
     return event.locals
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          yield* AuthGuard.requireVerified(event.locals.authenticate);
+          const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
           const directory = yield* HumanTaskDirectory.Service;
-          return yield* directory.get(id);
+          return yield* directory.get(principal, ref);
         }),
       )
       .then(
         Result.getOrElse((failure) =>
           Match.valueTags(failure, {
             "AuthGuard.Required": AuthGuard.reject,
-            "AuthGuard.Unverified": AuthGuard.reject,
+            "Access.Unverified": AuthGuard.reject,
+            "Access.NotFound": () => error(404, "This task could not be found."),
+            "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
+            "OrganizationMembership.Unavailable": () =>
+              error(503, "We couldn’t verify your access. Try again."),
             "Authentication.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>
@@ -35,22 +40,26 @@ export const getHumanTask = query(
   },
 );
 
-export const listHumanTasks = query(() => {
+export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (organizationId) => {
   const event = getRequestEvent();
   return event.locals
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        yield* AuthGuard.requireVerified(event.locals.authenticate);
+        const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
         const directory = yield* HumanTaskDirectory.Service;
-        return yield* directory.list;
+        return yield* directory.list(principal, organizationId);
       }),
     )
     .then(
       Result.getOrElse((failure) =>
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
-          "AuthGuard.Unverified": AuthGuard.reject,
+          "Access.Unverified": AuthGuard.reject,
+          "Access.NotFound": () => error(404, "This organization could not be found."),
+          "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
+          "OrganizationMembership.Unavailable": () =>
+            error(503, "We couldn’t verify your access. Try again."),
           "Authentication.Unavailable": AuthGuard.reject,
           "HumanTaskStore.PersistenceError": () =>
             error(503, "We couldn’t load your tasks. Try again."),
@@ -61,22 +70,26 @@ export const listHumanTasks = query(() => {
 });
 
 export const respondToHumanTask = form(
-  Schema.toStandardSchemaV1(Schema.Struct({ id: HumanTaskId, ...ApprovalResult.fields }), {
-    parseOptions: { onExcessProperty: "error" },
-  }),
-  ({ id, ...answer }) => {
+  Schema.toStandardSchemaV1(
+    Schema.Struct({ id: HumanTaskId, organizationId: OrganizationId, ...ApprovalResult.fields }),
+    {
+      parseOptions: { onExcessProperty: "error" },
+    },
+  ),
+  ({ id, organizationId, ...answer }) => {
+    const ref = { taskId: id, organizationId };
     const event = getRequestEvent();
     return event.locals
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          yield* AuthGuard.requireVerified(event.locals.authenticate);
+          const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
           const directory = yield* HumanTaskDirectory.Service;
-          return yield* directory.respond(id, answer).pipe(
+          return yield* directory.respond(principal, ref, answer).pipe(
             Effect.map((task) => ({ outcome: "recorded" as const, task })),
             Effect.catchTag("HumanTaskStore.AlreadyCompleted", () =>
               directory
-                .get(id)
+                .get(principal, ref)
                 .pipe(Effect.map((task) => ({ outcome: "already-completed" as const, task }))),
             ),
           );
@@ -86,7 +99,14 @@ export const respondToHumanTask = form(
         Result.getOrElse((failure) =>
           Match.valueTags(failure, {
             "AuthGuard.Required": AuthGuard.reject,
-            "AuthGuard.Unverified": AuthGuard.reject,
+            "Access.Unverified": AuthGuard.reject,
+            "Access.NotFound": () => error(404, "This task could not be found."),
+            "Access.Denied": () =>
+              error(403, "Your role allows viewing tasks, but not answering them."),
+            "OrganizationMembership.Unavailable": () =>
+              error(503, "We couldn’t verify your access. Try again."),
+            "Transaction.Unavailable": () =>
+              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
             "Authentication.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>
@@ -95,8 +115,8 @@ export const respondToHumanTask = form(
         ),
       )
       .then(({ outcome, task }) => {
-        getHumanTask(id).set(Schema.encodeSync(HumanTask)(task));
-        return listHumanTasks()
+        getHumanTask(ref).set(Schema.encodeSync(HumanTask)(task));
+        return listHumanTasks(organizationId)
           .refresh()
           .then(() => outcome);
       });
