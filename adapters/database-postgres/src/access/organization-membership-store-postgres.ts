@@ -1,4 +1,4 @@
-import { OrganizationMembership } from "@moku/core/organization-membership";
+import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import type { UserId } from "@moku/domain/identity";
 import { Organization, type OrganizationId } from "@moku/domain/organization";
 import { and, asc, eq } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { member, organization } from "../auth/schema.ts";
 import { Database } from "../internal/database.ts";
 
 export const layer = Layer.effect(
-  OrganizationMembership.Service,
+  OrganizationMembershipStore.Service,
   Effect.gen(function* () {
     const database = yield* Database.Service;
     const sql = yield* SqlClient.SqlClient;
@@ -26,22 +26,22 @@ export const layer = Layer.effect(
       const row = rows[0];
       return row === undefined
         ? Option.none()
-        : Option.some(yield* Schema.decodeUnknownEffect(OrganizationMembership.Member)(row));
+        : Option.some(yield* Schema.decodeUnknownEffect(OrganizationMembershipStore.Member)(row));
     });
-    const unavailable = (cause: unknown) => new OrganizationMembership.Unavailable({ cause });
+    const unavailable = (cause: unknown) => new OrganizationMembershipStore.Unavailable({ cause });
 
-    const find = Effect.fn("OrganizationMembershipPostgres.find")(
+    const find = Effect.fn("OrganizationMembershipStorePostgres.find")(
       (userId: UserId, organizationId: OrganizationId) =>
         lookup(userId, organizationId).pipe(Effect.flatMap(decode), Effect.mapError(unavailable)),
     );
 
-    const findForWrite = Effect.fn("OrganizationMembershipPostgres.findForWrite")(function* (
+    const findForWrite = Effect.fn("OrganizationMembershipStorePostgres.findForWrite")(function* (
       userId: UserId,
       organizationId: OrganizationId,
     ) {
       if (Option.isNone(yield* Effect.serviceOption(sql.transactionService))) {
         return yield* Effect.die(
-          new Error("OrganizationMembership.findForWrite requires Transaction.run"),
+          new Error("OrganizationMembershipStore.findForWrite requires Transaction.run"),
         );
       }
       return yield* lookup(userId, organizationId)
@@ -49,7 +49,7 @@ export const layer = Layer.effect(
         .pipe(Effect.flatMap(decode), Effect.mapError(unavailable));
     });
 
-    const list = Effect.fn("OrganizationMembershipPostgres.list")((userId: UserId) =>
+    const list = Effect.fn("OrganizationMembershipStorePostgres.list")((userId: UserId) =>
       database
         .select({ id: organization.id, name: organization.name })
         .from(organization)
@@ -62,8 +62,8 @@ export const layer = Layer.effect(
         ),
     );
 
-    return OrganizationMembership.Service.of({ find, findForWrite, list });
+    return OrganizationMembershipStore.Service.of({ find, findForWrite, list });
   }),
 );
 
-export * as OrganizationMembershipPostgres from "./organization-membership-postgres.ts";
+export * as OrganizationMembershipStorePostgres from "./organization-membership-store-postgres.ts";

@@ -3,7 +3,7 @@ import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { HumanTaskStore } from "@moku/core/human-task-store";
-import { OrganizationMembership } from "@moku/core/organization-membership";
+import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import { Transaction } from "@moku/core/transaction";
 import { HumanTaskTitle } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
@@ -102,12 +102,12 @@ it.live("rolls back completion and attribution across the production core ports"
 it.live("rejects malformed persisted roles without confusing absence", () =>
   fixture(
     Effect.gen(function* () {
-      const memberships = yield* OrganizationMembership.Service;
+      const memberships = yield* OrganizationMembershipStore.Service;
       const sql = yield* PgClient.PgClient;
       yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'tenant-member'`;
       assert.instanceOf(
         yield* Effect.flip(memberships.find(actor.userId, organizationId)),
-        OrganizationMembership.Unavailable,
+        OrganizationMembershipStore.Unavailable,
       );
       yield* sql`DELETE FROM member WHERE id = 'tenant-member'`;
       assert.deepStrictEqual(yield* memberships.find(actor.userId, organizationId), Option.none());
@@ -118,13 +118,13 @@ it.live("rejects malformed persisted roles without confusing absence", () =>
 it.live("refuses a locked membership lookup without an active transaction", () =>
   fixture(
     Effect.gen(function* () {
-      const memberships = yield* OrganizationMembership.Service;
+      const memberships = yield* OrganizationMembershipStore.Service;
       const exit = yield* Effect.exit(memberships.findForWrite(actor.userId, organizationId));
       assert.isTrue(Exit.isFailure(exit));
       if (Exit.isSuccess(exit)) return assert.fail("Expected transaction prerequisite defect");
       assert.deepStrictEqual(
         Cause.squash(exit.cause),
-        new Error("OrganizationMembership.findForWrite requires Transaction.run"),
+        new Error("OrganizationMembershipStore.findForWrite requires Transaction.run"),
       );
     }),
   ),

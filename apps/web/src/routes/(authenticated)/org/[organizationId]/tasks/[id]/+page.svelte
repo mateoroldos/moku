@@ -6,5 +6,5 @@
 </script>
 
 {#key `${params.organizationId}/${params.id}`}
-  <HumanTaskReview id={params.id} organizationId={data.organizationId} canWrite={data.canWrite} />
+  <HumanTaskReview id={params.id} organizationId={data.organizationId} canRespondToHumanTasks={data.canRespondToHumanTasks} />
 {/key}

@@ -6,7 +6,7 @@
   "exports": {
     "./access": "./src/access/access.ts",
     "./organization-access": "./src/access/organization-access.ts",
-    "./organization-membership": "./src/access/organization-membership.ts",
+    "./organization-membership-store": "./src/access/organization-membership-store.ts",
     "./transaction": "./src/transaction/transaction.ts",
     "./human-task-directory": "./src/human-task/human-task-directory.ts",
     "./human-task-store": "./src/human-task/human-task-store.ts",

@@ -4,7 +4,7 @@ import { UserId } from "@moku/domain/identity";
 import { OrganizationId, type OrganizationRole } from "@moku/domain/organization";
 import { DateTime, Effect, Layer, Option, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
-import { OrganizationMembership } from "../access/organization-membership.ts";
+import { OrganizationMembershipStore } from "../access/organization-membership-store.ts";
 import { Transaction } from "../transaction/transaction.ts";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
 import { HumanTaskDirectory } from "./human-task-directory.ts";
@@ -29,19 +29,19 @@ const pending = PendingHumanTask.make({
 });
 const member = (role: OrganizationRole) =>
   Option.some(
-    OrganizationMembership.Member.make({ userId: principal.userId, organizationId, role }),
+    OrganizationMembershipStore.Member.make({ userId: principal.userId, organizationId, role }),
   );
-const unavailable = new OrganizationMembership.Unavailable({ cause: "offline" });
+const unavailable = new OrganizationMembershipStore.Unavailable({ cause: "offline" });
 
 // Policy tests deliberately do not simulate database transactions; PostgreSQL owns that proof.
 const transaction = Layer.succeed(Transaction.Service, { run: (effect) => effect });
-const memberships = (lookup: ReturnType<OrganizationMembership.Interface["find"]>) =>
-  Layer.succeed(OrganizationMembership.Service, {
+const memberships = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
+  Layer.succeed(OrganizationMembershipStore.Service, {
     find: () => lookup,
     findForWrite: () => lookup,
     list: () => Effect.succeed([]),
   });
-const dependencies = (lookup: ReturnType<OrganizationMembership.Interface["find"]>) =>
+const dependencies = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
   Layer.mergeAll(
     HumanTaskStoreMemory.layer,
     CryptoDeterministic.layer,
@@ -136,7 +136,7 @@ const denied = [
     name: "membership outage",
     actor: principal,
     lookup: Effect.fail(unavailable),
-    tag: "OrganizationMembership.Unavailable",
+    tag: "OrganizationMembershipStore.Unavailable",
   },
 ];
 

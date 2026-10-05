@@ -1,4 +1,4 @@
-import { OrganizationMembership } from "@moku/core/organization-membership";
+import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import { error, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
@@ -10,7 +10,7 @@ export const load: PageServerLoad = (event) =>
       "Load.home",
       Effect.gen(function* () {
         const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-        const memberships = yield* OrganizationMembership.Service;
+        const memberships = yield* OrganizationMembershipStore.Service;
         return yield* memberships.list(principal.userId);
       }),
     )
@@ -20,7 +20,7 @@ export const load: PageServerLoad = (event) =>
           "AuthGuard.Required": AuthGuard.reject,
           "Access.Unverified": AuthGuard.reject,
           "Authentication.Unavailable": AuthGuard.reject,
-          "OrganizationMembership.Unavailable": () =>
+          "OrganizationMembershipStore.Unavailable": () =>
             error(503, "We couldn’t load your organization. Try again."),
         }),
       ),

@@ -1,6 +1,6 @@
 # PostgreSQL persistence
 
-Implements `HumanTaskStore`, `OrganizationMembership`, and `Transaction` with Drizzle
+Implements `HumanTaskStore`, `OrganizationMembershipStore`, and `Transaction` with Drizzle
 and Effect SQL. Supply the PostgreSQL
 client with `PersistencePostgres.typeParsers` for Drizzle's temporal codecs.
 

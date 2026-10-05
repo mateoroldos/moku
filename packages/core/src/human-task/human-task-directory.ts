@@ -28,31 +28,44 @@ export const permissions = {
   respond: ["owner", "admin", "member"],
 } as const satisfies Record<"get" | "list" | "create" | "respond", ReadonlyArray<OrganizationRole>>;
 
-type ReadFailure = OrganizationAccess.Failure | HumanTaskStore.PersistenceError;
-type WriteFailure = ReadFailure | Transaction.Unavailable;
-
 export interface Interface {
   readonly create: (
     principal: Principal,
     organizationId: OrganizationId,
     input: CreateInput,
-  ) => Effect.Effect<PendingHumanTask, WriteFailure | IdGenerationError>;
+  ) => Effect.Effect<
+    PendingHumanTask,
+    | OrganizationAccess.Failure
+    | HumanTaskStore.PersistenceError
+    | Transaction.Unavailable
+    | IdGenerationError
+  >;
   readonly respond: (
     principal: Principal,
     ref: TaskRef,
     result: ApprovalResult,
   ) => Effect.Effect<
     CompletedHumanTask,
-    WriteFailure | HumanTaskStore.NotFound | HumanTaskStore.AlreadyCompleted
+    | OrganizationAccess.Failure
+    | HumanTaskStore.PersistenceError
+    | Transaction.Unavailable
+    | HumanTaskStore.NotFound
+    | HumanTaskStore.AlreadyCompleted
   >;
   readonly get: (
     principal: Principal,
     ref: TaskRef,
-  ) => Effect.Effect<HumanTask, ReadFailure | HumanTaskStore.NotFound>;
+  ) => Effect.Effect<
+    HumanTask,
+    OrganizationAccess.Failure | HumanTaskStore.PersistenceError | HumanTaskStore.NotFound
+  >;
   readonly list: (
     principal: Principal,
     organizationId: OrganizationId,
-  ) => Effect.Effect<ReadonlyArray<HumanTask>, ReadFailure>;
+  ) => Effect.Effect<
+    ReadonlyArray<HumanTask>,
+    OrganizationAccess.Failure | HumanTaskStore.PersistenceError
+  >;
 }
 
 export class Service extends Context.Service<Service, Interface>()(

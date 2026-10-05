@@ -2,7 +2,7 @@ import { Layer } from "effect";
 import { type CustomTypesConfig, types } from "pg";
 import { HumanTaskStorePostgres } from "./human-task/human-task-store-postgres.ts";
 import { Database } from "./internal/database.ts";
-import { OrganizationMembershipPostgres } from "./access/organization-membership-postgres.ts";
+import { OrganizationMembershipStorePostgres } from "./access/organization-membership-store-postgres.ts";
 import { TransactionPostgres } from "./transaction-postgres.ts";
 
 const drizzleRawStringOids = new Set([1082, 1114, 1184, 1186, 1231, 1115, 1185, 1187, 1182]);
@@ -15,7 +15,7 @@ export const typeParsers: CustomTypesConfig = {
 
 export const layer = Layer.mergeAll(
   HumanTaskStorePostgres.layer,
-  OrganizationMembershipPostgres.layer,
+  OrganizationMembershipStorePostgres.layer,
   TransactionPostgres.layer,
 ).pipe(Layer.provide(Database.layer));
 

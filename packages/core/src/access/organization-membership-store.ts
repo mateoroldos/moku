@@ -10,7 +10,7 @@ export const Member = Schema.Struct({
 export interface Member extends Schema.Schema.Type<typeof Member> {}
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()(
-  "OrganizationMembership.Unavailable",
+  "OrganizationMembershipStore.Unavailable",
   {
     cause: Schema.Defect(),
   },
@@ -30,7 +30,7 @@ export interface Interface {
 }
 
 export class Service extends Context.Service<Service, Interface>()(
-  "@moku/core/OrganizationMembership",
+  "@moku/core/OrganizationMembershipStore",
 ) {}
 
-export * as OrganizationMembership from "./organization-membership.ts";
+export * as OrganizationMembershipStore from "./organization-membership-store.ts";

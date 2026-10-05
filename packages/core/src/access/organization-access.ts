@@ -2,22 +2,27 @@ import type { Principal } from "@moku/domain/identity";
 import type { OrganizationId } from "@moku/domain/organization";
 import { Context, Effect, Layer, Option } from "effect";
 import { Access } from "./access.ts";
-import { OrganizationMembership } from "./organization-membership.ts";
+import { OrganizationMembershipStore } from "./organization-membership-store.ts";
 
 export type Failure =
   | Access.Unverified
   | Access.NotFound
   | Access.Denied
-  | OrganizationMembership.Unavailable;
+  | OrganizationMembershipStore.Unavailable;
 
 export interface Interface {
   readonly require: (
     principal: Principal,
     organizationId: OrganizationId,
     permission: Access.Permission,
-  ) => Effect.Effect<OrganizationMembership.Member, Failure>;
+  ) => Effect.Effect<OrganizationMembershipStore.Member, Failure>;
+
   /** The caller owns the transaction containing this check and the mutation. */
-  readonly requireForWrite: Interface["require"];
+  readonly requireForWrite: (
+    principal: Principal,
+    organizationId: OrganizationId,
+    permission: Access.Permission,
+  ) => Effect.Effect<OrganizationMembershipStore.Member, Failure>;
 }
 
 export class Service extends Context.Service<Service, Interface>()(
@@ -27,7 +32,7 @@ export class Service extends Context.Service<Service, Interface>()(
 export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const memberships = yield* OrganizationMembership.Service;
+    const memberships = yield* OrganizationMembershipStore.Service;
 
     const check = Effect.fnUntraced(function* (
       principal: Principal,

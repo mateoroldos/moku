@@ -11,6 +11,7 @@ export const betterAuthOptions = {
         ...organizations.schema,
         member: {
           ...organizations.schema.member,
+          // The plugin omits this constraint; schema generation must enforce one membership per pair.
           indexes: [{ fields: ["organizationId", "userId"], unique: true }],
         },
       },

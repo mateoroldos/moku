@@ -24,7 +24,10 @@ export const load: LayoutServerLoad = (event) => {
         );
         return {
           organizationId,
-          canWrite: Access.allows(HumanTaskDirectory.permissions.respond, member.role),
+          canRespondToHumanTasks: Access.allows(
+            HumanTaskDirectory.permissions.respond,
+            member.role,
+          ),
         };
       }),
     )
@@ -36,7 +39,7 @@ export const load: LayoutServerLoad = (event) => {
           "Authentication.Unavailable": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
-          "OrganizationMembership.Unavailable": () =>
+          "OrganizationMembershipStore.Unavailable": () =>
             error(503, "We couldn’t verify your access. Try again."),
         }),
       ),
