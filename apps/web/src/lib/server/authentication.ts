@@ -1,5 +1,8 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
+import { runWithTransaction } from "@better-auth/core/context";
+import { generateId } from "@better-auth/core/utils/id";
 import { Principal, UserId } from "@moku/domain/identity";
+import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
@@ -26,6 +29,10 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Authenticati
 
 export interface Interface {
   readonly authenticate: (headers: Headers) => IdentityLookup<never>;
+  readonly createOrganization: (
+    userId: UserId,
+    name: string,
+  ) => Effect.Effect<Organization, Unavailable>;
   readonly handle: (
     request: Request,
     clientAddress: string,
@@ -50,7 +57,7 @@ export const layer = Layer.effect(
       secret: Redacted.value(secret),
     });
     const unavailable = (cause: unknown) => new Unavailable({ cause: Redacted.make(cause) });
-    yield* Effect.tryPromise({ try: () => auth.$context, catch: unavailable });
+    const context = yield* Effect.tryPromise({ try: () => auth.$context, catch: unavailable });
 
     const authenticate = Effect.fn("Authentication.authenticate")(function* (headers: Headers) {
       const result: unknown = yield* Effect.tryPromise({
@@ -83,7 +90,29 @@ export const layer = Layer.effect(
       return response;
     }, Effect.uninterruptible);
 
-    return Service.of({ authenticate, handle });
+    const createOrganization = Effect.fn("Authentication.createOrganization")(function* (
+      userId: UserId,
+      name: string,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        // Flatten Better Auth's declared Promise<Promise<...>> at the Promise boundary.
+        try: () =>
+          Promise.resolve(
+            runWithTransaction(context.adapter, () =>
+              auth.api.createOrganization({
+                body: { userId, name, slug: generateId(), keepCurrentActiveOrganization: true },
+              }),
+            ),
+          ),
+        catch: unavailable,
+      });
+
+      return yield* Schema.decodeUnknownEffect(Organization)(result).pipe(
+        Effect.mapError(unavailable),
+      );
+    }, Effect.uninterruptible);
+
+    return Service.of({ authenticate, handle, createOrganization });
   }),
 );
 

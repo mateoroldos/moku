@@ -21,6 +21,16 @@ Derive UI capabilities from the [task permissions](../../../packages/core/src/hu
 rather than maintaining a separate role policy. Membership checks and scoped task
 queries protect different boundaries; completion fallback reads need both too.
 
+Organization creation accepts only a name. The remote supplies the verified caller's
+ID to Authentication's server-only provider operation; browser organization endpoints
+remain blocked. Better Auth's `runWithTransaction` binds organization and owner writes
+to one provider transaction. A plain adapter transaction does not bind nested provider
+operations. This transaction is independent of Effect SQL's task-write transactions.
+
+Organization IDs use 12 uppercase Crockford-alphabet characters. The provider's
+model-specific generator leaves other IDs at provider defaults. An ID collision fails
+creation; neither collisions nor uncertain network outcomes trigger automatic retries.
+
 Write authorization must use uncached membership on the task write's Effect SQL
 transaction. Lock membership before task rows and keep external calls outside the
 transaction. A write that locks membership first may finish before removal or

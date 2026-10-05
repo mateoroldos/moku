@@ -2,9 +2,10 @@
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
+import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
-import { Config, Effect, Layer } from "effect";
+import { Config, Effect, Layer, Redacted } from "effect";
 import { Authentication } from "./authentication.ts";
 
 const origin = "http://localhost:3000";
@@ -136,5 +137,79 @@ it.live("uses the supplied transport address instead of caller IP headers for th
     assert.strictEqual((yield* attempt("192.0.2.3", "192.0.2.10")).status, 401);
     assert.strictEqual((yield* attempt("192.0.2.4", "192.0.2.10")).status, 429);
     assert.strictEqual((yield* attempt("192.0.2.4", "192.0.2.11")).status, 401);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("creates a short-ID organization with the caller as its owner", () =>
+  Effect.gen(function* () {
+    const { auth, sql } = yield* fixture("192.0.2.7");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-creation-test'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+
+    const organization = yield* auth.createOrganization(
+      UserId.make("authentication-test"),
+      "auth-creation-test",
+    );
+
+    assert.match(organization.id, /^[0-9A-HJKMNP-TV-Z]{12}$/);
+    assert.deepStrictEqual(
+      yield* sql`
+      SELECT o.id, o.name, m.user_id, m.role FROM organization o
+      JOIN member m ON m.organization_id = o.id WHERE o.id = ${organization.id}
+    `,
+      [
+        {
+          id: organization.id,
+          name: "auth-creation-test",
+          user_id: "authentication-test",
+          role: "owner",
+        },
+      ],
+    );
+    assert.deepStrictEqual(
+      yield* sql`SELECT active_organization_id FROM session WHERE user_id = 'authentication-test'`,
+      [{ active_organization_id: null }],
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("rolls back organization creation when its owner cannot be stored", () =>
+  Effect.gen(function* () {
+    const { auth, sql } = yield* fixture("192.0.2.8");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-rollback-test'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* Effect.acquireRelease(
+      sql`CREATE FUNCTION pg_temp.reject_auth_test_owner() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.user_id = 'authentication-test' THEN
+            RAISE EXCEPTION 'organization-owner-write-probe';
+          END IF;
+          RETURN NEW;
+        END $$`.pipe(
+        Effect.andThen(sql`
+          CREATE TRIGGER reject_auth_test_owner BEFORE INSERT ON member
+          FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_auth_test_owner()
+        `),
+      ),
+      () => sql`DROP TRIGGER IF EXISTS reject_auth_test_owner ON member`.pipe(Effect.orDie),
+    );
+
+    const failure = yield* Effect.flip(
+      auth.createOrganization(UserId.make("authentication-test"), "auth-rollback-test"),
+    );
+
+    assert.nestedPropertyVal(
+      Redacted.value(failure.cause),
+      "cause.message",
+      "organization-owner-write-probe",
+    );
+    assert.deepStrictEqual(
+      yield* sql`SELECT id FROM organization WHERE name = 'auth-rollback-test'`,
+      [],
+    );
+    assert.deepStrictEqual(
+      yield* sql`SELECT id FROM member WHERE user_id = 'authentication-test'`,
+      [],
+    );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
