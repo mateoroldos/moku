@@ -28,6 +28,7 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const memberships = yield* OrganizationMembership.Service;
+
     const check = Effect.fnUntraced(function* (
       principal: Principal,
       permission: Access.Permission,
@@ -39,14 +40,17 @@ export const layer = Layer.effect(
       if (!Access.allows(permission, member.value.role)) return yield* new Access.Denied({});
       return member.value;
     });
+
     const require = Effect.fn("OrganizationAccess.require")(
       (principal: Principal, organizationId: OrganizationId, permission: Access.Permission) =>
         check(principal, permission, memberships.find(principal.userId, organizationId)),
     );
+
     const requireForWrite = Effect.fn("OrganizationAccess.requireForWrite")(
       (principal: Principal, organizationId: OrganizationId, permission: Access.Permission) =>
         check(principal, permission, memberships.findForWrite(principal.userId, organizationId)),
     );
+
     return Service.of({ require, requireForWrite });
   }),
 );

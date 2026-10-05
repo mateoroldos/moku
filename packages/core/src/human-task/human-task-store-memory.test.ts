@@ -4,6 +4,7 @@ import { DateTime, Effect, Result } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
 import { HumanTaskStoreContract } from "../test/human-task-store-contract.ts";
+
 const { organizationId, ref, attribution } = HumanTaskStoreContract;
 
 it.effect("honors the shared store lifecycle contract", () =>

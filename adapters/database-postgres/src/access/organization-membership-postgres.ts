@@ -12,6 +12,7 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service;
     const sql = yield* SqlClient.SqlClient;
+
     const lookup = (userId: UserId, organizationId: OrganizationId) =>
       database
         .select({
@@ -28,10 +29,12 @@ export const layer = Layer.effect(
         : Option.some(yield* Schema.decodeUnknownEffect(OrganizationMembership.Member)(row));
     });
     const unavailable = (cause: unknown) => new OrganizationMembership.Unavailable({ cause });
+
     const find = Effect.fn("OrganizationMembershipPostgres.find")(
       (userId: UserId, organizationId: OrganizationId) =>
         lookup(userId, organizationId).pipe(Effect.flatMap(decode), Effect.mapError(unavailable)),
     );
+
     const findForWrite = Effect.fn("OrganizationMembershipPostgres.findForWrite")(function* (
       userId: UserId,
       organizationId: OrganizationId,
@@ -45,6 +48,7 @@ export const layer = Layer.effect(
         .for("share")
         .pipe(Effect.flatMap(decode), Effect.mapError(unavailable));
     });
+
     const list = Effect.fn("OrganizationMembershipPostgres.list")((userId: UserId) =>
       database
         .select({ id: organization.id, name: organization.name })
@@ -57,6 +61,7 @@ export const layer = Layer.effect(
           Effect.mapError(unavailable),
         ),
     );
+
     return OrganizationMembership.Service.of({ find, findForWrite, list });
   }),
 );

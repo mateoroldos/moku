@@ -58,6 +58,7 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()(
   "@moku/core/HumanTaskDirectory",
 ) {}
+
 export class IdGenerationError extends Schema.TaggedError<IdGenerationError>()(
   "HumanTaskDirectory.IdGenerationError",
   { cause: Schema.Defect() },
@@ -97,6 +98,7 @@ export const layer = Layer.effect(
         }),
       );
     });
+
     const respond = Effect.fn("HumanTaskDirectory.respond")(function* (
       principal: Principal,
       ref: TaskRef,
@@ -117,10 +119,12 @@ export const layer = Layer.effect(
         }),
       );
     });
+
     const get = Effect.fn("HumanTaskDirectory.get")(function* (principal: Principal, ref: TaskRef) {
       yield* access.require(principal, ref.organizationId, permissions.get);
       return yield* store.get(ref);
     });
+
     const list = Effect.fn("HumanTaskDirectory.list")(function* (
       principal: Principal,
       organizationId: OrganizationId,
@@ -128,6 +132,7 @@ export const layer = Layer.effect(
       yield* access.require(principal, organizationId, permissions.list);
       return yield* store.list(organizationId);
     });
+
     return Service.of({ create, respond, get, list });
   }),
 ).pipe(Layer.provide(OrganizationAccess.layer));

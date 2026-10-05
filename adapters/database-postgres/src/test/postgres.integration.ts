@@ -9,6 +9,7 @@ import { migrationConfig } from "../migrations.ts";
 import { PersistencePostgres } from "../persistence-postgres.ts";
 import { HumanTaskStoreContract } from "@moku/core/test/human-task-store-contract";
 import { UserId } from "@moku/domain/identity";
+
 const { organizationId, ref, attribution } = HumanTaskStoreContract;
 const seedOrganization = PgClient.PgClient.use(
   (sql) =>

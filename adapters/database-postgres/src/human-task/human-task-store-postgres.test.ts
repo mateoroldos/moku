@@ -7,6 +7,7 @@ import { DateTime, Effect, Result } from "effect";
 import { Database } from "../internal/database.ts";
 import { PersistencePglite } from "../test/persistence-pglite.ts";
 import { humanTasks } from "./schema.ts";
+
 const { organizationId, ref, attribution } = HumanTaskStoreContract;
 
 const task = PendingHumanTask.make({
