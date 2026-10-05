@@ -1,10 +1,107 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { AuthStorage } from "@moku/database-postgres/auth-storage";
+import { PersistencePostgres } from "@moku/database-postgres";
+import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { ApprovalResult } from "@moku/domain/human-task";
-import { Principal, UserId } from "@moku/domain/identity";
+import { Principal } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
-import { Config, Console, Effect, Layer, Schema } from "effect";
-import { WebRuntime } from "#lib/server/runtime.ts";
+import { betterAuth } from "better-auth/minimal";
+import { Config, Console, Effect, Layer, Redacted, Schema } from "effect";
+import { betterAuthOptions } from "#lib/server/better-auth-options.ts";
+
+class SeedUnavailable extends Schema.TaggedError<SeedUnavailable>()("SeedUnavailable", {
+  cause: Schema.Redacted(Schema.Unknown),
+}) {}
+
+const provider = <A>(run: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) => new SeedUnavailable({ cause: Redacted.make(cause) }),
+  });
+
+const provisionAccount = Effect.fn("provisionAccount")(function* () {
+  const database = yield* AuthStorage.Service;
+  const email = (yield* Config.schema(
+    Schema.String.check(Schema.isPattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)),
+    "SEED_EMAIL",
+  )).toLowerCase();
+  const password = yield* Config.redacted("SEED_PASSWORD");
+  const secret = yield* Config.redacted("BETTER_AUTH_SECRET");
+  const slug = yield* Config.string("SEED_ORGANIZATION_SLUG").pipe(Config.withDefault("moku"));
+
+  const auth = betterAuth({
+    ...betterAuthOptions,
+    database,
+    secret: Redacted.value(secret),
+    baseURL: "http://localhost",
+  });
+  const context = yield* provider(() => auth.$context);
+
+  const existing = yield* provider(() =>
+    context.internalAdapter.findUserByEmail(email, { includeAccounts: true }),
+  );
+  const user =
+    existing?.user ??
+    (yield* provider(() =>
+      context.internalAdapter.createUser(
+        { email, name: email, emailVerified: true },
+        { method: "email-password" },
+      ),
+    ));
+
+  if (!existing?.accounts.some((account) => account.providerId === "credential")) {
+    const hash = yield* provider(() => context.password.hash(Redacted.value(password)));
+    yield* provider(() =>
+      context.internalAdapter.linkAccount({
+        userId: user.id,
+        accountId: user.id,
+        providerId: "credential",
+        password: hash,
+      }),
+    );
+  }
+
+  const verifiedUser = user.emailVerified
+    ? user
+    : yield* provider(() => context.internalAdapter.updateUser(user.id, { emailVerified: true }));
+  const principal = yield* Schema.decodeEffect(Principal)({
+    userId: verifiedUser.id,
+    emailVerified: verifiedUser.emailVerified,
+  });
+
+  const organizations = yield* provider(() =>
+    context.adapter.findMany({ model: "organization", where: [{ field: "slug", value: slug }] }),
+  );
+  const existingOrganization = yield* Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ id: Schema.String })),
+  )(organizations);
+  const organizationId = yield* Schema.decodeEffect(OrganizationId)(
+    existingOrganization[0]?.id ??
+      (yield* provider(() =>
+        auth.api.createOrganization({ body: { name: slug, slug, userId: principal.userId } }),
+      )).id,
+  );
+
+  const members = yield* provider(() =>
+    context.adapter.findMany({
+      model: "member",
+      where: [
+        { field: "organizationId", value: organizationId },
+        { field: "userId", value: principal.userId },
+      ],
+    }),
+  );
+  if (members.length === 0)
+    yield* provider(() =>
+      auth.api.addMember({
+        body: { organizationId, userId: principal.userId, role: "owner" },
+      }),
+    );
+
+  return { principal, organizationId };
+}, Effect.uninterruptible);
 
 const examples = Schema.decodeSync(
   Schema.Array(
@@ -67,15 +164,20 @@ const examples = Schema.decodeSync(
 
 NodeRuntime.runMain(
   Effect.gen(function* () {
-    const baseUrl = yield* Config.url("REVIEW_BASE_URL").pipe(
-      Config.withDefault(new URL("http://127.0.0.1:5173")),
+    const baseUrl = process.argv.includes("--account-only")
+      ? undefined
+      : yield* Config.url("REVIEW_BASE_URL").pipe(
+          Config.withDefault(new URL("http://127.0.0.1:5173")),
+        );
+
+    const { principal, organizationId } = yield* provisionAccount();
+    yield* Console.log(
+      `Verified login account ready.\nUser: ${principal.userId}\nOrganization: ${organizationId}`,
     );
+
+    if (baseUrl === undefined) return;
+
     const directory = yield* HumanTaskDirectory.Service;
-    const principal = Principal.make({
-      userId: yield* Config.schema(UserId, "SEED_USER_ID"),
-      emailVerified: true,
-    });
-    const organizationId = yield* Config.schema(OrganizationId, "SEED_ORGANIZATION_ID");
 
     for (const { request, result } of examples) {
       const pending = yield* directory.create(principal, organizationId, request);
@@ -83,6 +185,7 @@ NodeRuntime.runMain(
         result === undefined
           ? pending
           : yield* directory.respond(principal, { organizationId, taskId: pending.id }, result);
+
       yield* Console.log(
         `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(organizationId)}/tasks/${task.id}`, baseUrl).href}`,
       );
@@ -91,7 +194,19 @@ NodeRuntime.runMain(
     yield* Console.log("Added four example tasks. Existing tasks and decisions were preserved.");
   }).pipe(
     Effect.provide(
-      Layer.unwrap(Config.redacted("DATABASE_URL").pipe(Effect.map(WebRuntime.layer))),
+      Layer.unwrap(
+        Config.redacted("DATABASE_URL").pipe(
+          Effect.map((url) =>
+            HumanTaskDirectory.layer.pipe(
+              Layer.provide(PersistencePostgres.layer),
+              Layer.provide(NodeCrypto.layer),
+              Layer.provideMerge(
+                PostgresConnection.layer({ url, applicationName: "moku-seed", maxConnections: 1 }),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   ),
 );

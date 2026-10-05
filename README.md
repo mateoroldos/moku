@@ -35,24 +35,25 @@ bun run db:migrate
 ```
 
 Set `BETTER_AUTH_SECRET` in `.env` to a private value from `openssl rand -base64 32`.
-Create a verified reviewer account from the root:
+Create a verified reviewer account, organization, and example tasks from the root:
 
 ```sh
-SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run auth:seed
+SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run db:seed
 ```
 
 The seed creates an owner membership in the `moku` organization; set
 `SEED_ORGANIZATION_SLUG` to seed another organization. Repeated seeds preserve
 existing credentials and memberships. Public signup and membership endpoints are disabled.
 
-Use the IDs printed by `auth:seed` to create four example approval tasks:
+To provision only the account and organization:
 
 ```sh
-SEED_USER_ID='<printed user ID>' SEED_ORGANIZATION_ID='<printed organization ID>' bun run db:seed
+SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run auth:seed
 ```
 
-Each run adds a fresh batch and prints review URLs. Set `REVIEW_BASE_URL` for a
-server other than `http://127.0.0.1:5173`.
+Each `db:seed` run adds four tasks and prints review URLs. Set `REVIEW_BASE_URL`
+for a server other than `http://127.0.0.1:5173`. Provisioning and task creation commit
+separately; a failed run can leave an account, organization, or partial task batch.
 
 Run `bun run dev` and open `http://127.0.0.1:5173`. Development commands and the
 built server read root `.env`; exported variables take precedence.
