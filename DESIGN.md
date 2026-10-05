@@ -67,6 +67,10 @@ Design every state a surface can reach: empty, loading, pending, submitting,
 recorded, already recorded, and failed. Loading placeholders match the final
 layout. Pair every status color with text or an icon.
 
+Use Sonner toasts for global action feedback, such as a failed sign-out. Keep
+validation beside its form, uncertain decision outcomes beside the task, and
+page failures in route error boundaries.
+
 ## Voice
 
 - Use sentence case and plain verbs; cut filler.

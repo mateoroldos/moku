@@ -14,7 +14,7 @@
     "auth:generate": "auth generate --config ./auth.config.ts --output ../../adapters/database-postgres/src/auth/schema.ts --yes && bun run --cwd ../.. oxfmt adapters/database-postgres/src/auth/schema.ts",
     "start": "node --env-file-if-exists=../../.env build/index.js",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
-    "dev": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js dev --host 127.0.0.1",
+    "dev": "node --env-file-if-exists=../../.env node_modules/vite/bin/vite.js dev --host localhost --port 5173 --strictPort",
     "build": "vite build",
     "check-types": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint",
@@ -28,8 +28,9 @@
     "@moku/domain": "workspace:*",
     "@moku/ui": "workspace:*",
     "effect": "catalog:",
-    "mode-watcher": "1.1.0",
-    "phosphor-svelte": "3.1.0"
+    "mode-watcher": "catalog:",
+    "phosphor-svelte": "catalog:",
+    "svelte-sonner": "catalog:"
   },
   "devDependencies": {
     "@better-auth/drizzle-adapter": "1.7.4",

@@ -167,7 +167,7 @@ NodeRuntime.runMain(
     const baseUrl = process.argv.includes("--account-only")
       ? undefined
       : yield* Config.url("REVIEW_BASE_URL").pipe(
-          Config.withDefault(new URL("http://127.0.0.1:5173")),
+          Config.withDefault(new URL("http://localhost:5173")),
         );
 
     const { principal, organizationId } = yield* provisionAccount();

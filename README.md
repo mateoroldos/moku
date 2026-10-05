@@ -52,11 +52,13 @@ SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run auth:
 ```
 
 Each `db:seed` run adds four tasks and prints review URLs. Set `REVIEW_BASE_URL`
-for a server other than `http://127.0.0.1:5173`. Provisioning and task creation commit
+for a server other than `http://localhost:5173`. Provisioning and task creation commit
 separately; a failed run can leave an account, organization, or partial task batch.
 
-Run `bun run dev` and open `http://127.0.0.1:5173`. Development commands and the
-built server read root `.env`; exported variables take precedence.
+Run `bun run dev` and open `http://localhost:5173`, matching `ORIGIN` in `.env`.
+Authentication requires an exact origin match, including hostname and port.
+Development commands and the built server read root `.env`; exported variables
+take precedence.
 
 See [authentication boundaries](apps/web/docs/authentication.md) when changing access checks.
 

@@ -4,7 +4,7 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 ## ⚠️ Needs you
 
-- Review [PR #20](https://github.com/mateoroldos/moku/pull/20), the feedback-draft slice, before PR 5 implementation.
+- Review [PR #21](https://github.com/mateoroldos/moku/pull/21), the organization chooser and sidebar, before PR 6 implementation.
 - Before PR 7: approve synchronous email sending with resend over a durable queue; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and trusted proxy.
 
@@ -17,8 +17,8 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 | 1   | Auth tables and one scoped pool           | Existing inbox                | known                         | ✅ #14 |
 | 2   | Seeded login protects read and answer     | Working inbox after login     | known                         | ✅ #18 |
 | 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers      | known                         | ✅ #19 |
-| 4   | Tab-local feedback drafts                 | Return to unfinished feedback | known · approved design       |        |
-| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | new · approved design below   |        |
+| 4   | Tab-local feedback drafts                 | Return to unfinished feedback | known                         | ✅ #20 |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | known · approved design below |        |
 | 6   | Organization creation                     | Create org → inbox            | new · design before build     |        |
 | 7   | Signup, email code, console email         | Verify → create org → review  | new · design before build     |        |
 | 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox  | new · deployment verification |        |
@@ -36,6 +36,7 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 - Home consumes parent data for the zero/one/many landing decision. The sidebar derives selection from the URL; a cached membership list never authorizes a destination.
 - Keep independent guards in organization loads and task remotes. Listing needs no transaction, retry loop, or provider active-organization mutation.
 - Place `Sidebar.Provider` in the authenticated layout. Root layout owns global styles/theme setup; move sign-out and its draft cleanup together into authenticated chrome.
+- Public and authenticated error boundaries inherit their route layouts. Root failures use the shared public presentation without authenticated data; task failures retain task-specific recovery. The root hosts Sonner for global action feedback.
 - Copy [sidebar-07's composition](https://shadcn-svelte.com/registry/sidebar-07.json), not its demo `activeTeam` state: Header → switcher, Content → Inbox, Footer → theme/sign-out. Use the standard sidebar variant.
 - Import primitives through `packages/ui/components.json`; preserve Moku's button, tokens, and Phosphor icons. Review registry dependencies, package exports, and transitive generated code before accepting them.
 
@@ -68,12 +69,20 @@ sidebar link → /org/{encoded id}
 apps/web/src/
   routes/
     ~ +layout.svelte
+    ~ +error.svelte
+    + (public)/+layout.svelte
+    + (public)/+error.svelte
+    → (public)/login/+page.svelte
     ~ (authenticated)/+layout.server.ts
     + (authenticated)/+layout.svelte
+    + (authenticated)/+error.svelte
     ~ (authenticated)/+page.server.ts
     ~ (authenticated)/+page.svelte
   lib/features/organizations/
     + OrganizationSidebar.svelte
+  lib/features/navigation/
+    + PublicLayout.svelte
+    + RouteError.svelte
 packages/ui/
   ~ package.json
   ~ src/theme.css
@@ -84,25 +93,26 @@ packages/ui/
 
 ### Proof
 
-| Boundary                 | Cases                                                                  | Failure caught                                                      |
-| ------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| Built Kit requests       | Zero/one/many memberships; signed-out, unverified, backend unavailable | Wrong landing; leaked names; outage mistaken for no access          |
-| Browser + built requests | Stale/forged organization link; viewer; different user                 | Navigation grants access or displays another user's memberships     |
-| Browser                  | Inbox/review switching; back/forward; single organization              | Selection diverges from URL or sole organization exposes a dropdown |
-| Browser                  | ~375px/~1280px, light/dark, keyboard, collapsed/mobile states          | Inaccessible controls, broken focus, sheet covering destination     |
-| Browser                  | Draft in org A → org B → original task                                 | Navigation loses or mixes feedback                                  |
+| Boundary                 | Cases                                                                  | Failure caught                                                           |
+| ------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Built Kit requests       | Zero/one/many memberships; signed-out, unverified, backend unavailable | Wrong landing; leaked names; outage mistaken for no access               |
+| Browser + built requests | Stale/forged organization link; viewer; different user                 | Navigation grants access or displays another user's memberships          |
+| Browser                  | Inbox/review switching; back/forward; single organization              | Selection diverges from URL or the picker disappears with one membership |
+| Browser                  | ~375px/~1280px, light/dark, keyboard, collapsed/mobile states          | Inaccessible controls, broken focus, sheet covering destination          |
+| Browser                  | Draft in org A → org B → original task                                 | Navigation loses or mixes feedback                                       |
 
 Use the installed Kit APIs, Svelte autofixer with `--async`, `bun run check`, and `bun run build`. [Sidebar](https://shadcn-svelte.com/docs/components/sidebar) and [dropdown](https://shadcn-svelte.com/docs/components/dropdown-menu) docs own primitive composition.
 
 ### Assumed
 
 - Retain the membership store's organization-ID order; search is unnecessary for the seeded list.
-- On the chooser, label the sidebar header “Choose organization” with no current checkmark. With no memberships, omit the Inbox destination.
+- On the chooser, label the sidebar header “Choose organization” with no current checkmark. With no memberships, show “No organization access” and omit navigation destinations.
 - Keep theme and sign-out as visible footer controls. Collapse state lasts for the mounted shell; expanded is the initial default.
 - Membership lists can remain layout snapshots during navigation. Destination guards handle stale links; live membership updates belong to #10.
 
 ## Decided
 
+- Keep the organization picker visible with one membership. PR 6 adds a working “Create organization” action for zero, one, and multiple memberships.
 - PR 5 may exceed 400 lines for imported shadcn-svelte primitives and their dependencies; application logic remains a focused slice.
 - Tab-local drafts use [session storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage) over server persistence. Kit owns live form state; the web draft adapter owns stored feedback and user-scoped cleanup. Storage failure cannot block answering.
 - Browser session storage survives reloads but is not durable or synchronized. Duplicated/opener tabs can start with copies; sign-out cleanup applies to the current tab.
