@@ -1,71 +1,119 @@
 # Verified identity and tenant-safe tasks
 
-Issue: #8 · Appetite: ~8 PRs
-
-A teammate signs in and reads, creates, and answers only their organization's tasks; a new person signs up, verifies their email, and creates an organization. PR 3 scopes the privately seeded inbox by organization; public signup follows later.
-
-Not: password recovery and sessions (#9), invitations and members (#10), guests (#11), deletion and invite-only (#12); social login, MFA, SSO, billing, machine API keys.
+Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 ## ⚠️ Needs you
 
-- Review [PR #19](https://github.com/mateoroldos/moku/pull/19): tenant scope, role policy, and attribution.
-- Email: approve sending while the person waits, with a resend button, over a durable queue? Simpler; a crash can lose one email.
-- Before PR 8: confirm the Cloudflare sender, Node hosting, and the trusted proxy.
+- Review [PR #20](https://github.com/mateoroldos/moku/pull/20), the feedback-draft slice, before PR 5 implementation.
+- Before PR 7: approve synchronous email sending with resend over a durable queue; a crash can lose one email.
+- Before PR 8: confirm the Cloudflare sender, Node hosting, and trusted proxy.
 
 ## Trunk path
 
-No PR removes the working inbox.
+No PR removes the working inbox. Drafts ship before organization switching so unfinished feedback survives navigation.
 
-| PR  | Trunk gains                                      | Users see                    | Technique                         | Undo                              | Mode | Done   |
-| --- | ------------------------------------------------ | ---------------------------- | --------------------------------- | --------------------------------- | ---- | ------ |
-| 1   | Auth tables and one scoped pool for both drivers | Existing inbox               | contract first · keystone in PR 2 | revert code; retain unused tables | ask  | ✅ #14 |
-| 2   | Seeded login protects read and answer            | Working inbox after login    | skeleton · live                   | revert                            | ask  | ✅ #18 |
-| 3   | Tenant scope, role policy, attribution           | Scoped inbox and answers     | skeleton · live                   | revert, reset dev data            | ask  |        |
-| 4   | Task creation in the app                         | Create → review → answer     | split · live                      | revert                            | ask  |        |
-| 5   | Organization list and switcher                   | Switch seeded organizations  | split · live                      | revert                            | ask  |        |
-| 6   | Organization creation                            | Create org → inbox           | split · live                      | revert                            | ask  |        |
-| 7   | Signup, email code, console email                | Verify → create org → review | split · live                      | revert                            | ask  |        |
-| 8   | Cloudflare email; docs; plan deleted; #8 closed  | Code arrives in a real inbox | split · live                      | revert; sent mail stays           | ask  |        |
-
-Later: [#9 Account security](https://github.com/mateoroldos/moku/issues/9), [#10 Team membership](https://github.com/mateoroldos/moku/issues/10), [#11 External review](https://github.com/mateoroldos/moku/issues/11), [#12 Lifecycle and production](https://github.com/mateoroldos/moku/issues/12)
+| PR  | Trunk gains                               | Users see                     | Approach                      | Done   |
+| --- | ----------------------------------------- | ----------------------------- | ----------------------------- | ------ |
+| 1   | Auth tables and one scoped pool           | Existing inbox                | known                         | ✅ #14 |
+| 2   | Seeded login protects read and answer     | Working inbox after login     | known                         | ✅ #18 |
+| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers      | known                         | ✅ #19 |
+| 4   | Tab-local feedback drafts                 | Return to unfinished feedback | known · approved design       |        |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | new · approved design below   |        |
+| 6   | Organization creation                     | Create org → inbox            | new · design before build     |        |
+| 7   | Signup, email code, console email         | Verify → create org → review  | new · design before build     |        |
+| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox  | new · deployment verification |        |
 
 ## Rules
 
-- Follow [authentication boundaries](../apps/web/docs/authentication.md) when adding protected entrypoints.
-- Logs and events never hold passwords, codes, tokens, or email bodies; production refuses to start with console email.
+- Follow [authentication boundaries](../apps/web/docs/authentication.md) for protected entrypoints, role capabilities, and transactional writes.
+- Logs and events never hold passwords, codes, tokens, email bodies, or feedback drafts; production refuses to start with console email.
 
-## PR 3 design
+## Design: PR 5
 
-- Transactional write authorization over request-snapshot membership: removal and demotion must have a deterministic order relative to task writes. The contract lives in [authentication boundaries](../apps/web/docs/authentication.md).
-- Core creation authorization belongs in this slice; creation UI belongs in PR 4 and organization selection in PR 5.
+### Ownership
+
+- Extend the authenticated layout's `Load.authenticated` operation to list organizations after verification. Reuse [OrganizationMembershipStore.list](../packages/core/src/access/organization-membership-store.ts); its existing PostgreSQL adapter owns the scoped query and row decoding.
+- Home consumes parent data for the zero/one/many landing decision. The sidebar derives selection from the URL; a cached membership list never authorizes a destination.
+- Keep independent guards in organization loads and task remotes. Listing needs no transaction, retry loop, or provider active-organization mutation.
+- Place `Sidebar.Provider` in the authenticated layout. Root layout owns global styles/theme setup; move sign-out and its draft cleanup together into authenticated chrome.
+- Copy [sidebar-07's composition](https://shadcn-svelte.com/registry/sidebar-07.json), not its demo `activeTeam` state: Header → switcher, Content → Inbox, Footer → theme/sign-out. Use the standard sidebar variant.
+- Import primitives through `packages/ui/components.json`; preserve Moku's button, tokens, and Phosphor icons. Review registry dependencies, package exports, and transitive generated code before accepting them.
+
+### Request flow
+
+```text
+(authenticated)/+layout.server.ts load(event)
+  └─ locals.run("Load.authenticated", program) → cancellation + diagnostics
+       ├─ AuthGuard.requireVerified(locals.authenticate)
+       │    └─ Required → login; Unverified → 403; Unavailable → 503
+       └─ OrganizationMembershipStore.list(principal.userId)
+            └─ SQL/row decode failure → Unavailable → 503, never an empty list
+
+(authenticated)/+page.server.ts load(event)
+  └─ await event.parent() → organizations
+       ├─ zero → no-access page
+       ├─ one → redirect 303 /org/{encoded id}
+       └─ several → chooser with organization links
+
+sidebar link → /org/{encoded id}
+  ├─ existing org layout: parse ID → require membership → capabilities
+  │    └─ invalid/missing membership → 404; storage unavailable → 503
+  ├─ existing inbox query: verified principal + organization scope → tasks
+  └─ completed navigation → close mobile sheet
+```
+
+### Files
+
+```text
+apps/web/src/
+  routes/
+    ~ +layout.svelte
+    ~ (authenticated)/+layout.server.ts
+    + (authenticated)/+layout.svelte
+    ~ (authenticated)/+page.server.ts
+    ~ (authenticated)/+page.svelte
+  lib/features/organizations/
+    + OrganizationSidebar.svelte
+packages/ui/
+  ~ package.json
+  ~ src/theme.css
+  + src/ui/{sidebar,dropdown-menu,...}/
+  + src/hooks/                              registry mobile hook, if retained
+~ bun.lock
+```
+
+### Proof
+
+| Boundary                 | Cases                                                                  | Failure caught                                                      |
+| ------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Built Kit requests       | Zero/one/many memberships; signed-out, unverified, backend unavailable | Wrong landing; leaked names; outage mistaken for no access          |
+| Browser + built requests | Stale/forged organization link; viewer; different user                 | Navigation grants access or displays another user's memberships     |
+| Browser                  | Inbox/review switching; back/forward; single organization              | Selection diverges from URL or sole organization exposes a dropdown |
+| Browser                  | ~375px/~1280px, light/dark, keyboard, collapsed/mobile states          | Inaccessible controls, broken focus, sheet covering destination     |
+| Browser                  | Draft in org A → org B → original task                                 | Navigation loses or mixes feedback                                  |
+
+Use the installed Kit APIs, Svelte autofixer with `--async`, `bun run check`, and `bun run build`. [Sidebar](https://shadcn-svelte.com/docs/components/sidebar) and [dropdown](https://shadcn-svelte.com/docs/components/dropdown-menu) docs own primitive composition.
 
 ### Assumed
 
-- Organization IDs in URLs are sufficient for this slice; readable slugs and a switcher are not required to establish access.
+- Retain the membership store's organization-ID order; search is unnecessary for the seeded list.
+- On the chooser, label the sidebar header “Choose organization” with no current checkmark. With no memberships, omit the Inbox destination.
+- Keep theme and sign-out as visible footer controls. Collapse state lasts for the mounted shell; expanded is the initial default.
+- Membership lists can remain layout snapshots during navigation. Destination guards handle stale links; live membership updates belong to #10.
+
+## Decided
+
+- PR 5 may exceed 400 lines for imported shadcn-svelte primitives and their dependencies; application logic remains a focused slice.
+- Tab-local drafts use [session storage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage) over server persistence. Kit owns live form state; the web draft adapter owns stored feedback and user-scoped cleanup. Storage failure cannot block answering.
+- Browser session storage survives reloads but is not durable or synchronized. Duplicated/opener tabs can start with copies; sign-out cleanup applies to the current tab.
+- Better Auth over custom credentials: authentication is not Moku's product; `../effect-forge` provides an Effect/SvelteKit precedent. Better Auth owns identity/membership storage; Moku owns task permissions.
+- Organization IDs in URLs over readable slugs: sufficient for routing and access checks.
+- Replacing the task schema and resetting development data over compatibility migrations: there are no users yet.
+- One process-owned database pool for provider and task storage. See [PostgreSQL persistence](../adapters/database-postgres/README.md) for transaction ownership.
+- Console email in development and Cloudflare in production behind one email port.
 
 ## Risks
 
-- Deployed HTTPS and trusted-proxy behavior require verification in PR 8.
-- Better Auth membership writes do not join Effect transactions; membership management in #10 must preserve the write-ordering contract.
-- Waiting for email may reveal whether an account exists through response time → measure before PR 7.
-
-## Decisions
-
-- Better Auth over our own: credentials and sessions aren't our product, and `../effect-forge` already runs it with our Effect version.
-- Better Auth stores accounts, sessions, codes, and memberships; Moku owns task permissions. No second membership table.
-- Seeded accounts before signup over signup first: the protected inbox works from PR 2.
-- Replacing the task schema and resetting dev data over a migration: there are no users yet.
-- Email code: six digits, five minutes, three tries, single use, stored hashed; resend waits 60 seconds.
-- Console email in development, Cloudflare in production, behind one email port.
-- One process-owned database pool over Forge's separate client: provider and task storage share resource ownership. See [PostgreSQL persistence](../adapters/database-postgres/README.md) for transaction boundaries.
-
-## References
-
-| Source                                                                                                                                                         | Use it for                                                  | Trust     |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------- |
-| `adapters/database-postgres/node_modules/better-auth` 1.7.4                                                                                                    | what the provider really does: cookies, hooks, transactions | truth     |
-| [Better Auth: SvelteKit](https://www.better-auth.com/docs/integrations/svelte-kit)                                                                             | wiring the handler and session into hooks                   | truth     |
-| [Better Auth: email OTP](https://www.better-auth.com/docs/plugins/email-otp) and [organization](https://www.better-auth.com/docs/plugins/organization) plugins | code options and membership endpoints to enable or deny     | truth     |
-| [Cloudflare Email Service](https://developers.cloudflare.com/email-service/)                                                                                   | sending from Node over REST; account and sender setup       | truth     |
-| `../effect-forge/apps/web/src/lib/server/authentication.ts`, `apps/web/docs/authentication.md`                                                                 | Better Auth with Effect and SvelteKit; no OTP or email      | precedent |
-| `../effect-forge/packages/core/src/organization-access/`                                                                                                       | decoding membership, permission checks, inaccessible orgs   | precedent |
+- Better Auth membership writes do not join Effect transactions; #10 must preserve the write-ordering contract.
+- Waiting for email may reveal whether an account exists through response time; measure before PR 7.
+- Verify deployed HTTPS and trusted-proxy behavior in PR 8.

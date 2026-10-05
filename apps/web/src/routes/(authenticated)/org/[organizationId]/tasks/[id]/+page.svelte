@@ -5,6 +5,6 @@
   let { params, data }: PageProps = $props();
 </script>
 
-{#key `${params.organizationId}/${params.id}`}
-  <HumanTaskReview id={params.id} organizationId={data.organizationId} canRespondToHumanTasks={data.canRespondToHumanTasks} />
+{#key `${data.viewer.userId}/${params.organizationId}/${params.id}`}
+  <HumanTaskReview id={params.id} organizationId={data.organizationId} userId={data.viewer.userId} canRespondToHumanTasks={data.canRespondToHumanTasks} />
 {/key}
