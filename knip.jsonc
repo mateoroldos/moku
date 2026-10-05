@@ -17,7 +17,7 @@
       "ignoreDependencies": ["tailwindcss"],
     },
     "packages/ui": {
-      // svelte-check selects the TypeScript 7 alias through --tsgo.
+      // svelte-check selects this compiler through --tsgo-experimental-api.
       "ignoreDependencies": ["@typescript/native"],
     },
   },

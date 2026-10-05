@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PanelLeftIcon from 'phosphor-svelte/lib/SidebarSimpleIcon';
+	import SidebarIcon from 'phosphor-svelte/lib/Sidebar';
 	import { Button } from "@moku/ui/ui/button/index.js";
 	import { cn } from "@moku/ui/cn.js";
 	import { useSidebar } from "./context.svelte.js";
@@ -17,6 +17,7 @@
 	const sidebar = useSidebar();
 </script>
 
+<!-- eslint-disable shadcn/no-unknown-classes -- Preserve the upstream optional cn-rtl-flip utility. -->
 <Button
 	bind:ref
 	data-sidebar="trigger"
@@ -31,6 +32,6 @@
 	}}
 	{...restProps}
 >
-	<PanelLeftIcon aria-hidden="true" />
-	<span class="sr-only">Toggle sidebar</span>
+	<SidebarIcon class="cn-rtl-flip" />
+	<span class="sr-only">Toggle Sidebar</span>
 </Button>

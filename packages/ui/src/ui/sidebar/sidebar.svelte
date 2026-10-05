@@ -13,7 +13,7 @@
 		class: className,
 		children,
 		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLElement>> & {
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
 		side?: "left" | "right";
 		variant?: "sidebar" | "floating" | "inset";
 		collapsible?: "offcanvas" | "icon" | "none";
@@ -23,7 +23,7 @@
 </script>
 
 {#if collapsible === "none"}
-	<aside
+	<div
 		class={cn(
 			"flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
 			className
@@ -32,7 +32,7 @@
 		{...restProps}
 	>
 		{@render children?.()}
-	</aside>
+	</div>
 {:else if sidebar.isMobile}
 	<Sheet.Root bind:open={() => sidebar.openMobile, (v) => sidebar.setOpenMobile(v)} {...restProps}>
 		<Sheet.Content
@@ -57,7 +57,7 @@
 		</Sheet.Content>
 	</Sheet.Root>
 {:else}
-	<aside
+	<div
 		bind:this={ref}
 		class="group peer hidden text-sidebar-foreground md:block"
 		data-state={sidebar.state}
@@ -99,5 +99,5 @@
 				{@render children?.()}
 			</div>
 		</div>
-	</aside>
+	</div>
 {/if}

@@ -1,8 +1,8 @@
 <script lang="ts">
   import PublicLayout from '#lib/features/navigation/PublicLayout.svelte';
-  import type { LayoutProps } from './$types';
+  import type { Snippet } from 'svelte';
 
-  let { children }: LayoutProps = $props();
+  let { children }: { children: Snippet } = $props();
 </script>
 
 <PublicLayout>{@render children()}</PublicLayout>

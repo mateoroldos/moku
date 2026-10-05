@@ -2,28 +2,22 @@
 	import { DropdownMenu as DropdownMenuPrimitive } from "bits-ui";
 	import { cn, type WithoutChildrenOrChild } from "@moku/ui/cn.js";
 	import DropdownMenuPortal from "./dropdown-menu-portal.svelte";
-	import type { ComponentProps, Snippet } from "svelte";
-
-	const uid = $props.id();
+	import type { ComponentProps } from "svelte";
 
 	let {
-		id = uid,
-		children,
 		ref = $bindable(null),
 		sideOffset = 4,
 		align = "start",
 		portalProps,
 		class: className,
 		...restProps
-	}: WithoutChildrenOrChild<DropdownMenuPrimitive.ContentProps> & {
-		children?: Snippet;
+	}: DropdownMenuPrimitive.ContentProps & {
 		portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DropdownMenuPortal>>;
 	} = $props();
 </script>
 
 <DropdownMenuPortal {...portalProps}>
 	<DropdownMenuPrimitive.Content
-		{id}
 		bind:ref
 		data-slot="dropdown-menu-content"
 		{sideOffset}
@@ -33,12 +27,5 @@
 			className
 		)}
 		{...restProps}
-	>
-		{#snippet child({ props, wrapperProps })}
-			<div {...wrapperProps}>
-				<!-- Bits UI 2.18's floating layer omits the content ID required by aria-controls. -->
-				<div {...props} {id}>{@render children?.()}</div>
-			</div>
-		{/snippet}
-	</DropdownMenuPrimitive.Content>
+	/>
 </DropdownMenuPortal>

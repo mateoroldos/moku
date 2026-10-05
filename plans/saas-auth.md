@@ -4,7 +4,7 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 ## ⚠️ Needs you
 
-- Review [PR #21](https://github.com/mateoroldos/moku/pull/21), the organization chooser and sidebar, before PR 6 implementation.
+- Review the generated UI restoration and its separately committed check suppressions before PR 6 implementation.
 - Before PR 7: approve synchronous email sending with resend over a durable queue; a crash can lose one email.
 - Before PR 8: confirm the Cloudflare sender, Node hosting, and trusted proxy.
 
@@ -18,7 +18,8 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 | 2   | Seeded login protects read and answer     | Working inbox after login     | known                         | ✅ #18 |
 | 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers      | known                         | ✅ #19 |
 | 4   | Tab-local feedback drafts                 | Return to unfinished feedback | known                         | ✅ #20 |
-| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | known · approved design below |        |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | known                         | ✅ #21 |
+| 5a  | Official generated UI source              | Existing organization sidebar | known · approved suppressions |        |
 | 6   | Organization creation                     | Create org → inbox            | new · design before build     |        |
 | 7   | Signup, email code, console email         | Verify → create org → review  | new · design before build     |        |
 | 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox  | new · deployment verification |        |
@@ -28,7 +29,17 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 - Follow [authentication boundaries](../apps/web/docs/authentication.md) for protected entrypoints, role capabilities, and transactional writes.
 - Logs and events never hold passwords, codes, tokens, email bodies, or feedback drafts; production refuses to start with console email.
 
-## Design: PR 5
+## Design: generated UI compatibility
+
+Use official shadcn-svelte CLI output with Phosphor configured in `components.json`.
+Keep complete component families and their public APIs. Application-specific behavior
+belongs in consumers; generator support types and utilities belong in UI integration.
+
+Keep generated implementation intact. User-approved lint/type suppression comments
+live in a separate commit and explain each upstream incompatibility. Application
+code remains checked; native button props belong on the consumer's child snippet.
+
+## Decided: PR 5
 
 ### Ownership
 

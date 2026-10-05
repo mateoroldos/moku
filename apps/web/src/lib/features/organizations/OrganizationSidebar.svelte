@@ -143,8 +143,12 @@
         </Sidebar.MenuButton>
       </Sidebar.MenuItem>
       <Sidebar.MenuItem>
-        <Sidebar.MenuButton disabled={signingOut} onclick={signOut} tooltipContent="Sign out" aria-label="Sign out">
-          <SignOutIcon aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">{signingOut ? 'Signing out…' : 'Sign out'}</span>
+        <Sidebar.MenuButton tooltipContent="Sign out" aria-label="Sign out">
+          {#snippet child({ props })}
+            <button {...props} disabled={signingOut} onclick={signOut}>
+              <SignOutIcon aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">{signingOut ? 'Signing out…' : 'Sign out'}</span>
+            </button>
+          {/snippet}
         </Sidebar.MenuButton>
       </Sidebar.MenuItem>
     </Sidebar.Menu>

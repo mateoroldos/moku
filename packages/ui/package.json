@@ -16,7 +16,7 @@
     "./ui/*/index.js": "./src/ui/*/index.ts"
   },
   "scripts": {
-    "check-types": "svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check-types": "svelte-check --tsgo-experimental-api --tsconfig ./tsconfig.json",
     "lint": "eslint"
   },
   "dependencies": {

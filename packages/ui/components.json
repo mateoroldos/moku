@@ -12,5 +12,6 @@
     "hooks": "@moku/ui/hooks"
   },
   "typescript": true,
+  "iconLibrary": "phosphor",
   "registry": "https://shadcn-svelte.com/registry"
 }

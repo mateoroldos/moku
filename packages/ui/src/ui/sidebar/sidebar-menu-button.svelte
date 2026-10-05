@@ -11,7 +11,7 @@
 			size: {
 				default: "h-8 text-sm",
 				sm: "h-7 text-xs",
-				lg: "h-12 text-sm",
+				lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
 			},
 		},
 		defaultVariants: {
@@ -30,7 +30,7 @@
 	import { cn, type WithElementRef, type WithoutChildrenOrChild } from "@moku/ui/cn.js";
 	import { useSidebar } from "./context.svelte.js";
 	import type { ComponentProps, Snippet } from "svelte";
-	import type { HTMLAttributes, HTMLButtonAttributes } from "svelte/elements";
+	import type { HTMLAttributes } from "svelte/elements";
 
 	let {
 		ref = $bindable(null),
@@ -43,13 +43,14 @@
 		tooltipContent,
 		tooltipContentProps,
 		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLElement>, HTMLButtonElement> & Pick<HTMLButtonAttributes, "disabled" | "type"> & {
+	}: WithElementRef<HTMLAttributes<HTMLButtonElement>, HTMLButtonElement> & {
 		isActive?: boolean;
 		variant?: SidebarMenuButtonVariant;
 		size?: SidebarMenuButtonSize;
 		tooltipContent?: Snippet | string;
 		tooltipContentProps?: WithoutChildrenOrChild<ComponentProps<typeof Tooltip.Content>>;
-		child?: Snippet<[{ props: HTMLAttributes<HTMLElement> }]>;
+		// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- Preserve the generated shadcn child-snippet API.
+		child?: Snippet<[{ props: Record<string, unknown> }]>;
 	} = $props();
 
 	const sidebar = useSidebar();
@@ -59,13 +60,13 @@
 		"data-slot": "sidebar-menu-button",
 		"data-sidebar": "menu-button",
 		"data-size": size,
-		"data-active": isActive || undefined,
+		"data-active": isActive,
 		...restProps,
 	});
 </script>
 
-{#snippet Button({ props }: { props?: HTMLAttributes<HTMLElement> })}
-	{@const mergedProps = mergeProps(buttonProps, { ...props })}
+{#snippet Button({ props }: { props?: Record<string, unknown> })}
+	{@const mergedProps = mergeProps(buttonProps, props)}
 	{#if child}
 		{@render child({ props: mergedProps })}
 	{:else}
@@ -85,7 +86,6 @@
 			{/snippet}
 		</Tooltip.Trigger>
 		<Tooltip.Content
-			portalProps={{ disabled: true }}
 			side="right"
 			align="center"
 			hidden={sidebar.state !== "collapsed" || sidebar.isMobile}

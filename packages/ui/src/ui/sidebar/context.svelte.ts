@@ -1,4 +1,4 @@
-import { createContext } from "svelte";
+import { getContext, setContext } from "svelte";
 import { IsMobile } from "@moku/ui/hooks/is-mobile.svelte.js";
 import { SIDEBAR_KEYBOARD_SHORTCUT } from "./constants.js";
 
@@ -57,7 +57,7 @@ class SidebarState {
   };
 }
 
-export const [useSidebar, setSidebarContext] = createContext<SidebarState>();
+const SYMBOL_KEY = "scn-sidebar";
 
 /**
  * Instantiates a new `SidebarState` instance and sets it in the context.
@@ -66,5 +66,14 @@ export const [useSidebar, setSidebarContext] = createContext<SidebarState>();
  * @returns  The `SidebarState` instance.
  */
 export function setSidebar(props: SidebarStateProps): SidebarState {
-  return setSidebarContext(new SidebarState(props));
+  return setContext(Symbol.for(SYMBOL_KEY), new SidebarState(props));
+}
+
+/**
+ * Retrieves the `SidebarState` instance from the context. This is a class instance,
+ * so you cannot destructure it.
+ * @returns The `SidebarState` instance.
+ */
+export function useSidebar(): SidebarState {
+  return getContext(Symbol.for(SYMBOL_KEY));
 }

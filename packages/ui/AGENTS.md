@@ -9,8 +9,12 @@ Add primitives when a consuming page needs them.
   component. Follow installed library APIs and neighboring components.
 - `components.json` belongs to this package. Review generator output before
   accepting it; do not regenerate the collection for a targeted change.
-- Preserve generated component APIs. Resolve integration errors at their source;
-  do not narrow props or rewrite primitives to satisfy a consuming page.
+- Keep shadcn components as generated unless the user explicitly requests a
+  primitive edit. Customize through supported props, composition, theme tokens,
+  and generator configuration. Report upstream defects instead of patching them
+  silently; preserve generated APIs and component-family exports.
+- Suppress approved upstream diagnostics with in-file comments. Keep generated
+  components included in formatting and lint checks.
 - `eslint.config.js` owns the Svelte and [design](../../DESIGN.md) lint rules that web
   reuses; Oxlint owns JavaScript/TypeScript rules.
 - Use Phosphor icons with regular weight and direct `phosphor-svelte/lib/*` imports.

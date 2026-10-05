@@ -10,16 +10,11 @@
 	}: WithElementRef<HTMLAttributes<HTMLElement>> = $props();
 </script>
 
-<!-- eslint-disable shadcn/no-unknown-classes -- Preserve the upstream optional no-scrollbar utility. -->
-<div
+<main
 	bind:this={ref}
-	data-slot="sidebar-content"
-	data-sidebar="content"
-	class={cn(
-		"no-scrollbar gap-0 flex min-h-0 flex-1 flex-col overflow-auto group-data-[collapsible=icon]:overflow-hidden",
-		className
-	)}
+	data-slot="sidebar-inset"
+	class={cn("bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2 relative flex w-full flex-1 flex-col", className)}
 	{...restProps}
 >
 	{@render children?.()}
-</div>
+</main>

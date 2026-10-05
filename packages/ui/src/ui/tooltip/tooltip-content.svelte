@@ -5,10 +5,7 @@
 	import TooltipPortal from "./tooltip-portal.svelte";
 	import type { ComponentProps } from "svelte";
 
-	const uid = $props.id();
-
 	let {
-		id = uid,
 		ref = $bindable(null),
 		class: className,
 		sideOffset = 0,
@@ -25,8 +22,6 @@
 
 <TooltipPortal {...portalProps}>
 	<TooltipPrimitive.Content
-		{id}
-		role="tooltip"
 		bind:ref
 		data-slot="tooltip-content"
 		{sideOffset}
@@ -37,10 +32,6 @@
 		)}
 		{...restProps}
 	>
-		{#snippet child({ props, wrapperProps })}
-		<div {...wrapperProps}>
-			<!-- Bits UI 2.18's floating layer omits the content ID required by aria-describedby. -->
-			<div {...props} {id}>
 		{@render children?.()}
 		<TooltipPrimitive.Arrow>
 			{#snippet child({ props })}
@@ -53,8 +44,5 @@
 				></div>
 			{/snippet}
 		</TooltipPrimitive.Arrow>
-			</div>
-		</div>
-		{/snippet}
 	</TooltipPrimitive.Content>
 </TooltipPortal>
