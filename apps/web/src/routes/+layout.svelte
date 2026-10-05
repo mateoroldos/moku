@@ -7,6 +7,7 @@
   import favicon from '../favicon.svg';
   import '../app.css';
   import { authClient } from '#lib/features/auth/client.ts';
+  import { FeedbackDrafts } from '#lib/features/human-tasks/feedback-drafts.ts';
 
   let { children } = $props();
   let signingOut = $state(false);
@@ -15,6 +16,7 @@
 
   const signOut = async () => {
     if (signingOut) return;
+    const userId = page.data.viewer?.userId;
     signingOut = true;
     signoutError = null;
     try {
@@ -23,7 +25,12 @@
         signoutError = 'We couldn’t sign you out. Try again.';
         return;
       }
+      if (userId) FeedbackDrafts.browser.clearUser(userId);
+
       await goto('/login', { refreshAll: true });
+
+      // The old form can still write while navigation is pending.
+      if (userId) FeedbackDrafts.browser.clearUser(userId);
     } catch {
       console.error('Sign-out request failed');
       signoutError = 'We couldn’t sign you out. Check your connection and try again.';

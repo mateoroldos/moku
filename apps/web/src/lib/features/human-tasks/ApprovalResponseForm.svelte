@@ -3,14 +3,34 @@
   import { isHttpError } from "@sveltejs/kit";
   import CheckIcon from "phosphor-svelte/lib/CheckIcon";
   import XIcon from "phosphor-svelte/lib/XIcon";
+  import { Option } from "effect";
+  import { untrack } from "svelte";
   import ApprovalAnswer from "./ApprovalAnswer.svelte";
+  import { FeedbackDrafts } from "./feedback-drafts";
   import { getHumanTask, respondToHumanTask } from "./human-tasks.remote";
   import type { ReviewTask } from "./review-task";
 
-  let { task }: { task: ReviewTask } = $props();
+  let { task, userId }: { task: ReviewTask; userId: string } = $props();
   const query = $derived(getHumanTask({ taskId: task.id, organizationId: task.organizationId }));
-  const response = $derived(respondToHumanTask.for(task.id));
+  const response = $derived(respondToHumanTask.for(JSON.stringify([userId, task.organizationId, task.id])));
+  const draftKey = $derived({ userId, organizationId: task.organizationId, taskId: task.id });
   let submissionFailed = $state(false);
+
+  function restoreDraft() {
+    const key = draftKey;
+    const fields = response.fields;
+
+    untrack(() => {
+      const draft = FeedbackDrafts.browser.read(key);
+      if (Option.isSome(draft) && !fields.feedback.value()) {
+        fields.feedback.set(draft.value.feedback);
+      }
+    });
+  }
+
+  $effect(() => {
+    if (task.status === "completed") FeedbackDrafts.browser.remove(draftKey);
+  });
 </script>
 
 <section aria-label="Your response" class="border-t pt-6 sm:pt-8">
@@ -30,6 +50,7 @@
       <h2 id="draft-heading" class="text-lg font-medium">Your decision</h2>
       <p class="mt-2 text-sm leading-relaxed text-muted-foreground">Review the request before responding. Your first response is final; recording it does not execute the action.</p>
       <form class="mt-6 flex flex-col gap-5" {...response.enhance(async (submission) => {
+        const key = draftKey;
         submissionFailed = false;
         try {
           const decision = submission.fields.decision.value();
@@ -41,6 +62,11 @@
           await submission.submit().updates(query.withOverride((current) =>
             current.status === "pending" ? { ...current, status: "submitting", answer } : current
           ));
+
+          if (submission.result === "recorded" || submission.result === "already-completed") {
+            // Navigation can unmount the completion effect before this submission finishes.
+            FeedbackDrafts.browser.remove(key);
+          }
         } catch (failure) {
           if (isHttpError(failure, 403) || isHttpError(failure, 404)) throw failure;
           if (!isHttpError(failure)) {
@@ -54,7 +80,9 @@
         <input {...response.fields.organizationId.as("hidden", task.organizationId)} />
         <div class="flex flex-col gap-2">
           <label for="feedback" class="text-sm font-medium">Feedback <span class="font-normal text-muted-foreground">(optional)</span></label>
-          <textarea {...response.fields.feedback.as("text")} id="feedback" rows="4" aria-describedby="feedback-hint" disabled={response.pending > 0}
+          <textarea {...response.fields.feedback.as("text")} {@attach restoreDraft}
+            oninput={(event) => FeedbackDrafts.browser.write(draftKey, { feedback: event.currentTarget.value })}
+            id="feedback" rows="4" aria-describedby="feedback-hint" disabled={response.pending > 0}
             class="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
           <p id="feedback-hint" class="text-xs text-muted-foreground">Explain your decision or what would need to change.</p>
         </div>
@@ -65,7 +93,6 @@
           <div class="flex flex-col items-start gap-2">
             <p role="alert" class="text-sm text-destructive">We couldn’t confirm your response. Reload to check the task’s status.</p>
             <Button href="/org/{encodeURIComponent(task.organizationId)}/tasks/{task.id}" variant="outline" data-sveltekit-reload>Reload task</Button>
-            <p class="text-xs text-muted-foreground">Reloading clears unsaved feedback.</p>
           </div>
         {/if}
         <div class="flex flex-col gap-3 sm:flex-row">
