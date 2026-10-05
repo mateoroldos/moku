@@ -46,5 +46,7 @@ Follow [root validation](../../AGENTS.md#validation). Choose the smallest releva
 browser check; trivial cosmetic edits may only need a quick visual inspection.
 Verify changed UI in light and dark themes, at about 375px and 1280px wide, by
 keyboard, and in each affected state.
+After changing UI dependencies, restart the dev server and verify an affected
+route as well as the production build; hot reload can retain stale dependency handling.
 Run broader regression checks when shared behavior or a discovered failure warrants
 them. Report browser checks separately from automated checks.
