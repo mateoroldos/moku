@@ -60,10 +60,12 @@ it.effect(
       const store = yield* HumanTaskStore.Service;
       const database = yield* Database.Service;
       yield* store.create(task);
+
       const invalidState = yield* Effect.result(
         database.update(humanTasks).set({ status: "completed" }).where(eq(humanTasks.id, task.id)),
       );
       assert.isTrue(Result.isFailure(invalidState));
+
       const missingAttribution = yield* Effect.result(
         database
           .update(humanTasks)
@@ -76,6 +78,7 @@ it.effect(
       );
       assert.isTrue(Result.isFailure(missingAttribution));
       assert.deepStrictEqual(yield* store.get(ref(task.id)), task);
+
       yield* database
         .update(humanTasks)
         .set({ subject: { title: " " } })

@@ -32,6 +32,7 @@ it.live(
       const database = yield* makeWithDefaults();
       yield* migrate(database, migrationConfig);
       const sql = yield* PgClient.PgClient;
+
       const cleanup = Effect.gen(function* () {
         yield* sql`DELETE FROM organization WHERE id = 'auth-schema-org'`;
         yield* sql`DELETE FROM session WHERE id IN ('auth-schema-session', 'auth-schema-duplicate', 'auth-orphan')`;
@@ -39,6 +40,7 @@ it.live(
         yield* sql`DELETE FROM "user" WHERE id IN ('auth-schema-test', 'auth-schema-duplicate')`;
       });
       yield* cleanup;
+
       yield* Effect.gen(function* () {
         yield* sql`INSERT INTO "user" (id, name, email)
         VALUES ('auth-schema-test', 'Schema test', 'schema-test@example.test')`;
@@ -104,12 +106,14 @@ it.live("migrates repeatedly, preserves the winning insert, and survives reconne
       createdAt: DateTime.makeUnsafe("2026-09-28T12:00:00.123Z"),
       status: "pending",
     });
+
     // This suite requires a disposable database; remove only its own fixed task.
     const cleanup = Effect.gen(function* () {
       const sql = yield* PgClient.PgClient;
       yield* sql`DELETE FROM human_tasks WHERE id = ${task.id}`;
     }).pipe(Effect.provide(postgres));
     yield* cleanup;
+
     yield* Effect.gen(function* () {
       const inserted = yield* Effect.forEach(
         ["First proposal", "Second proposal"],
@@ -132,6 +136,7 @@ it.live("migrates repeatedly, preserves the winning insert, and survives reconne
       assert.lengthOf(failures, 1);
       for (const failure of failures)
         assert.instanceOf(failure.failure, HumanTaskStore.PersistenceError);
+
       const completed = yield* Effect.gen(function* () {
         const store = yield* HumanTaskStore.Service;
         const pending = yield* store.get(ref(task.id));
@@ -149,8 +154,10 @@ it.live("migrates repeatedly, preserves the winning insert, and survives reconne
           completedAt,
           attribution,
         });
+
         return saved;
       }).pipe(Effect.provide(persistence));
+
       // Every provide above has closed its pool before this new connection reads the result.
       yield* Effect.gen(function* () {
         const store = yield* HumanTaskStore.Service;
@@ -190,6 +197,7 @@ it.live("rechecks pending status after a competing transaction releases its row 
       yield* seedOrganization;
     }).pipe(Effect.provide(postgres));
     yield* cleanup;
+
     yield* Effect.gen(function* () {
       yield* Effect.gen(function* () {
         const store = yield* HumanTaskStore.Service;
@@ -197,6 +205,7 @@ it.live("rechecks pending status after a competing transaction releases its row 
       }).pipe(Effect.provide(persistence));
       const locked = yield* Deferred.make<number>();
       const release = yield* Deferred.make<void>();
+
       const winner = yield* Effect.gen(function* () {
         const sql = yield* PgClient.PgClient;
         const store = yield* HumanTaskStore.Service;
@@ -246,6 +255,7 @@ it.live("rechecks pending status after a competing transaction releases its row 
       yield* Deferred.succeed(release, undefined);
       const completed = yield* Fiber.join(winner);
       const outcome = yield* Fiber.join(contender);
+
       assert.deepStrictEqual(
         outcome,
         Result.fail(new HumanTaskStore.AlreadyCompleted(ref(task.id))),

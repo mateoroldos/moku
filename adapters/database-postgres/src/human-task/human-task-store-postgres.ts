@@ -36,6 +36,7 @@ export const layer = Layer.effect(
   HumanTaskStore.Service,
   Effect.gen(function* () {
     const database = yield* Database.Service;
+
     const create = Effect.fn("HumanTaskStorePostgres.create")((task: PendingHumanTask) =>
       Schema.encodeEffect(PendingHumanTask)(task).pipe(
         Effect.flatMap((encoded) => database.insert(humanTasks).values(encoded)),
@@ -43,6 +44,7 @@ export const layer = Layer.effect(
         Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
       ),
     );
+
     const get = Effect.fn("HumanTaskStorePostgres.get")(function* (ref: TaskRef) {
       const rows = yield* database
         .select()
@@ -57,6 +59,7 @@ export const layer = Layer.effect(
         Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
       );
     });
+
     const list = (organizationId: OrganizationId) =>
       database
         .select()
@@ -66,6 +69,7 @@ export const layer = Layer.effect(
           Effect.flatMap((rows) => Effect.forEach(rows, decodeRow)),
           Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
         );
+
     const complete = Effect.fn("HumanTaskStorePostgres.complete")(function* (
       ref: TaskRef,
       result: ApprovalResult,
@@ -99,6 +103,7 @@ export const layer = Layer.effect(
         Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
       );
     });
+
     return HumanTaskStore.Service.of({ create, get, list, complete });
   }),
 );

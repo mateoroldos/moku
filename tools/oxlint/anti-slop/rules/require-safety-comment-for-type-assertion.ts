@@ -51,6 +51,7 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
   createOnce(context) {
     const checkAssertion = (node: TypeAssertion) => {
       if (isConstAssertion(node) || hasSafetyComment(context.sourceCode, node)) return;
+
       context.report({ node, messageId: "missingSafetyComment" });
     };
 

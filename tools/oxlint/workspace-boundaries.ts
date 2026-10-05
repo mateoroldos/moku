@@ -53,6 +53,7 @@ const noCrossWorkspaceImports = defineRule({
     function check(node: ESTree.Node, source: ESTree.Expression) {
       const specifier = moduleSpecifier(source);
       if (specifier === undefined) return;
+
       const target = importTarget(context.filename, specifier);
       if (target !== undefined && target !== name && !dependencies.includes(target)) {
         context.report({ node, messageId: "forbidden", data: { source: name, target } });

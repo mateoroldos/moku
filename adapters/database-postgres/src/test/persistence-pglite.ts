@@ -11,6 +11,7 @@ export const databaseLayer = Layer.effect(
   Database.Service,
   Effect.gen(function* () {
     const database = yield* makeWithDefaults();
+
     yield* migrate(database, migrationConfig);
     yield* database.insert(organization).values([
       {
@@ -26,6 +27,7 @@ export const databaseLayer = Layer.effect(
         createdAt: DateTime.toDateUtc(DateTime.makeUnsafe(0)),
       },
     ]);
+
     return database;
   }),
 ).pipe(Layer.provide(PgliteClient.layer()));

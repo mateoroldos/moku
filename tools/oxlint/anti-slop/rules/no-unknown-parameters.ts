@@ -59,6 +59,7 @@ export const noUnknownParametersRule = defineRule({
         if (annotation?.typeAnnotation.type !== "TSUnknownKeyword") continue;
         const name = parameterName(parameter, context.sourceCode.getText(parameter));
         if (name === "cause") continue;
+
         context.report({
           node: annotation.typeAnnotation,
           messageId: "unknownParameter",

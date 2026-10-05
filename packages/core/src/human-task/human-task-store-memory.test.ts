@@ -64,12 +64,14 @@ it.effect("atomically completes once under competing responses and preserves req
         completedAt: DateTime.makeUnsafe(3_000),
       },
     ] as const;
+
     const outcomes = yield* Effect.forEach(
       candidates,
       ({ result, completedAt }) =>
         Effect.result(store.complete(ref(task.id), result, completedAt, attribution)),
       { concurrency: "unbounded" },
     );
+
     const winners = outcomes.filter(Result.isSuccess).map((outcome) => outcome.success);
     const failures = outcomes.filter(Result.isFailure).map((outcome) => outcome.failure);
     assert.lengthOf(winners, 1);
@@ -113,9 +115,11 @@ it.effect("allows exactly one competing insert per ID and preserves the winner",
         status: "pending",
       }),
     );
+
     const results = yield* Effect.forEach(candidates, (task) => Effect.result(store.create(task)), {
       concurrency: "unbounded",
     });
+
     const winners = results.filter(Result.isSuccess).map((result) => result.success);
     const failures = results.filter(Result.isFailure).map((result) => result.failure);
     assert.lengthOf(winners, 1);

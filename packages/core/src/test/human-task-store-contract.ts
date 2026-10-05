@@ -23,15 +23,18 @@ export const lifecycle = Effect.gen(function* () {
     createdAt: DateTime.makeUnsafe("2026-09-28T12:34:56.789Z"),
     status: "pending",
   });
+
   assert.deepStrictEqual(yield* store.list(organizationId), []);
   assert.deepStrictEqual(yield* store.create(task), task);
   assert.deepStrictEqual(yield* store.get(ref(task.id)), task);
+
   const replacement = PendingHumanTask.make({
     ...task,
     subject: { title: HumanTaskTitle.make("Different proposal") },
     context: "Must not replace the original",
   });
   assert.instanceOf(yield* Effect.flip(store.create(replacement)), HumanTaskStore.PersistenceError);
+
   const result = { decision: "approved", feedback: "" } as const;
   const completedAt = DateTime.makeUnsafe("2026-09-28T13:00:00.123Z");
   const completed = yield* store.complete(ref(task.id), result, completedAt, attribution);
@@ -43,6 +46,7 @@ export const lifecycle = Effect.gen(function* () {
     attribution,
   });
   assert.deepStrictEqual(yield* store.list(organizationId), [completed]);
+
   for (const retry of [result, { decision: "rejected" }] as const) {
     assert.deepStrictEqual(
       yield* Effect.flip(
@@ -72,8 +76,10 @@ export const isolation = Effect.gen(function* () {
     organizationId: otherOrganizationId,
   });
   const missing = ref(HumanTaskId.make("00000000-0000-4000-8000-000000000003"));
+
   yield* store.create(first);
   yield* store.create(sibling);
+
   assert.deepStrictEqual(yield* store.get(ref(first.id)), first);
   for (const inaccessible of [missing, ref(sibling.id)]) {
     assert.deepStrictEqual(
@@ -89,6 +95,7 @@ export const isolation = Effect.gen(function* () {
   }
   assert.deepStrictEqual(yield* store.list(organizationId), [first]);
   assert.deepStrictEqual(yield* store.list(otherOrganizationId), [sibling]);
+
   const completed = yield* store.complete(
     { organizationId: otherOrganizationId, taskId: sibling.id },
     { decision: "rejected" },

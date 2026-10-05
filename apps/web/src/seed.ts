@@ -76,6 +76,7 @@ NodeRuntime.runMain(
       emailVerified: true,
     });
     const organizationId = yield* Config.schema(OrganizationId, "SEED_ORGANIZATION_ID");
+
     for (const { request, result } of examples) {
       const pending = yield* directory.create(principal, organizationId, request);
       const task =
@@ -86,6 +87,7 @@ NodeRuntime.runMain(
         `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(organizationId)}/tasks/${task.id}`, baseUrl).href}`,
       );
     }
+
     yield* Console.log("Added four example tasks. Existing tasks and decisions were preserved.");
   }).pipe(
     Effect.provide(

@@ -36,6 +36,7 @@ export function lexicalTypeParameterNames(
   const names = new Set<string>();
   let descendant: ESTree.Node = node;
   let current: ESTree.Node | null = node;
+
   while (current !== null && current.type !== "Program") {
     if ("typeParameters" in current) {
       for (const parameter of current.typeParameters?.params ?? []) {
@@ -54,5 +55,6 @@ export function lexicalTypeParameterNames(
     descendant = current;
     current = current.parent;
   }
+
   return names;
 }

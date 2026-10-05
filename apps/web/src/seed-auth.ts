@@ -31,6 +31,7 @@ NodeRuntime.runMain(
       baseURL: "http://localhost",
     });
     const context = yield* provider(() => auth.$context);
+
     const existing = yield* provider(() =>
       context.internalAdapter.findUserByEmail(email, { includeAccounts: true }),
     );
@@ -55,6 +56,7 @@ NodeRuntime.runMain(
     }
     if (!user.emailVerified)
       yield* provider(() => context.internalAdapter.updateUser(user.id, { emailVerified: true }));
+
     const slug = yield* Config.string("SEED_ORGANIZATION_SLUG").pipe(Config.withDefault("moku"));
     const organizations = yield* provider(() =>
       context.adapter.findMany({ model: "organization", where: [{ field: "slug", value: slug }] }),
@@ -80,6 +82,7 @@ NodeRuntime.runMain(
       yield* provider(() =>
         auth.api.addMember({ body: { organizationId, userId: user.id, role: "owner" } }),
       );
+
     yield* Console.log("Verified login account ready. Existing credentials were preserved.");
     yield* Console.log(`SEED_USER_ID=${user.id}\nSEED_ORGANIZATION_ID=${organizationId}`);
   }).pipe(

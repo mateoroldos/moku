@@ -26,6 +26,7 @@ const application = HumanTaskDirectory.layer.pipe(
   Layer.provide(NodeCrypto.layer),
   Layer.provideMerge(postgres),
 );
+
 const actor = { userId: UserId.make("tenant-user"), emailVerified: true };
 const organizationId = OrganizationId.make("tenant-org");
 const input = HumanTaskDirectory.CreateInput.make({
@@ -41,6 +42,7 @@ const cleanup = PgClient.PgClient.use((sql) =>
     yield* sql`DELETE FROM "user" WHERE id = 'tenant-user'`;
   }),
 );
+
 const fixture = <A, E, R>(program: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const database = yield* makeWithDefaults();
@@ -63,6 +65,7 @@ const backendPid = PgClient.PgClient.use((sql) =>
     Effect.map((rows) => rows[0].pid),
   ),
 );
+
 const waitForBlocker = (pid: number) =>
   PgClient.PgClient.use((sql) =>
     Effect.gen(function* () {
@@ -141,6 +144,7 @@ it.live.each(races)(
         const directory = yield* HumanTaskDirectory.Service;
         const store = yield* HumanTaskStore.Service;
         const sql = yield* PgClient.PgClient;
+
         const pending = yield* directory.create(actor, organizationId, input);
         const ref = { organizationId, taskId: pending.id };
         const locked = yield* Deferred.make<number>();
@@ -155,6 +159,7 @@ it.live.each(races)(
           create: (task) => pause.pipe(Effect.andThen(store.create(task))),
           complete: (...args) => pause.pipe(Effect.andThen(store.complete(...args))),
         });
+
         const answer = yield* Effect.gen(function* () {
           const directory = yield* HumanTaskDirectory.Service;
           return yield* operation === "answer"
@@ -182,6 +187,7 @@ it.live.each(races)(
         yield* Deferred.succeed(release, undefined);
         const completed = yield* Fiber.join(answer);
         yield* Fiber.join(revoked);
+
         assert.strictEqual(completed.status, status);
         assert.strictEqual(completed.organizationId, organizationId);
         assert.deepStrictEqual(
@@ -200,10 +206,12 @@ it.live.each(races)("waits for concurrent removal and refuses $operation", ({ op
       const directory = yield* HumanTaskDirectory.Service;
       const store = yield* HumanTaskStore.Service;
       const sql = yield* PgClient.PgClient;
+
       const pending = yield* directory.create(actor, organizationId, input);
       const ref = { organizationId, taskId: pending.id };
       const locked = yield* Deferred.make<number>();
       const release = yield* Deferred.make<void>();
+
       const mutation = yield* sql
         .withTransaction(
           Effect.gen(function* () {
@@ -221,6 +229,7 @@ it.live.each(races)("waits for concurrent removal and refuses $operation", ({ op
       yield* waitForBlocker(pid);
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(mutation);
+
       assert.strictEqual((yield* Fiber.join(answer))._tag, "Access.NotFound");
       assert.deepStrictEqual(yield* store.get(ref), pending);
       assert.deepStrictEqual(yield* store.list(organizationId), [pending]);

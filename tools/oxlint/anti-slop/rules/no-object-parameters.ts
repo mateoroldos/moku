@@ -71,6 +71,7 @@ export const noObjectParametersRule = defineRule({
       ) {
         return false;
       }
+
       const alias = aliases.get(type.typeName.name);
       if (alias === undefined) return false;
       const nextVisited = new Set(visited);
@@ -84,6 +85,7 @@ export const noObjectParametersRule = defineRule({
         const annotation = parameterAnnotation(parameter);
         if (annotation === null || annotation === undefined) continue;
         if (!resolvesToObject(annotation.typeAnnotation, shadowedAliases)) continue;
+
         context.report({
           node: annotation.typeAnnotation,
           messageId: "objectParameter",
@@ -95,6 +97,7 @@ export const noObjectParametersRule = defineRule({
     return {
       Program(node) {
         aliases.clear();
+
         for (const statement of node.body) {
           const declaration =
             statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
@@ -106,6 +109,7 @@ export const noObjectParametersRule = defineRule({
           }
         }
       },
+
       ArrowFunctionExpression: checkParameters,
       FunctionDeclaration: checkParameters,
       FunctionExpression: checkParameters,

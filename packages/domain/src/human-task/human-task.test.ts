@@ -25,9 +25,11 @@ it.effect("round-trips pending tasks and rejects invalid time or unsupported sta
       createdAt: "2026-09-25T12:00:00.000Z",
       status: "pending",
     } as const;
+
     const task = yield* Schema.decodeEffect(HumanTask)(encoded);
     assert.strictEqual(DateTime.formatIso(task.createdAt), encoded.createdAt);
     assert.deepStrictEqual(yield* Schema.encodeEffect(HumanTask)(task), encoded);
+
     for (const input of [
       { ...encoded, createdAt: "not-a-date" },
       { ...encoded, status: "completed" },
@@ -67,12 +69,14 @@ it.effect("round-trips completed tasks with structured results and requires comp
       completedAt: "2026-09-25T13:00:00.000Z",
       attribution: { userId: "user", role: "member" },
     } as const;
+
     const task = yield* Schema.decodeEffect(HumanTask)(encoded);
     assert.strictEqual(task.status, "completed");
     if (task.status !== "completed") return assert.fail("Expected completed task");
     assert.deepStrictEqual(task.result, encoded.result);
     assert.strictEqual(DateTime.formatIso(task.completedAt), encoded.completedAt);
     assert.deepStrictEqual(yield* Schema.encodeEffect(HumanTask)(task), encoded);
+
     for (const invalid of [
       { ...encoded, result: undefined },
       { ...encoded, attribution: undefined },
@@ -90,10 +94,12 @@ it.effect("round-trips completed tasks with structured results and requires comp
 
 it("accepts approval decisions with optional text feedback only", () => {
   const decode = Schema.decodeUnknownResult(ApprovalResult, { onExcessProperty: "error" });
+
   for (const decision of ["approved", "rejected"]) {
     assert.isTrue(Result.isSuccess(decode({ decision })));
     assert.isTrue(Result.isSuccess(decode({ decision, feedback: "" })));
   }
+
   for (const invalid of [
     null,
     {},

@@ -68,6 +68,7 @@ export const noUnknownReturnsRule = defineRule({
       ) {
         return false;
       }
+
       const nextVisited = new Set(visited);
       nextVisited.add(name);
       return resolvesToUnknown(alias.typeAnnotation, shadowedAliases, nextVisited);
@@ -84,12 +85,14 @@ export const noUnknownReturnsRule = defineRule({
       ) {
         return;
       }
+
       context.report({ node: annotation.typeAnnotation, messageId: "unknownReturn" });
     };
 
     return {
       Program(node) {
         aliases.clear();
+
         for (const statement of node.body) {
           const declaration =
             statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;

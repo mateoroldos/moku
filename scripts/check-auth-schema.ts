@@ -26,6 +26,7 @@ try {
     { cwd: web, stdin: "ignore", stdout: "inherit", stderr: "inherit", timeout: 60000 },
   );
   if (generation.exitCode !== 0) throw new Error("Better Auth schema generation failed");
+
   const formatting = spawnSync(["bun", "run", "oxfmt", generated], {
     cwd: root,
     stdout: "inherit",
@@ -33,6 +34,7 @@ try {
     timeout: 60000,
   });
   if (formatting.exitCode !== 0) throw new Error("Auth schema formatting failed");
+
   if ((await file(generated).text()) !== (await file(join(adapter, "src/auth/schema.ts")).text())) {
     throw new Error("Auth schema drift: run bun run --cwd apps/web auth:generate");
   }

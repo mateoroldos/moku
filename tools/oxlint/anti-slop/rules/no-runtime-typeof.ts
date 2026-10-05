@@ -55,6 +55,7 @@ export const noRuntimeTypeofRule = defineRule({
           option !== null &&
           !Array.isArray(option) &&
           option.allowInTypeGuards === true;
+
         if (node.operator === "typeof" && (!allowInTypeGuards || !isInsideTypeGuard(node))) {
           context.report({ node, messageId: "runtimeTypeof" });
         }

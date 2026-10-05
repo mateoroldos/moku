@@ -40,6 +40,7 @@ for (const manifestPath of manifests) {
   if (manifestPath !== `${workspace.directory}/package.json`) {
     violations.push(`${manifestPath}: ${manifest.name} belongs in ${workspace.directory}`);
   }
+
   const dependencies = {
     ...manifest.dependencies,
     ...manifest.devDependencies,

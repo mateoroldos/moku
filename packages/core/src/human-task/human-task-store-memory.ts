@@ -12,6 +12,7 @@ export const layer = Layer.effect(
   HumanTaskStore.Service,
   Effect.gen(function* () {
     const state = yield* Ref.make(new Map<HumanTaskId, HumanTask>());
+
     return HumanTaskStore.Service.of({
       create: (task) =>
         Ref.modify(

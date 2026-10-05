@@ -6,6 +6,7 @@ export const layer = Layer.effect(
   Transaction.Service,
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     return Transaction.Service.of({
       run: (effect) =>
         sql

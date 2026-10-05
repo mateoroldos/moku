@@ -38,6 +38,7 @@ function isTestFrameworkObject(
   if (variable === null || variable.defs.length === 0) {
     return expression.name === "vi" || expression.name === "jest";
   }
+
   return variable.defs.some((definition) => {
     if (definition.type !== "ImportBinding" || definition.parent?.type !== "ImportDeclaration") {
       return false;
@@ -53,6 +54,7 @@ function isTestFrameworkObject(
 function moduleMockCall(sourceCode: SourceCode, callee: ESTree.Expression): boolean {
   if (!("property" in callee) || !("object" in callee) || !("computed" in callee)) return false;
   if (!isTestFrameworkObject(sourceCode, callee.object)) return false;
+
   const property = callee.property;
   const method = callee.computed
     ? property.type === "Literal" &&
@@ -84,6 +86,7 @@ export const noModuleMockingRule = defineRule({
     return {
       CallExpression(node) {
         if (node.callee.type === "Super" || node.callee.type === "V8IntrinsicExpression") return;
+
         if (moduleMockCall(context.sourceCode, node.callee)) {
           context.report({ node, messageId: "moduleMock" });
         }

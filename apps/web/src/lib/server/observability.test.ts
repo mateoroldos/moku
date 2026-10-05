@@ -20,6 +20,7 @@ describe("request tracing", () => {
     ({ kind, routeId, name, route }) => {
       const spans: Array<Tracer.Span> = [];
       const response = new Response(null, { status: 503 });
+
       const result = Effect.runSync(
         Observability.request({ method: "GET", routeId, kind }, (span) => {
           spans.push(span);
@@ -27,6 +28,7 @@ describe("request tracing", () => {
           return Effect.succeed(response);
         }),
       );
+
       expect(result).toBe(response);
       expect(spans).toHaveLength(1);
       expect(spans[0]?.name).toBe(name);
@@ -40,12 +42,14 @@ describe("request tracing", () => {
   it("closes the span without replacing the original failure", () => {
     const spans: Array<Tracer.Span> = [];
     const failure = new Error("request failed");
+
     const result = Effect.runSync(
       Observability.request({ method: "GET", routeId: "/", kind: "request" }, (span) => {
         spans.push(span);
         return Effect.fail(failure);
       }).pipe(Effect.result),
     );
+
     expect(Result.isFailure(result) && result.failure).toBe(failure);
     expect(spans[0]?.status._tag).toBe("Ended");
     expect(spans[0]?.attributes.has("http.response.status_code")).toBe(false);
