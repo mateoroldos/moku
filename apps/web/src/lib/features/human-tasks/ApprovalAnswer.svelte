@@ -24,6 +24,7 @@
       <p class="text-xs text-muted-foreground">
         {#if task.status === "completed"}
           <time datetime={task.completedAt}>{formatUtcDateTime(task.completedAt)} UTC</time>
+          <span class="mt-1 block">Answered with the {task.attribution.role} role</span>
         {:else}
           Saving…
         {/if}

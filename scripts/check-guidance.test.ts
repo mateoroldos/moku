@@ -16,6 +16,7 @@ function runFixture(files: Readonly<Record<string, string>>) {
       mkdirSync(path.dirname(filename), { recursive: true });
       writeFileSync(filename, content);
     }
+
     const result = spawnSync("bun", [checker, root], { encoding: "utf8", timeout: 10_000 });
     if (result.error) throw result.error;
     return { output: result.stdout + result.stderr, exitCode: result.status };

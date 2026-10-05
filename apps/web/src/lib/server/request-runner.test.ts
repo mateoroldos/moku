@@ -25,6 +25,7 @@ describe("RequestRunner", () => {
     const { runtime } = fixture();
     const bothStarted = Deferred.makeUnsafe<void>();
     let started = 0;
+
     const request = () =>
       runtime.runPromise(
         Effect.useSpan("Request · GET /", (parent) =>
@@ -50,6 +51,7 @@ describe("RequestRunner", () => {
           }),
         ),
       );
+
     const [first, second] = await Promise.all([request(), request()]);
     assert.notStrictEqual(first.traceId, second.traceId);
     assert.strictEqual(first.status._tag, "Ended");
@@ -60,8 +62,10 @@ describe("RequestRunner", () => {
     const { run, entries } = fixture();
     const value = { title: "Review the proposal" };
     const failure = { _tag: "Test.Denied", cause: { message: "password=secret SQL private" } };
+
     const success = await run("Test.success", Effect.succeed(value));
     const rejected = await run("Test.denied", Effect.fail(failure));
+
     assert(Result.isSuccess(success));
     assert.strictEqual(success.success, value);
     assert(Result.isFailure(rejected));
@@ -101,6 +105,7 @@ describe("RequestRunner", () => {
         }),
       ),
     );
+
     controller.abort();
     await expect(
       run(
@@ -110,6 +115,7 @@ describe("RequestRunner", () => {
         }),
       ),
     ).rejects.toMatchObject({ cause: { reasons: [{ _tag: "Interrupt" }] } });
+
     expect(acquired).toBe(false);
     expect(entered).toBe(false);
     expect(entries).toHaveLength(0);
@@ -141,6 +147,7 @@ describe("RequestRunner", () => {
   it("retains and reports a cleanup defect alongside a typed failure", async () => {
     const { run, entries } = fixture();
     const defect = new Error("private cleanup defect");
+
     await expect(
       run("Test.cleanup", Effect.fail(failure).pipe(Effect.ensuring(Effect.die(defect)))),
     ).rejects.toMatchObject({
@@ -151,6 +158,7 @@ describe("RequestRunner", () => {
         ],
       },
     });
+
     expect(entries).toMatchObject([
       { level: "ERROR", annotations: { outcome: "failure", "error.kind": "defect" } },
     ]);
@@ -161,6 +169,7 @@ describe("RequestRunner", () => {
     const { run, controller, entries, runtime } = fixture();
     const started = Deferred.makeUnsafe<void>();
     let finalized = false;
+
     const pending = run(
       "Test.cancel",
       Effect.gen(function* () {
@@ -175,11 +184,13 @@ describe("RequestRunner", () => {
     );
     await Effect.runPromise(Deferred.await(started));
     controller.abort();
+
     await expect(pending).rejects.toMatchObject({ cause: { reasons: [{ _tag: "Interrupt" }] } });
     expect(finalized).toBe(true);
     expect(entries).toMatchObject([
       { level: "INFO", annotations: { outcome: "cancelled", "error.kind": "interruption" } },
     ]);
+
     const next = RequestRunner.make(runtime, new AbortController().signal);
     const result = await next("Test.nextRequest", Effect.succeed(42));
     assert(Result.isSuccess(result));
@@ -190,6 +201,7 @@ describe("RequestRunner", () => {
     const unavailable = { _tag: "Test.AcquisitionFailed" };
     let entered = false;
     const { run, entries } = fixture(Layer.effectDiscard(Effect.fail(unavailable)));
+
     await expect(
       run(
         "Test.unentered",
@@ -198,6 +210,7 @@ describe("RequestRunner", () => {
         }),
       ),
     ).rejects.toMatchObject({ cause: { reasons: [{ _tag: "Fail", error: unavailable }] } });
+
     expect(entered).toBe(false);
     expect(entries).toHaveLength(0);
   });

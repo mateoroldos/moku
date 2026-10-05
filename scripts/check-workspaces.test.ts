@@ -18,6 +18,7 @@ function fixture(files: Readonly<Record<string, string>>, check: (root: string) 
       mkdirSync(path.dirname(filename), { recursive: true });
       writeFileSync(filename, content);
     }
+
     check(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -71,6 +72,7 @@ it("checks allowed dependencies, all dependency sections, and workspace registra
       expect(result.exitCode).toBe(1);
       expect(result.output).toContain(diagnostic);
     }
+
     writeFileSync(manifest, '{"name":"@moku/core"}');
     rmSync(domainManifest);
     const missing = run(root, "bun", [checker]);
@@ -125,8 +127,10 @@ it("checks ESM boundaries through Oxlint, including relative and absolute paths"
         path.join(root, "packages/domain/src/absolute.ts"),
         `import ${JSON.stringify(path.join(root, "packages/core/src/human-task/human-task-directory.ts"))};`,
       );
+
       const result = run(root, oxlint, ["-c", ".oxlintrc.json", "--format", "json", "packages"]);
       expect(result.exitCode).toBe(1);
+
       const report = Schema.decodeSync(
         Schema.fromJsonString(
           Schema.Struct({
@@ -136,6 +140,7 @@ it("checks ESM boundaries through Oxlint, including relative and absolute paths"
           }),
         ),
       )(result.output);
+
       expect(
         report.diagnostics.every(
           (item) => item.code === "workspace-boundaries(no-cross-workspace-imports)",

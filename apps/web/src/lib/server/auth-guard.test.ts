@@ -11,7 +11,7 @@ it.effect.each([
   {
     name: "unverified",
     auth: Effect.succeed({ userId: UserId.make("alice"), emailVerified: false }),
-    tag: "AuthGuard.Unverified",
+    tag: "Access.Unverified",
   },
   { name: "unavailable", auth: Effect.fail(unavailable), tag: "Authentication.Unavailable" },
 ])("rejects $name identity without treating outages as signout", ({ auth, tag }) =>

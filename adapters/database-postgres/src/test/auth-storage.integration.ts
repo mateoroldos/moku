@@ -98,6 +98,7 @@ it.live(
         yield* sql`SELECT identifier FROM verification WHERE identifier = 'rollback'`,
         [],
       );
+
       return { auth, headers };
     }).pipe(
       Effect.scoped,
@@ -126,6 +127,7 @@ it.live("drains a borrowed auth transaction before releasing the pool", () =>
     const started = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
     const runPromise = Effect.runPromiseWith(yield* Effect.context());
+
     const transaction = yield* Effect.acquireRelease(
       Effect.promise(() =>
         adapter.transaction((tx) =>
@@ -146,11 +148,13 @@ it.live("drains a borrowed auth transaction before releasing the pool", () =>
       (transaction) =>
         Deferred.succeed(release, undefined).pipe(Effect.andThen(Fiber.join(transaction))),
     );
+
     yield* Effect.raceFirst(Deferred.await(started), Fiber.join(transaction));
     const shutdown = yield* Effect.forkChild(runtime.disposeEffect, { startImmediately: true });
     yield* Deferred.succeed(release, undefined);
     yield* Fiber.join(transaction);
     yield* Fiber.join(shutdown);
+
     assert.deepStrictEqual(
       yield* sql`SELECT identifier FROM verification WHERE identifier = 'drain-pool'`,
       [{ identifier: "drain-pool" }],

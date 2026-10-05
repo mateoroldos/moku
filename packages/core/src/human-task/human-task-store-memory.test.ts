@@ -5,6 +5,8 @@ import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
 import { HumanTaskStoreContract } from "../test/human-task-store-contract.ts";
 
+const { organizationId, ref, attribution } = HumanTaskStoreContract;
+
 it.effect("honors the shared store lifecycle contract", () =>
   HumanTaskStoreContract.lifecycle.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );
@@ -18,6 +20,7 @@ it.effect("shares persisted tasks within a build and isolates separate builds", 
     yield* Effect.gen(function* () {
       const store = yield* HumanTaskStore.Service;
       const task = PendingHumanTask.make({
+        organizationId,
         id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
         intent: "authorize",
         subject: { title: HumanTaskTitle.make("Review") },
@@ -26,13 +29,13 @@ it.effect("shares persisted tasks within a build and isolates separate builds", 
         status: "pending",
       });
       yield* store.create(task);
-      assert.deepStrictEqual(yield* store.get(task.id), task);
-      assert.deepStrictEqual(yield* store.list, [task]);
+      assert.deepStrictEqual(yield* store.get(ref(task.id)), task);
+      assert.deepStrictEqual(yield* store.list(organizationId), [task]);
     }).pipe(Effect.provide(HumanTaskStoreMemory.layer));
 
     yield* Effect.gen(function* () {
       const store = yield* HumanTaskStore.Service;
-      assert.deepStrictEqual(yield* store.list, []);
+      assert.deepStrictEqual(yield* store.list(organizationId), []);
     }).pipe(Effect.provide(HumanTaskStoreMemory.layer));
   }),
 );
@@ -41,6 +44,7 @@ it.effect("atomically completes once under competing responses and preserves req
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
     const task = PendingHumanTask.make({
+      organizationId,
       id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
       intent: "authorize",
       subject: { title: HumanTaskTitle.make("Publish"), description: "The final report" },
@@ -60,21 +64,25 @@ it.effect("atomically completes once under competing responses and preserves req
         completedAt: DateTime.makeUnsafe(3_000),
       },
     ] as const;
+
     const outcomes = yield* Effect.forEach(
       candidates,
-      ({ result, completedAt }) => Effect.result(store.complete(task.id, result, completedAt)),
+      ({ result, completedAt }) =>
+        Effect.result(store.complete(ref(task.id), result, completedAt, attribution)),
       { concurrency: "unbounded" },
     );
+
     const winners = outcomes.filter(Result.isSuccess).map((outcome) => outcome.success);
     const failures = outcomes.filter(Result.isFailure).map((outcome) => outcome.failure);
     assert.lengthOf(winners, 1);
-    assert.deepStrictEqual(failures, [new HumanTaskStore.AlreadyCompleted({ id: task.id })]);
+    assert.deepStrictEqual(failures, [new HumanTaskStore.AlreadyCompleted(ref(task.id))]);
     for (const winner of winners) {
       assert.deepStrictEqual(winner, {
         ...task,
         status: "completed",
         result: winner.result,
         completedAt: winner.completedAt,
+        attribution,
       });
       assert.isTrue(
         candidates.some(
@@ -86,8 +94,8 @@ it.effect("atomically completes once under competing responses and preserves req
         ),
       );
     }
-    assert.deepStrictEqual([yield* store.get(task.id)], winners);
-    assert.deepStrictEqual(yield* store.list, winners);
+    assert.deepStrictEqual([yield* store.get(ref(task.id))], winners);
+    assert.deepStrictEqual(yield* store.list(organizationId), winners);
   }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );
 
@@ -98,6 +106,7 @@ it.effect("allows exactly one competing insert per ID and preserves the winner",
     const createdAt = yield* DateTime.now;
     const candidates = ["First proposal", "Second proposal"].map((title) =>
       PendingHumanTask.make({
+        organizationId,
         id,
         intent: "authorize",
         subject: { title: HumanTaskTitle.make(title) },
@@ -106,15 +115,17 @@ it.effect("allows exactly one competing insert per ID and preserves the winner",
         status: "pending",
       }),
     );
+
     const results = yield* Effect.forEach(candidates, (task) => Effect.result(store.create(task)), {
       concurrency: "unbounded",
     });
+
     const winners = results.filter(Result.isSuccess).map((result) => result.success);
     const failures = results.filter(Result.isFailure).map((result) => result.failure);
     assert.lengthOf(winners, 1);
     assert.lengthOf(failures, 1);
     for (const failure of failures) assert.instanceOf(failure, HumanTaskStore.PersistenceError);
-    assert.deepStrictEqual(yield* store.list, winners);
-    assert.deepStrictEqual([yield* store.get(id)], winners);
+    assert.deepStrictEqual(yield* store.list(organizationId), winners);
+    assert.deepStrictEqual([yield* store.get(ref(id))], winners);
   }).pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );

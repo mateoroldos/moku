@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./organization": "./src/organization/organization.ts",
     "./human-task": "./src/human-task/human-task.ts",
     "./identity": "./src/identity/identity.ts"
   },

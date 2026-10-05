@@ -105,9 +105,11 @@ it.live("signs out through the provider and invalidates the previous session", (
 it.live("uses provider CSRF checks, including trusted Referer fallback", () =>
   Effect.gen(function* () {
     const { auth, headers } = yield* fixture("192.0.2.6");
+
     const external = request("sign-out", headers, "{}");
     external.headers.set("origin", "https://outsider.test");
     assert.strictEqual((yield* auth.handle(external, "127.0.0.1")).status, 403);
+
     const referred = request("sign-out", headers, "{}");
     referred.headers.delete("origin");
     referred.headers.set("referer", `${origin}/`);
@@ -118,6 +120,7 @@ it.live("uses provider CSRF checks, including trusted Referer fallback", () =>
 it.live("uses the supplied transport address instead of caller IP headers for throttling", () =>
   Effect.gen(function* () {
     const { auth } = yield* fixture("192.0.2.5");
+
     const attempt = (claimedIP: string, transportIP: string) =>
       auth.handle(
         request(
@@ -127,6 +130,7 @@ it.live("uses the supplied transport address instead of caller IP headers for th
         ),
         transportIP,
       );
+
     assert.strictEqual((yield* attempt("192.0.2.1", "192.0.2.10")).status, 401);
     assert.strictEqual((yield* attempt("192.0.2.2", "192.0.2.10")).status, 401);
     assert.strictEqual((yield* attempt("192.0.2.3", "192.0.2.10")).status, 401);

@@ -32,10 +32,12 @@ export const layer = (options: Options) =>
         }),
         (pool) => Effect.promise(() => pool.end()),
       );
+
       yield* Effect.tryPromise({
         try: () => pool.query("SELECT 1"),
         catch: (cause) => new SqlError({ reason: new ConnectionError({ cause }) }),
       });
+
       return Layer.merge(
         PgClient.layerFrom(
           PgClient.fromPool({

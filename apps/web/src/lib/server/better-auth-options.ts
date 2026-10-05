@@ -1,6 +1,22 @@
 import type { BetterAuthOptions } from "better-auth";
+import { organization } from "better-auth/plugins/organization";
+
+const organizations = organization({ allowUserToCreateOrganization: false });
 
 export const betterAuthOptions = {
+  plugins: [
+    {
+      ...organizations,
+      schema: {
+        ...organizations.schema,
+        member: {
+          ...organizations.schema.member,
+          // The plugin omits this constraint; schema generation must enforce one membership per pair.
+          indexes: [{ fields: ["organizationId", "userId"], unique: true }],
+        },
+      },
+    },
+  ],
   emailAndPassword: { enabled: true, disableSignUp: true, requireEmailVerification: true },
   session: { expiresIn: 604800, disableSessionRefresh: true, cookieCache: { enabled: false } },
   logger: { disabled: true },

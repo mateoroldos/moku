@@ -12,6 +12,7 @@ export const layer = Layer.effect(
   HumanTaskStore.Service,
   Effect.gen(function* () {
     const state = yield* Ref.make(new Map<HumanTaskId, HumanTask>());
+
     return HumanTaskStore.Service.of({
       create: (task) =>
         Ref.modify(
@@ -29,7 +30,7 @@ export const layer = Layer.effect(
                 ]
               : [Effect.succeed(task), new Map(tasks).set(task.id, task)],
         ).pipe(Effect.flatten),
-      complete: (id, result, completedAt) =>
+      complete: (ref, result, completedAt, attribution) =>
         Ref.modify(
           state,
           (
@@ -41,30 +42,36 @@ export const layer = Layer.effect(
             >,
             Map<HumanTaskId, HumanTask>,
           ] => {
-            const task = tasks.get(id);
-            if (task === undefined)
-              return [Effect.fail(new HumanTaskStore.NotFound({ id })), tasks];
+            const task = tasks.get(ref.taskId);
+            if (task === undefined || task.organizationId !== ref.organizationId)
+              return [Effect.fail(new HumanTaskStore.NotFound(ref)), tasks];
             if (task.status === "completed")
-              return [Effect.fail(new HumanTaskStore.AlreadyCompleted({ id })), tasks];
+              return [Effect.fail(new HumanTaskStore.AlreadyCompleted(ref)), tasks];
             const completed = CompletedHumanTask.make({
               ...task,
               status: "completed",
               result,
               completedAt,
+              attribution,
             });
-            return [Effect.succeed(completed), new Map(tasks).set(id, completed)];
+            return [Effect.succeed(completed), new Map(tasks).set(ref.taskId, completed)];
           },
         ).pipe(Effect.flatten),
-      get: (id) =>
+      get: (ref) =>
         Ref.get(state).pipe(
           Effect.flatMap((tasks) => {
-            const task = tasks.get(id);
-            return task === undefined
-              ? Effect.fail(new HumanTaskStore.NotFound({ id }))
+            const task = tasks.get(ref.taskId);
+            return task === undefined || task.organizationId !== ref.organizationId
+              ? Effect.fail(new HumanTaskStore.NotFound(ref))
               : Effect.succeed(task);
           }),
         ),
-      list: Ref.get(state).pipe(Effect.map((tasks) => [...tasks.values()])),
+      list: (organizationId) =>
+        Ref.get(state).pipe(
+          Effect.map((tasks) =>
+            [...tasks.values()].filter((task) => task.organizationId === organizationId),
+          ),
+        ),
     });
   }),
 );

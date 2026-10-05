@@ -32,6 +32,7 @@ const files = new Set(
 const violations: Array<string> = [];
 const lockPath = path.join(root, "skills-lock.json");
 const managedSkills = new Set<string>();
+
 if (existsSync(lockPath)) {
   const lock = Schema.decodeSync(SkillLock)(readFileSync(lockPath, "utf8"));
   for (const name of Object.keys(lock.skills)) {

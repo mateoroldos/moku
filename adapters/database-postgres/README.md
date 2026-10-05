@@ -1,6 +1,7 @@
 # PostgreSQL persistence
 
-Implements `HumanTaskStore` with Drizzle and Effect SQL. Supply the PostgreSQL
+Implements `HumanTaskStore`, `OrganizationMembershipStore`, and `Transaction` with Drizzle
+and Effect SQL. Supply the PostgreSQL
 client with `PersistencePostgres.typeParsers` for Drizzle's temporal codecs.
 
 The web runtime uses `PostgresConnection.layer` to supply Effect SQL and
@@ -20,6 +21,21 @@ the volume. The migration command reads root `.env`; an exported `DATABASE_URL`
 overrides it. For Neon, use a direct connection URL for migrations and preserve
 the provider's TLS settings.
 
+### Reset local data
+
+Stop the app. These commands delete all data in the local Compose database:
+
+```sh
+docker compose down -v
+bun run db:up
+bun run db:migrate
+```
+
+Repeat [account and task seeding](../../README.md#develop) before restarting the app.
+
+For a non-Compose development database, recreate the disposable database before
+running migrations and seeds.
+
 ## Change the schema
 
 ```sh
@@ -29,9 +45,10 @@ bun run db:migrate
 ```
 
 Edit [the task schema](src/human-task/schema.ts), generate and review the SQL, and commit
-the migration directory including its snapshot. Add a new migration rather than
-editing one already applied to a database. `db:check` generates against a
-temporary copy and fails on drift. Apply checked-in migrations once per deployment
+the migration directory including its snapshot. Add a migration rather than editing
+one already applied. Disposable baselines follow the root
+[development status policy](../../AGENTS.md#development-status).
+`db:check` generates against a temporary copy and fails on drift. Apply checked-in migrations once per deployment
 before serving traffic; repeated migration runs leave applied migrations intact.
 
 Generate [the auth schema](src/auth/schema.ts) with Better Auth rather than editing

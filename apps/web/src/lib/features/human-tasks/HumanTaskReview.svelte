@@ -3,9 +3,9 @@
   import ApprovalResponseForm from "./ApprovalResponseForm.svelte";
   import { getHumanTask } from "./human-tasks.remote";
 
-  let { id }: { id: string } = $props();
+  let { id, organizationId, canRespondToHumanTasks }: { id: string; organizationId: string; canRespondToHumanTasks: boolean } = $props();
 
-  const task = $derived(await getHumanTask(id));
+  const task = $derived(await getHumanTask({ taskId: id, organizationId }));
 </script>
 
 <svelte:head>
@@ -35,5 +35,9 @@
     </section>
   {/if}
 
-  <ApprovalResponseForm {task} />
+  {#if task.status === 'completed' || canRespondToHumanTasks}
+    <ApprovalResponseForm {task} />
+  {:else}
+    <p class="text-sm text-muted-foreground">Your role allows viewing tasks, but not answering them.</p>
+  {/if}
 </div>

@@ -15,9 +15,8 @@ Read the [vision](VISION.md) for the product's purpose, scope, and priorities.
 
 Based on [Effect Forge](https://github.com/mateoroldos/effect-forge). Domain/core
 support creating, reading, and completing approval tasks with structured results.
-PostgreSQL provides durable storage. The web app can review stored
-approval tasks from the home-page inbox or at `/tasks/<id>`. PostgreSQL is
-provider-independent; Neon is the preferred managed provider.
+The web app provides an organization inbox and individual review pages.
+PostgreSQL provides durable storage; Neon is the preferred managed provider.
 
 Install [mise](https://mise.jdx.dev/getting-started.html), then from the repository root:
 
@@ -36,22 +35,28 @@ bun run db:migrate
 ```
 
 Set `BETTER_AUTH_SECRET` in `.env` to a private value from `openssl rand -base64 32`.
-Create a verified reviewer account from the root:
+Create a verified reviewer account, organization, and example tasks from the root:
+
+```sh
+SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run db:seed
+```
+
+The seed creates an owner membership in the `moku` organization; set
+`SEED_ORGANIZATION_SLUG` to seed another organization. Repeated seeds preserve
+existing credentials and memberships. Public signup and membership endpoints are disabled.
+
+To provision only the account and organization:
 
 ```sh
 SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run auth:seed
 ```
 
-Repeated seeds preserve existing credentials. Public signup is disabled; all verified
-accounts share the inbox until organization scoping is implemented.
+Each `db:seed` run adds four tasks and prints review URLs. Set `REVIEW_BASE_URL`
+for a server other than `http://127.0.0.1:5173`. Provisioning and task creation commit
+separately; a failed run can leave an account, organization, or partial task batch.
 
-Then run `bun run dev` and open `http://127.0.0.1:5173`. Both development and the
-built server use Node 24 and read root `.env`; exported variables take precedence.
-
-Run `bun run db:seed` to create four example approval tasks and print their review
-URLs. Each run adds a fresh batch, preserving existing tasks and decisions. It uses
-`DATABASE_URL` from root `.env` (or the exported environment), after migrations.
-The printed URLs use `http://127.0.0.1:5173`; set `REVIEW_BASE_URL` for another server.
+Run `bun run dev` and open `http://127.0.0.1:5173`. Development commands and the
+built server read root `.env`; exported variables take precedence.
 
 See [authentication boundaries](apps/web/docs/authentication.md) when changing access checks.
 

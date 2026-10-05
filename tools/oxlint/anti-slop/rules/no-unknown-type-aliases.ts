@@ -41,6 +41,7 @@ export const noUnknownTypeAliasesRule = defineRule({
       ) {
         return false;
       }
+
       const nextVisited = new Set(visited);
       nextVisited.add(name);
       return resolvesToUnknown(alias.typeAnnotation, nextVisited);
@@ -49,6 +50,7 @@ export const noUnknownTypeAliasesRule = defineRule({
     return {
       Program(node) {
         aliases.clear();
+
         for (const statement of node.body) {
           const declaration =
             statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
@@ -56,6 +58,7 @@ export const noUnknownTypeAliasesRule = defineRule({
             aliases.set(declaration.id.name, declaration);
           }
         }
+
         for (const alias of aliases.values()) {
           if (!resolvesToUnknown(alias.typeAnnotation, new Set([alias.id.name]))) continue;
           context.report({

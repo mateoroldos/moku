@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { Button } from '@moku/ui/ui/button';
+
   const heading = $derived(page.status === 404 ? 'Page not found' : page.status === 403 ? 'Access denied' : 'Something went wrong');
 </script>
 

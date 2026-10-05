@@ -75,6 +75,7 @@ function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironme
 function shouldReportType(node: ESTree.TSType, environment: TypeEnvironment): boolean {
   if (isPlainAliasConsumerUse(node, environment)) return false;
   if (classifyUnsafeDictionary(node, environment) === null) return false;
+
   let current: ESTree.Node | null = node.parent;
   while (current !== null && current.type !== "Program") {
     if (isTypeNode(current) && classifyUnsafeDictionary(current, environment) !== null)
@@ -99,6 +100,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
   },
   createOnce(context) {
     let environment: TypeEnvironment | null = null;
+
     const report = (node: ESTree.Node, value: string) => {
       context.report({ node, messageId: "unsafeDictionary", data: { value } });
     };
@@ -106,6 +108,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
       if (environment === null || !shouldReportType(node, environment)) return;
       const unsafe = classifyUnsafeDictionary(node, environment);
       if (unsafe === null) return;
+
       report(node, unsafe.unsafeValue);
     };
 
@@ -116,6 +119,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
       TSTypeReference: reportIfUnsafe,
       TSTypeLiteral: reportIfUnsafe,
       TSMappedType: reportIfUnsafe,
+
       TSIndexSignature(node) {
         if (
           environment === null ||
@@ -123,6 +127,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
           node.parent.type === "TSTypeLiteral"
         )
           return;
+
         const unsafe = classifyUnsafeDictionaryValue(
           node.typeAnnotation.typeAnnotation,
           environment,
