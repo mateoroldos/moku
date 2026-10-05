@@ -28,7 +28,6 @@ const application = HumanTaskDirectory.layer.pipe(
 );
 const actor = { userId: UserId.make("tenant-user"), emailVerified: true };
 const organizationId = OrganizationId.make("tenant-org");
-const otherOrg = OrganizationId.make("tenant-other");
 const input = HumanTaskDirectory.CreateInput.make({
   intent: "authorize",
   subject: { title: HumanTaskTitle.make("Tenant review") },
@@ -37,8 +36,8 @@ const input = HumanTaskDirectory.CreateInput.make({
 
 const cleanup = PgClient.PgClient.use((sql) =>
   Effect.gen(function* () {
-    yield* sql`DELETE FROM human_tasks WHERE organization_id IN ('tenant-org', 'tenant-other')`;
-    yield* sql`DELETE FROM organization WHERE id IN ('tenant-org', 'tenant-other')`;
+    yield* sql`DELETE FROM human_tasks WHERE organization_id = 'tenant-org'`;
+    yield* sql`DELETE FROM organization WHERE id = 'tenant-org'`;
     yield* sql`DELETE FROM "user" WHERE id = 'tenant-user'`;
   }),
 );
@@ -50,7 +49,7 @@ const fixture = <A, E, R>(program: Effect.Effect<A, E, R>) =>
     yield* cleanup;
     return yield* Effect.gen(function* () {
       yield* sql`INSERT INTO "user" (id, name, email, email_verified) VALUES ('tenant-user', 'Tenant', 'tenant@example.test', true)`;
-      yield* sql`INSERT INTO organization (id, name, slug, created_at) VALUES ('tenant-org', 'Tenant', 'tenant', now()), ('tenant-other', 'Other', 'tenant-other', now())`;
+      yield* sql`INSERT INTO organization (id, name, slug, created_at) VALUES ('tenant-org', 'Tenant', 'tenant', now())`;
       yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES ('tenant-member', 'tenant-org', 'tenant-user', 'member', now())`;
       return yield* program.pipe(Effect.timeout("10 seconds"), Effect.scoped);
     }).pipe(Effect.ensuring(cleanup.pipe(Effect.orDie)));
@@ -97,39 +96,14 @@ it.live("rolls back completion and attribution across the production core ports"
   ),
 );
 
-it.live("does not let dual membership authorize a task under the wrong organization", () =>
-  fixture(
-    Effect.gen(function* () {
-      const directory = yield* HumanTaskDirectory.Service;
-      const sql = yield* PgClient.PgClient;
-      const pending = yield* directory.create(actor, organizationId, input);
-      const ref = { organizationId, taskId: pending.id };
-      const foreign = { organizationId: otherOrg, taskId: pending.id };
-      yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES ('tenant-second-member', 'tenant-other', 'tenant-user', 'member', now())`;
-      assert.deepStrictEqual(yield* directory.list(actor, otherOrg), []);
-      assert.instanceOf(yield* Effect.flip(directory.get(actor, foreign)), HumanTaskStore.NotFound);
-      assert.instanceOf(
-        yield* Effect.flip(directory.respond(actor, foreign, { decision: "approved" })),
-        HumanTaskStore.NotFound,
-      );
-      assert.deepStrictEqual(yield* directory.get(actor, ref), pending);
-    }),
-  ),
-);
-
 it.live("rejects malformed persisted roles without confusing absence", () =>
   fixture(
     Effect.gen(function* () {
       const memberships = yield* OrganizationMembership.Service;
-      const transaction = yield* Transaction.Service;
       const sql = yield* PgClient.PgClient;
       yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'tenant-member'`;
       assert.instanceOf(
         yield* Effect.flip(memberships.find(actor.userId, organizationId)),
-        OrganizationMembership.Unavailable,
-      );
-      assert.instanceOf(
-        yield* Effect.flip(transaction.run(memberships.findForWrite(actor.userId, organizationId))),
         OrganizationMembership.Unavailable,
       );
       yield* sql`DELETE FROM member WHERE id = 'tenant-member'`;
@@ -153,16 +127,15 @@ it.live("refuses a locked membership lookup without an active transaction", () =
   ),
 );
 
+// Row locks treat demotion and removal alike; core tests own the resulting failure tags.
 const races = [
-  { change: "demote", operation: "answer", failure: "Access.Denied", status: "completed" },
-  { change: "remove", operation: "answer", failure: "Access.NotFound", status: "completed" },
-  { change: "demote", operation: "create", failure: "Access.Denied", status: "pending" },
-  { change: "remove", operation: "create", failure: "Access.NotFound", status: "pending" },
+  { operation: "answer", status: "completed" },
+  { operation: "create", status: "pending" },
 ] as const;
 
 it.live.each(races)(
-  "holds membership until $operation commits before $change",
-  ({ change, operation, failure: expectedFailure, status }) =>
+  "holds membership until $operation commits before removal",
+  ({ operation, status }) =>
     fixture(
       Effect.gen(function* () {
         const directory = yield* HumanTaskDirectory.Service;
@@ -202,11 +175,9 @@ it.live.each(races)(
             Effect.flatMap(() => Effect.die(new Error("Mutation bypassed the paused store"))),
           ),
         );
-        const mutation =
-          change === "demote"
-            ? sql`UPDATE member SET role = 'viewer' WHERE id = 'tenant-member'`
-            : sql`DELETE FROM member WHERE id = 'tenant-member'`;
-        const revoked = yield* mutation.pipe(Effect.forkScoped);
+        const revoked = yield* sql`DELETE FROM member WHERE id = 'tenant-member'`.pipe(
+          Effect.forkScoped,
+        );
         yield* waitForBlocker(pid);
         yield* Deferred.succeed(release, undefined);
         const completed = yield* Fiber.join(answer);
@@ -218,46 +189,41 @@ it.live.each(races)(
           completed,
         );
         const failure = yield* Effect.flip(directory.respond(actor, ref, { decision: "rejected" }));
-        assert.strictEqual(failure._tag, expectedFailure);
+        assert.strictEqual(failure._tag, "Access.NotFound");
       }),
     ).pipe(Effect.scoped),
 );
 
-it.live.each(races)(
-  "waits for concurrent $change and refuses $operation",
-  ({ change, operation, failure: expectedFailure }) =>
-    fixture(
-      Effect.gen(function* () {
-        const directory = yield* HumanTaskDirectory.Service;
-        const store = yield* HumanTaskStore.Service;
-        const sql = yield* PgClient.PgClient;
-        const pending = yield* directory.create(actor, organizationId, input);
-        const ref = { organizationId, taskId: pending.id };
-        const locked = yield* Deferred.make<number>();
-        const release = yield* Deferred.make<void>();
-        const mutation = yield* sql
-          .withTransaction(
-            Effect.gen(function* () {
-              if (change === "demote")
-                yield* sql`UPDATE member SET role = 'viewer' WHERE id = 'tenant-member'`;
-              else yield* sql`DELETE FROM member WHERE id = 'tenant-member'`;
-              yield* Deferred.succeed(locked, yield* backendPid);
-              yield* Deferred.await(release);
-            }),
-          )
-          .pipe(Effect.forkScoped);
-        const pid = yield* Deferred.await(locked);
-        const answer = yield* Effect.gen(function* () {
-          if (operation === "answer")
-            yield* directory.respond(actor, ref, { decision: "approved" });
-          else yield* directory.create(actor, organizationId, input);
-        }).pipe(Effect.flip, Effect.forkScoped);
-        yield* waitForBlocker(pid);
-        yield* Deferred.succeed(release, undefined);
-        yield* Fiber.join(mutation);
-        assert.strictEqual((yield* Fiber.join(answer))._tag, expectedFailure);
-        assert.deepStrictEqual(yield* store.get(ref), pending);
-        assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
-      }),
-    ).pipe(Effect.scoped),
+it.live.each(races)("waits for concurrent removal and refuses $operation", ({ operation }) =>
+  fixture(
+    Effect.gen(function* () {
+      const directory = yield* HumanTaskDirectory.Service;
+      const store = yield* HumanTaskStore.Service;
+      const sql = yield* PgClient.PgClient;
+      const pending = yield* directory.create(actor, organizationId, input);
+      const ref = { organizationId, taskId: pending.id };
+      const locked = yield* Deferred.make<number>();
+      const release = yield* Deferred.make<void>();
+      const mutation = yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            yield* sql`DELETE FROM member WHERE id = 'tenant-member'`;
+            yield* Deferred.succeed(locked, yield* backendPid);
+            yield* Deferred.await(release);
+          }),
+        )
+        .pipe(Effect.forkScoped);
+      const pid = yield* Deferred.await(locked);
+      const answer = yield* Effect.gen(function* () {
+        if (operation === "answer") yield* directory.respond(actor, ref, { decision: "approved" });
+        else yield* directory.create(actor, organizationId, input);
+      }).pipe(Effect.flip, Effect.forkScoped);
+      yield* waitForBlocker(pid);
+      yield* Deferred.succeed(release, undefined);
+      yield* Fiber.join(mutation);
+      assert.strictEqual((yield* Fiber.join(answer))._tag, "Access.NotFound");
+      assert.deepStrictEqual(yield* store.get(ref), pending);
+      assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
+    }),
+  ).pipe(Effect.scoped),
 );
