@@ -24,30 +24,23 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 
 ## Design: PR 7 onboarding and email (approved)
 
-- **Email port and Layers:** one web-owned capability; AuthProvider owns verification copy, delivery Layers own transport.
+- **Email port and Layers:** keep authentication copy separate from delivery transport so PR 8 can replace console delivery without changing the auth flow.
 - Inline sender: fewer lines, but mixes authentication and delivery configuration.
 - Durable outbox: adds storage, a worker, retries, and crash/concurrency tests without an approved durability requirement.
 
+Follow [authentication boundaries](../apps/web/docs/authentication.md) for credential ownership, delivery outcomes, and reset failures.
+
 ```text
-AuthProvider.handle(request, clientAddress): Effect<Response, AuthProvider.Unavailable>
-  └─ Better Auth stores account/code → sendVerificationOTP: Promise<void>
-       └─ Effect.runPromiseWith(providedContext) → Email.send(message): Effect<void, Email.Unavailable>
-            failure → safe diagnostic; Better Auth catches rejection and can return success
+Signup → email code → app
+Unverified sign-in → request code → email code → app
+Forgot password → request code → code + new password → sign in
 ```
 
-For pre-release PR 7, `runtime.ts` supplies console delivery in every environment. Console output deliberately unwraps the message and bypasses telemetry; PR 8 supplies Cloudflare production delivery.
+Keep confirmation on the signup or login page so the password stays in memory. Refresh restarts that journey. Pages own steps and navigation; feature forms report outcomes. Recovery is separate because the user chooses a replacement password rather than confirming one already supplied.
 
-Follow [authentication boundaries](../apps/web/docs/authentication.md) for credential ownership, session revocation, and uncertain reset outcomes. Use hashed OTP storage and default rotation.
+Use Show/Hide instead of a repeat-password field to reduce typing. Resend and Edit remain secondary to the step's submit action.
 
-SignupFlow, LoginFlow, and PasswordRecoveryFlow own steps and navigation; their forms report operation outcomes. Signup and unverified login share ConfirmEmailForm, a code-only step. Recovery composes RequestResetForm → ResetPasswordForm → PasswordResetSuccess. Email submission requests the code; reset success offers explicit sign-in. Email-code and new-password fields compose shared UI primitives.
-
-Confirmation retains the intended password only in component memory. Refresh requires restarting signup or sign-in. No passwords enter URLs, browser storage, or navigation state. Show one primary action per step, with quiet Edit and Resend actions. New-password inputs use Show/Hide instead of a repeat-password field.
-
-Reset-for-signup is our supported-API workaround for [Better Auth #11023](https://github.com/better-auth/better-auth/issues/11023), not its documented signup recommendation. Revisit when an upstream fix covers credential ownership without the reproduced takeover.
-
-Await sending and report safe failures before Better Auth catches them. Accept request latency, account-existence timing differences, and possible crash loss; offer resend without automatic retries or delivery receipts.
-
-Code requests use a 60-second UI wait and an endpoint/IP rule on `/email-otp/request-password-reset`. Signup and login send no codes implicitly. An unverified login opens completion with the request button available. Use official shadcn-svelte InputOTP with six slots, numeric filtering, one-time-code autofill, and explicit submission; Bits UI owns input behavior.
+Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 replaces [pre-release console delivery](../README.md#develop) with Cloudflare.
 
 PR 8 uses [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Confirm sender onboarding, account access, and live delivery then.
 
@@ -56,7 +49,7 @@ PR 8 uses [Cloudflare REST](https://developers.cloudflare.com/email-service/api/
 | Attacker signup → owner signup → code + owner password → authenticated principal | Real PostgreSQL and capturing Email Layer: old password fails, owner's password works, implicit sends cannot bypass request throttling. |
 | Recovery revokes the previous session                                            | Same fixture with an already-verified user; catches missing session revocation wiring.                                                  |
 | Failing Email Layer emits a diagnostic despite successful HTTP response          | Same fixture; catches silent send failure at the bridge.                                                                                |
-| Signup, verification, resend wait, validation, and navigation                    | Running app, including keyboard, mobile/desktop, light/dark. Proves the new entrypoints and user-visible states.                        |
+| Signup, confirmation, recovery, and interrupted requests                         | Running app: keyboard, mobile/desktop, light/dark; catches lost credentials, stale callbacks, and incorrect success or retry guidance.  |
 
 Sources: installed Effect **4.0.0-rc.112** and Better Auth **1.7.4**; [OTP plugin](https://www.better-auth.com/docs/plugins/email-otp), [InputOTP](https://shadcn-svelte.com/docs/components/input-otp), and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
 

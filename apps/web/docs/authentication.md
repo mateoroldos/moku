@@ -42,16 +42,19 @@ deployment. Unexpected provider errors propagate to the Effect boundary for reda
 diagnostics and safe responses.
 
 Better Auth catches awaited email failures; auth success does not confirm delivery.
-Code requests are throttled per endpoint/IP, not per address. Signup and login do not
-send codes implicitly.
+Code requests are throttled per endpoint/IP, not per address. Provider signup and
+login must not send codes implicitly; that would bypass the code-request limit.
 
-Signup completion uses OTP password reset: mailbox proof replaces any pre-existing
-password before verifying the account, then ordinary password sign-in opens the app.
-Signup and unverified sign-in retain that password only in component memory.
-Recovery collects a new password and ends at explicit sign-in.
-Verification-only and OTP sign-in endpoints stay blocked. Reset also revokes existing
-sessions; its password, verification, and revocation writes are not one transaction.
-An uncertain reset response must direct the user to try signing in before retrying.
+Email confirmation must replace any pre-existing password before activating the account.
+[ConfirmEmailForm](../src/lib/features/auth/ConfirmEmailForm.svelte) uses OTP password
+reset as a workaround for [Better Auth #11023](https://github.com/better-auth/better-auth/issues/11023),
+not its documented signup flow. Revisit when verification binds mailbox proof to the
+owner's credentials. Verification-only and OTP sign-in endpoints stay blocked.
+
+Signup and unverified sign-in retain passwords only in component memory, never in URLs,
+browser storage, or navigation state. Reset revokes existing sessions, but its password,
+verification, and revocation writes are not one transaction. An uncertain response must
+offer sign-in with the chosen password before another reset attempt.
 
 Native signout attempts server deletion and clears the browser cookie even when
 storage fails. A copied token can remain valid until expiry after failed deletion.
