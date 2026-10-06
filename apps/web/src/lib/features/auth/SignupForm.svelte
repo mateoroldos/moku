@@ -43,7 +43,7 @@
 </script>
 
 {#if verifying}
-  <VerifyEmailForm {email} bind:password cooldown={60} />
+  <VerifyEmailForm mode="signup" {email} bind:password cooldown={60} />
   <p class="mt-6 text-sm"><a href="/signup" data-sveltekit-reload class="text-primary underline underline-offset-4">Use a different email</a></p>
 {:else}
   <form method="POST" onsubmit={submit} class="mt-8" aria-busy={pending}>

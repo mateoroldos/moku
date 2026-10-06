@@ -41,7 +41,9 @@ Use hashed OTP storage and default rotation. Signup completion uses Better Auth'
 
 Minimal password recovery moves forward from #9: request/reset endpoints support both onboarding and recovery, revoke prior sessions, then ordinary password sign-in opens `/`. Password replacement precedes verification; the provider does not wrap all reset writes in one transaction. After uncertain completion, try signing in before requesting another code.
 
-SignupForm retains the intended password only in component memory through the code step. VerifyEmailForm owns completion, requests, countdown, and feedback; standalone recovery collects a new password. Refresh resumes through password recovery. Routes own page composition. No passwords enter URLs, browser storage, or navigation state.
+SignupForm retains the intended password only in component memory through a code-only confirmation step. VerifyEmailForm shows a new-password field only for recovery. Refresh requires restarting signup or using recovery. Routes own page composition. No passwords enter URLs, browser storage, or navigation state.
+
+Reset-for-signup is our supported-API workaround for [Better Auth #11023](https://github.com/better-auth/better-auth/issues/11023), not its documented signup recommendation. Revisit when an upstream fix covers credential ownership without the reproduced takeover.
 
 Await sending and report safe failures before Better Auth catches them. Accept request latency, account-existence timing differences, and possible crash loss; offer resend without automatic retries or delivery receipts.
 

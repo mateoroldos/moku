@@ -7,7 +7,12 @@
   import * as InputOTP from '@moku/ui/ui/input-otp';
   import { authClient } from '#lib/features/auth/client.ts';
 
-  let { email, password = $bindable(''), cooldown = 0 }: { email: string; password?: string; cooldown?: number } = $props();
+  type Props = { email: string; cooldown?: number } & (
+    | { mode: 'signup'; password: string }
+    | { mode?: 'recovery'; password?: string }
+  );
+
+  let { email, mode = 'recovery', password = $bindable(''), cooldown = 0 }: Props = $props();
   let otp = $state('');
   let pending = $state<'verify' | 'resend' | null>(null);
   let feedback = $state<{ kind: 'error' | 'status'; message: string } | null>(null);
@@ -30,7 +35,7 @@
     try {
       const { error } = await authClient.emailOtp.resetPassword({ email, otp, password });
       if (error) {
-        feedback = { kind: 'error', message: error.status >= 500 ? uncertainCompletion : error.status === 429 ? 'Too many attempts. Wait a minute and try again.' : 'We couldn’t set your password. Check the code and password, or request another code.' };
+        feedback = { kind: 'error', message: error.status >= 500 ? uncertainCompletion : error.status === 429 ? 'Too many attempts. Wait a minute and try again.' : mode === 'signup' ? 'We couldn’t finish signup. Check the code or request another.' : 'We couldn’t set your password. Check the code and password, or request another code.' };
         return;
       }
 
@@ -70,7 +75,7 @@
 </script>
 
 {#if completed}
-  <p role="status" class="mt-6 text-sm">Your password is set. <a href="/login" class="text-primary underline underline-offset-4">Continue to sign in</a></p>
+  <p role="status" class="mt-6 text-sm">{mode === 'signup' ? 'Signup is complete.' : 'Your password is set.'} <a href="/login" class="text-primary underline underline-offset-4">Continue to sign in</a></p>
 {:else}
   <p class="mt-3 text-sm text-muted-foreground">Request a code if needed, then enter the six-digit code for <span class="break-all text-foreground">{email}</span>. Codes expire after five minutes.</p>
   <form method="POST" onsubmit={submit} class="mt-8" aria-busy={pending !== null}>
@@ -89,12 +94,14 @@
           {:else if feedback}<p role="status" class="text-sm text-muted-foreground">{feedback.message}</p>{/if}
         </div>
       </Field.Field>
+      {#if mode === 'recovery'}
       <Field.Field>
         <Field.Label for="password">Password</Field.Label>
         <Input id="password" name="password" type="password" autocomplete="new-password" minlength={8} maxlength={128} required bind:value={password} disabled={pending !== null} aria-describedby="password-help" />
         <Field.Description id="password-help">Use at least 8 characters. This will replace any previous password.</Field.Description>
       </Field.Field>
-      <Button type="submit" disabled={pending !== null}>{pending === 'verify' ? 'Finishing…' : 'Set password and sign in'}</Button>
+      {/if}
+      <Button type="submit" disabled={pending !== null}>{pending === 'verify' ? 'Finishing…' : mode === 'signup' ? 'Finish signup' : 'Set password and sign in'}</Button>
       <Button type="button" variant="outline" onclick={resend} disabled={pending !== null || seconds > 0}>{seconds > 0 ? `Request code in ${seconds}s` : 'Request code'}</Button>
     </Field.Group>
   </form>
