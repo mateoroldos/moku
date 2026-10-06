@@ -17,7 +17,7 @@
       const { error } = await authClient.signIn.email({ email, password });
       if (error) {
         if (error.code === 'EMAIL_NOT_VERIFIED') {
-          await goto(`/verify-email?email=${encodeURIComponent(email)}`);
+          await goto(`/reset-password?email=${encodeURIComponent(email)}`);
           return;
         }
         message = error.code === 'INVALID_EMAIL_OR_PASSWORD'

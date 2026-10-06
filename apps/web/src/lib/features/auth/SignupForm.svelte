@@ -3,7 +3,7 @@
   import { Input } from '@moku/ui/ui/input';
   import * as Field from '@moku/ui/ui/field';
   import { authClient } from '#lib/features/auth/client.ts';
-  import VerifyEmailForm from './VerifyEmailForm.svelte';
+  import PasswordConfirmationForm from './PasswordConfirmationForm.svelte';
 
   let name = $state('');
   let email = $state('');
@@ -43,7 +43,7 @@
 </script>
 
 {#if verifying}
-  <VerifyEmailForm mode="signup" {email} bind:password cooldown={60} />
+  <PasswordConfirmationForm mode="signup" {email} bind:password cooldown={60} />
   <p class="mt-6 text-sm"><a href="/signup" data-sveltekit-reload class="text-primary underline underline-offset-4">Use a different email</a></p>
 {:else}
   <form method="POST" onsubmit={submit} class="mt-8" aria-busy={pending}>

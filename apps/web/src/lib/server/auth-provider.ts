@@ -77,7 +77,6 @@ export const layer = Layer.effect(
             ),
         }),
       ],
-      emailVerification: { sendOnSignUp: false, sendOnSignIn: false },
       rateLimit: {
         enabled: true,
         customRules: { "/email-otp/request-password-reset": { window: 60, max: 1 } },

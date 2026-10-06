@@ -45,7 +45,7 @@
 
       await goto('/', { refreshAll: true });
     } catch {
-      console.error('Email verification request failed');
+      console.error('Password confirmation request failed');
       feedback = { kind: 'error', message: uncertainCompletion };
     } finally {
       if (completed) password = '';
