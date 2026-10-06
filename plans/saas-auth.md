@@ -10,19 +10,19 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 No PR removes the working inbox. Drafts ship before organization switching so unfinished feedback survives navigation.
 
-| PR  | Trunk gains                               | Users see                     | Approach                | Done    |
-| --- | ----------------------------------------- | ----------------------------- | ----------------------- | ------- |
-| 1   | Auth tables and one scoped pool           | Existing inbox                | known                   | ✅ #14  |
-| 2   | Seeded login protects read and answer     | Working inbox after login     | known                   | ✅ #18  |
-| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers      | known                   | ✅ #19  |
-| 4   | Tab-local feedback drafts                 | Return to unfinished feedback | known                   | ✅ #20  |
-| 5   | Organization chooser and sidebar switcher | Switch seeded organizations   | known                   | ✅ #21  |
-| 5a  | Official generated UI source              | Existing organization sidebar | known · review complete | ✅ main |
-| 6   | Organization creation                     | Create org → inbox            | approved · implemented  | ✅ #22  |
-| 7   | Signup, email code, console email         | Verify → create org → review  | design · verified       |         |
-| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox  | deployment verification |         |
+| PR  | Trunk gains                               | Users see                              | Approach                | Done    |
+| --- | ----------------------------------------- | -------------------------------------- | ----------------------- | ------- |
+| 1   | Auth tables and one scoped pool           | Existing inbox                         | known                   | ✅ #14  |
+| 2   | Seeded login protects read and answer     | Working inbox after login              | known                   | ✅ #18  |
+| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers               | known                   | ✅ #19  |
+| 4   | Tab-local feedback drafts                 | Return to unfinished feedback          | known                   | ✅ #20  |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations            | known                   | ✅ #21  |
+| 5a  | Official generated UI source              | Existing organization sidebar          | known · review complete | ✅ main |
+| 6   | Organization creation                     | Create org → inbox                     | approved · implemented  | ✅ #22  |
+| 7   | Signup, email code, console email         | Confirm password → create org → review | revised · implemented   | #23     |
+| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox           | deployment verification |         |
 
-## Design: PR 7 email boundary (approved)
+## Design: PR 7 onboarding and email (approved)
 
 - **Email port and Layers:** one web-owned capability; AuthProvider owns verification copy, delivery Layers own transport.
 - Inline sender: fewer lines, but mixes authentication and delivery configuration.
@@ -37,19 +37,24 @@ AuthProvider.handle(request, clientAddress): Effect<Response, AuthProvider.Unava
 
 For pre-release PR 7, `runtime.ts` supplies console delivery in every environment. Console output deliberately unwraps the message and bypasses telemetry; PR 8 supplies Cloudflare production delivery.
 
-Configure the OTP plugin with hashed storage and default rotation. Use `overrideDefaultEmailVerification: true` and `sendOnSignIn: true` for signup and unverified password login. Verification signs in and opens `/`; `beforeEmailVerification` rejects already-verified users so this cannot become passwordless login. Keep passwordless sign-in, recovery, and email-change endpoints outside the route allowlist; constrain resend input to email verification.
+Use hashed OTP storage and default rotation. Signup completion uses Better Auth's OTP password-reset transition: proof of mailbox ownership replaces any pre-existing password before verifying the account. Verification-only activation preserves an attacker-supplied password after duplicate signup and is blocked, along with OTP sign-in and email-change endpoints.
+
+Minimal password recovery moves forward from #9: request/reset endpoints support both onboarding and recovery, revoke prior sessions, then ordinary password sign-in opens `/`. Password replacement precedes verification; the provider does not wrap all reset writes in one transaction. After uncertain completion, try signing in before requesting another code.
+
+SignupForm retains the intended password only in component memory through the code step. VerifyEmailForm owns completion, requests, countdown, and feedback; standalone recovery collects a new password. Refresh resumes through password recovery. Routes own page composition. No passwords enter URLs, browser storage, or navigation state.
 
 Await sending and report safe failures before Better Auth catches them. Accept request latency, account-existence timing differences, and possible crash loss; offer resend without automatic retries or delivery receipts.
 
-Resend uses a 60-second UI wait and a targeted endpoint/IP rule, not shared per-address admission. Do not set the plugin-wide `rateLimit` to one per minute: it also affects verification attempts. Use official shadcn-svelte InputOTP with six slots, an explicit input label, numeric filtering, one-time-code autofill, and a submit button. The existing Bits UI dependency owns input behavior.
+Code requests use a 60-second UI wait and an endpoint/IP rule on `/email-otp/request-password-reset`. Signup and login send no codes implicitly. An unverified login opens completion with the request button available. Use official shadcn-svelte InputOTP with six slots, numeric filtering, one-time-code autofill, and explicit submission; Bits UI owns input behavior.
 
 PR 8 uses [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Confirm sender onboarding, account access, and live delivery then.
 
-| Proof                                                                             | Owner and regression caught                                                                                                                                                                                                                   |
-| --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Signup → captured email → verification → authenticated principal; replay rejected | Extend `auth-provider.integration.ts` with real PostgreSQL and a local capturing Email Layer. Catches broken plugin wiring, message/code mapping, and verification/session integration. Existing guard tests retain ownership of task access. |
-| Failing Email Layer leaves the account unverified and emits a safe diagnostic     | Same auth fixture. Pins the provider's generic HTTP outcome and prevents silent send failures or secret-bearing diagnostics.                                                                                                                  |
-| Signup, verification, resend wait, validation, and navigation                     | Running app, including keyboard, mobile/desktop, light/dark. Proves the new entrypoints and user-visible states.                                                                                                                              |
+| Proof                                                                            | Owner and regression caught                                                                                                             |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Attacker signup → owner signup → code + owner password → authenticated principal | Real PostgreSQL and capturing Email Layer: old password fails, owner's password works, implicit sends cannot bypass request throttling. |
+| Recovery revokes the previous session                                            | Same fixture with an already-verified user; catches missing session revocation wiring.                                                  |
+| Failing Email Layer emits a diagnostic despite successful HTTP response          | Same fixture; catches silent send failure at the bridge.                                                                                |
+| Signup, verification, resend wait, validation, and navigation                    | Running app, including keyboard, mobile/desktop, light/dark. Proves the new entrypoints and user-visible states.                        |
 
 Sources: installed Effect **4.0.0-rc.112** and Better Auth **1.7.4**; [OTP plugin](https://www.better-auth.com/docs/plugins/email-otp), [InputOTP](https://shadcn-svelte.com/docs/components/input-otp), and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
 

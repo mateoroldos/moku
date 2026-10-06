@@ -20,7 +20,11 @@ export const betterAuthOptions = {
       },
     },
   ],
-  emailAndPassword: { enabled: true, requireEmailVerification: true },
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    revokeSessionsOnPasswordReset: true,
+  },
   session: { expiresIn: 604800, disableSessionRefresh: true, cookieCache: { enabled: false } },
   logger: { disabled: true },
   onAPIError: { throw: true },

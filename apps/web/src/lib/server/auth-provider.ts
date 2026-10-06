@@ -4,9 +4,8 @@ import { generateId } from "@better-auth/core/utils/id";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
-import { APIError } from "better-auth/api";
 import { emailOTP } from "better-auth/plugins/email-otp";
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
 import { Email } from "./email.ts";
 
@@ -60,38 +59,28 @@ export const layer = Layer.effect(
         ...betterAuthOptions.plugins,
         emailOTP({
           storeOTP: "hashed",
-          overrideDefaultEmailVerification: true,
           disableSignUp: true,
           sendVerificationOTP: ({ email: to, otp }) =>
             runEmail(
-              Schema.decodeEffect(Email.Message)({
-                to,
-                subject: "Verify your Moku email",
-                text: Redacted.make(`${otp}\n\nEnter this code in Moku within five minutes.`),
-              }).pipe(
-                Effect.flatMap(email.send),
-                // Better Auth catches send failures; its disabled logger cannot report them.
-                Effect.tapCause(() => Effect.logError("email.send.failed")),
-              ),
+              email
+                .send({
+                  to,
+                  subject: "Set your Moku password",
+                  text: Redacted.make(
+                    `${otp}\n\nUse this code within five minutes to finish signup or reset your password. If you did not request this, ignore this email.`,
+                  ),
+                })
+                .pipe(
+                  // Better Auth catches send failures; its disabled logger cannot report them.
+                  Effect.tapCause(() => Effect.logError("email.send.failed")),
+                ),
             ),
         }),
       ],
-      emailVerification: {
-        autoSignInAfterVerification: true,
-        sendOnSignIn: true,
-        beforeEmailVerification: (user) =>
-          user.emailVerified
-            ? Promise.reject(
-                new APIError("BAD_REQUEST", {
-                  code: "EMAIL_ALREADY_VERIFIED",
-                  message: "Email is already verified. Sign in instead.",
-                }),
-              )
-            : Promise.resolve(),
-      },
+      emailVerification: { sendOnSignUp: false, sendOnSignIn: false },
       rateLimit: {
         enabled: true,
-        customRules: { "/email-otp/send-verification-otp": { window: 60, max: 1 } },
+        customRules: { "/email-otp/request-password-reset": { window: 60, max: 1 } },
       },
       database,
       baseURL: origin.origin,
@@ -121,24 +110,6 @@ export const layer = Layer.effect(
       request: Request,
       clientAddress: string,
     ) {
-      if (new URL(request.url).pathname === "/api/auth/email-otp/send-verification-otp") {
-        const input = yield* Effect.tryPromise({
-          try: () => request.clone().text(),
-          catch: () => null,
-        }).pipe(
-          Effect.flatMap(
-            Schema.decodeUnknownEffect(
-              Schema.fromJsonString(
-                Schema.Struct({ email: Schema.String, type: Schema.Literal("email-verification") }),
-              ),
-            ),
-          ),
-          Effect.option,
-        );
-        if (Option.isNone(input))
-          return Response.json({ message: "Invalid verification request." }, { status: 400 });
-      }
-
       const headers = new Headers(request.headers);
       headers.set("x-moku-client-ip", clientAddress);
       const response = yield* Effect.tryPromise({

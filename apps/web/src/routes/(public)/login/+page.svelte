@@ -53,5 +53,6 @@
     {#if message}<p role="alert" class="text-sm text-destructive">{message}</p>{/if}
     <Button type="submit" size="lg" disabled={pending} class="w-full">{pending ? 'Signing in…' : 'Sign in'}</Button>
   </form>
+  <p class="mt-6 text-sm"><a href="/reset-password" class="text-primary underline underline-offset-4">Forgot password?</a></p>
   <p class="mt-6 text-sm text-muted-foreground">New to Moku? <a href="/signup" class="text-primary underline underline-offset-4">Create an account</a></p>
 </section>

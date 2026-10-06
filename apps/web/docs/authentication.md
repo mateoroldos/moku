@@ -42,8 +42,13 @@ deployment. Unexpected provider errors propagate to the Effect boundary for reda
 diagnostics and safe responses.
 
 Better Auth catches awaited email failures; auth success does not confirm delivery.
-The Email bridge reports failures without message contents. Resend throttling is
-per endpoint/IP, not per address.
+Code requests are throttled per endpoint/IP, not per address. Signup and login do not
+send codes implicitly.
+
+Signup completion uses OTP password reset: mailbox proof replaces any pre-existing
+password before verifying the account, then ordinary password sign-in opens the app.
+Verification-only and OTP sign-in endpoints stay blocked. Reset also revokes existing
+sessions; its password, verification, and revocation writes are not one transaction.
 
 Native signout attempts server deletion and clears the browser cookie even when
 storage fails. A copied token can remain valid until expiry after failed deletion.

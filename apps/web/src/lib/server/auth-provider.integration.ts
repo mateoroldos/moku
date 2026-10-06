@@ -87,7 +87,7 @@ const signup = {
   password: "onboarding-password",
 };
 
-it.live("verifies signup once without enabling passwordless sign-in", () =>
+it.live("establishes the mailbox owner's password after an attacker registers first", () =>
   Effect.gen(function* () {
     const messages: Email.Message[] = [];
     const { auth } = yield* fixture("192.0.2.20", {
@@ -99,45 +99,82 @@ it.live("verifies signup once without enabling passwordless sign-in", () =>
     const post = (path: string, body: Record<string, string>) =>
       auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.20");
 
+    const attacker = { ...signup, password: "attacker-password" };
+    assert.strictEqual((yield* post("sign-up/email", attacker)).status, 200);
     assert.strictEqual((yield* post("sign-up/email", signup)).status, 200);
+    assert.strictEqual(messages.length, 0);
+    assert.strictEqual(
+      (yield* post("email-otp/request-password-reset", { email: signup.email })).status,
+      200,
+    );
+    assert.strictEqual(
+      (yield* post("email-otp/request-password-reset", { email: signup.email })).status,
+      429,
+    );
+    assert.strictEqual((yield* post("sign-in/email", attacker)).status, 403);
+    assert.strictEqual(messages.length, 1);
     const message = messages.at(-1);
     assert(message);
     assert.strictEqual(message.to, signup.email);
     const otp = Redacted.value(message.text).slice(0, 6);
 
-    const verified = yield* post("email-otp/verify-email", { email: signup.email, otp });
-    assert.strictEqual(verified.status, 200);
+    assert.strictEqual(
+      (yield* post("email-otp/reset-password", {
+        email: signup.email,
+        otp,
+        password: signup.password,
+      })).status,
+      200,
+    );
+    assert.strictEqual((yield* post("sign-in/email", attacker)).status, 401);
+    const signedIn = yield* auth.handle(
+      request("sign-in/email", new Headers(), JSON.stringify(signup)),
+      "192.0.2.22",
+    );
+    assert.strictEqual(signedIn.status, 200);
     const headers = new Headers({
-      cookie: verified.headers
+      cookie: signedIn.headers
         .getSetCookie()
         .map((cookie) => cookie.split(";")[0])
         .join("; "),
     });
     assert.strictEqual((yield* auth.authenticate(headers))?.emailVerified, true);
-    assert.strictEqual(
-      (yield* post("email-otp/verify-email", { email: signup.email, otp })).status,
-      400,
-    );
-
-    assert.strictEqual(
-      (yield* post("email-otp/send-verification-otp", {
-        email: signup.email,
-        type: "email-verification",
-      })).status,
-      200,
-    );
-    const latest = messages.at(-1);
-    assert(latest);
-    const repeated = yield* post("email-otp/verify-email", {
-      email: signup.email,
-      otp: Redacted.value(latest.text).slice(0, 6),
-    });
-    assert.strictEqual(repeated.status, 400);
-    assert.include(yield* Effect.promise(() => repeated.text()), "EMAIL_ALREADY_VERIFIED");
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("reports send failures without exposing email contents or verifying the account", () => {
+it.live("recovers a verified account and revokes its previous session", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth, headers } = yield* fixture("192.0.2.23", {
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const post = (path: string, body: Record<string, string>) =>
+      auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.23");
+
+    assert.strictEqual(
+      (yield* post("email-otp/request-password-reset", { email: credentials.email })).status,
+      200,
+    );
+    const message = messages.at(-1);
+    assert(message);
+    const password = "recovered-password";
+    assert.strictEqual(
+      (yield* post("email-otp/reset-password", {
+        email: credentials.email,
+        otp: Redacted.value(message.text).slice(0, 6),
+        password,
+      })).status,
+      200,
+    );
+    assert.strictEqual(yield* auth.authenticate(headers), null);
+    assert.strictEqual((yield* post("sign-in/email", { ...credentials, password })).status, 200);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("reports a delivery failure even when the provider returns success", () => {
   const entries: unknown[] = [];
   const logger = Logger.layer([
     Logger.make((options) => {
@@ -146,20 +183,20 @@ it.live("reports send failures without exposing email contents or verifying the 
   ]);
 
   return Effect.gen(function* () {
-    const { auth, sql } = yield* fixture("192.0.2.21", {
+    const { auth } = yield* fixture("192.0.2.21", {
       send: () =>
         Effect.fail(new Email.Unavailable({ cause: Redacted.make("private email body") })),
     });
 
     const response = yield* auth.handle(
-      request("sign-up/email", new Headers(), JSON.stringify(signup)),
+      request(
+        "email-otp/request-password-reset",
+        new Headers(),
+        JSON.stringify({ email: credentials.email }),
+      ),
       "192.0.2.21",
     );
     assert.strictEqual(response.status, 200);
-    assert.deepStrictEqual(
-      yield* sql`SELECT email_verified FROM "user" WHERE email = ${signup.email}`,
-      [{ email_verified: false }],
-    );
     assert.deepStrictEqual(entries, [["email.send.failed"]]);
   }).pipe(Effect.scoped, Effect.provide(Layer.merge(postgres, logger)));
 });

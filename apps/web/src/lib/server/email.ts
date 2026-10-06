@@ -1,12 +1,10 @@
 import { Console, Context, Effect, Layer, Redacted, Schema } from "effect";
 
-export const Message = Schema.Struct({
-  to: Schema.String,
-  subject: Schema.String,
-  text: Schema.Redacted(Schema.String),
-});
-
-export interface Message extends Schema.Schema.Type<typeof Message> {}
+export interface Message {
+  readonly to: string;
+  readonly subject: string;
+  readonly text: Redacted.Redacted<string>;
+}
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Email.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
