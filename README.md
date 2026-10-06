@@ -45,8 +45,8 @@ The seed creates an owner membership in the `moku` organization; set
 `SEED_ORGANIZATION_SLUG` to seed another organization. Repeated seeds preserve
 existing credentials and memberships. Membership administration endpoints are disabled.
 
-Create an account at `/signup`; read its code from the server terminal to confirm
-the password. Use `/reset-password` to recover access or resume after a refresh.
+Create an account at `/signup`; read its email confirmation code from the server
+terminal. Use `/reset-password` if you forget your password.
 Pre-release email delivery uses the console in every environment.
 
 To provision only the account and organization:

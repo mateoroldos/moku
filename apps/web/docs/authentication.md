@@ -47,8 +47,11 @@ send codes implicitly.
 
 Signup completion uses OTP password reset: mailbox proof replaces any pre-existing
 password before verifying the account, then ordinary password sign-in opens the app.
+Signup and unverified sign-in retain that password only in component memory.
+Recovery collects a new password and ends at explicit sign-in.
 Verification-only and OTP sign-in endpoints stay blocked. Reset also revokes existing
 sessions; its password, verification, and revocation writes are not one transaction.
+An uncertain reset response must direct the user to try signing in before retrying.
 
 Native signout attempts server deletion and clears the browser cookie even when
 storage fails. A copied token can remain valid until expiry after failed deletion.

@@ -10,17 +10,17 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 No PR removes the working inbox. Drafts ship before organization switching so unfinished feedback survives navigation.
 
-| PR  | Trunk gains                               | Users see                              | Approach                | Done    |
-| --- | ----------------------------------------- | -------------------------------------- | ----------------------- | ------- |
-| 1   | Auth tables and one scoped pool           | Existing inbox                         | known                   | ✅ #14  |
-| 2   | Seeded login protects read and answer     | Working inbox after login              | known                   | ✅ #18  |
-| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers               | known                   | ✅ #19  |
-| 4   | Tab-local feedback drafts                 | Return to unfinished feedback          | known                   | ✅ #20  |
-| 5   | Organization chooser and sidebar switcher | Switch seeded organizations            | known                   | ✅ #21  |
-| 5a  | Official generated UI source              | Existing organization sidebar          | known · review complete | ✅ main |
-| 6   | Organization creation                     | Create org → inbox                     | approved · implemented  | ✅ #22  |
-| 7   | Signup, email code, console email         | Confirm password → create org → review | revised · implemented   | #23     |
-| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox           | deployment verification |         |
+| PR  | Trunk gains                               | Users see                           | Approach                | Done    |
+| --- | ----------------------------------------- | ----------------------------------- | ----------------------- | ------- |
+| 1   | Auth tables and one scoped pool           | Existing inbox                      | known                   | ✅ #14  |
+| 2   | Seeded login protects read and answer     | Working inbox after login           | known                   | ✅ #18  |
+| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers            | known                   | ✅ #19  |
+| 4   | Tab-local feedback drafts                 | Return to unfinished feedback       | known                   | ✅ #20  |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations         | known                   | ✅ #21  |
+| 5a  | Official generated UI source              | Existing organization sidebar       | known · review complete | ✅ main |
+| 6   | Organization creation                     | Create org → inbox                  | approved · implemented  | ✅ #22  |
+| 7   | Signup, email code, console email         | Confirm email → create org → review | revised · implemented   | #23     |
+| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox        | deployment verification |         |
 
 ## Design: PR 7 onboarding and email (approved)
 
@@ -37,11 +37,11 @@ AuthProvider.handle(request, clientAddress): Effect<Response, AuthProvider.Unava
 
 For pre-release PR 7, `runtime.ts` supplies console delivery in every environment. Console output deliberately unwraps the message and bypasses telemetry; PR 8 supplies Cloudflare production delivery.
 
-Use hashed OTP storage and default rotation. Signup completion uses Better Auth's OTP password-reset transition: proof of mailbox ownership replaces any pre-existing password before verifying the account. Verification-only activation preserves an attacker-supplied password after duplicate signup and is blocked, along with OTP sign-in and email-change endpoints.
+Follow [authentication boundaries](../apps/web/docs/authentication.md) for credential ownership, session revocation, and uncertain reset outcomes. Use hashed OTP storage and default rotation.
 
-Request/reset endpoints support both onboarding and password recovery, revoke prior sessions, then ordinary password sign-in opens `/`. Password replacement precedes verification; the provider does not wrap all reset writes in one transaction. After uncertain completion, try signing in before requesting another code.
+SignupFlow, LoginFlow, and PasswordRecoveryFlow own steps and navigation; their forms report operation outcomes. Signup and unverified login share ConfirmEmailForm, a code-only step. Recovery composes RequestResetForm → ResetPasswordForm → PasswordResetSuccess. Email submission requests the code; reset success offers explicit sign-in. Email-code and new-password fields compose shared UI primitives.
 
-SignupForm retains the intended password only in component memory through a code-only confirmation step. PasswordConfirmationForm shows a new-password field only for recovery at `/reset-password`. Refresh requires restarting signup or using recovery. Routes own page composition. No passwords enter URLs, browser storage, or navigation state.
+Confirmation retains the intended password only in component memory. Refresh requires restarting signup or sign-in. No passwords enter URLs, browser storage, or navigation state. Show one primary action per step, with quiet Edit and Resend actions. New-password inputs use Show/Hide instead of a repeat-password field.
 
 Reset-for-signup is our supported-API workaround for [Better Auth #11023](https://github.com/better-auth/better-auth/issues/11023), not its documented signup recommendation. Revisit when an upstream fix covers credential ownership without the reproduced takeover.
 
