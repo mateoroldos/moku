@@ -4,7 +4,7 @@ import { Cause, Config, Effect, Option, Result } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 import { Observability } from "#lib/server/observability.ts";
 import { RequestRunner } from "#lib/server/request-runner.ts";
-import { Authentication } from "#lib/server/authentication.ts";
+import { AuthProvider } from "#lib/server/auth-provider.ts";
 
 let runtime: WebRuntime.Runtime | undefined;
 const dispose = () => runtime?.dispose();
@@ -55,7 +55,7 @@ export const handle: Handle = ({ event, resolve }) => {
       Effect.gen(function* () {
         event.locals.run = RequestRunner.make(active, event.request.signal, span);
         event.locals.authenticate = yield* Effect.cached(
-          Authentication.Service.use((auth) => auth.authenticate(event.request.headers)),
+          AuthProvider.Service.use((auth) => auth.authenticate(event.request.headers)),
         );
         return yield* Effect.tryPromise({
           try: () => resolve(event),

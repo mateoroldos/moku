@@ -16,6 +16,7 @@
     </ul>
   {:else}
   <h1 class="font-serif text-4xl tracking-tight">No organization access</h1>
-  <p class="text-sm text-muted-foreground">Ask the person who set up your account to add you to an organization.</p>
+   <p class="text-sm text-muted-foreground">Create an organization to start reviewing tasks with your team.</p>
+   <div><Button href="/organizations/new">Create organization</Button></div>
   {/if}
 </div>

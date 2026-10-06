@@ -21,6 +21,10 @@ Derive UI capabilities from the [task permissions](../../../packages/core/src/hu
 rather than maintaining a separate role policy. Membership checks and scoped task
 queries protect different boundaries; completion fallback reads need both too.
 
+Server-side organization creation bypasses Better Auth's browser creation restriction.
+Derive the creator from verified request identity, never caller-supplied input.
+Provider transactions are independent of Effect SQL's task-write transactions.
+
 Write authorization must use uncached membership on the task write's Effect SQL
 transaction. Lock membership before task rows and keep external calls outside the
 transaction. A write that locks membership first may finish before removal or

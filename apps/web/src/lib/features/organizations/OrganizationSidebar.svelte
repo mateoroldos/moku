@@ -72,18 +72,17 @@
 
 <Sidebar.Root collapsible="icon">
   <Sidebar.Header>
-    {#if organizations.length > 0}
       <nav aria-label="Organizations">
         <Sidebar.Menu>
           <Sidebar.MenuItem>
           <DropdownMenu.Root bind:open={switcherOpen}>
             <DropdownMenu.Trigger>
               {#snippet child({ props })}
-                <Sidebar.MenuButton {...props} size="lg" aria-label="Switch organization" tooltipContent="Switch organization">
+                  <Sidebar.MenuButton {...props} size="lg" aria-label="Organizations" tooltipContent="Organizations">
                   <BuildingsIcon aria-hidden="true" />
                   <span class="flex min-w-0 flex-1 flex-col group-data-[collapsible=icon]:sr-only">
                     <span class="truncate">{label}</span>
-                    <span class="text-xs text-muted-foreground">Switch organization</span>
+                    <span class="text-xs text-muted-foreground">Organizations</span>
                   </span>
                   <CaretUpDownIcon class="ml-auto group-data-[collapsible=icon]:hidden" aria-hidden="true" />
                 </Sidebar.MenuButton>
@@ -104,17 +103,19 @@
                   </DropdownMenu.Item>
                 {/each}
               </DropdownMenu.Group>
+              <DropdownMenu.Separator />
+              <DropdownMenu.Group>
+                <DropdownMenu.Item closeOnSelect={false}>
+                  {#snippet child({ props })}
+                    <a {...props} href="/organizations/new">Create organization</a>
+                  {/snippet}
+                </DropdownMenu.Item>
+              </DropdownMenu.Group>
             </DropdownMenu.Content>
           </DropdownMenu.Root>
           </Sidebar.MenuItem>
         </Sidebar.Menu>
       </nav>
-    {:else}
-      <div class="flex h-12 items-center gap-2 overflow-hidden px-2 text-sm" title={label}>
-        <BuildingsIcon class="size-4 shrink-0" aria-hidden="true" />
-        <span class="truncate group-data-[collapsible=icon]:sr-only">{label}</span>
-      </div>
-    {/if}
   </Sidebar.Header>
   <Sidebar.Content>
     <Sidebar.Group>

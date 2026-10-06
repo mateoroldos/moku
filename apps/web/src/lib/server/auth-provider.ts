@@ -1,5 +1,8 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
+import { runWithTransaction } from "@better-auth/core/context";
+import { generateId } from "@better-auth/core/utils/id";
 import { Principal, UserId } from "@moku/domain/identity";
+import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
@@ -20,19 +23,23 @@ const Origin = Schema.URLFromString.check(
   ),
 );
 
-export class Unavailable extends Schema.TaggedError<Unavailable>()("Authentication.Unavailable", {
+export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
 }) {}
 
 export interface Interface {
   readonly authenticate: (headers: Headers) => IdentityLookup<never>;
+  readonly createOrganization: (
+    userId: UserId,
+    name: string,
+  ) => Effect.Effect<Organization, Unavailable>;
   readonly handle: (
     request: Request,
     clientAddress: string,
   ) => Effect.Effect<Response, Unavailable>;
 }
 
-export class Service extends Context.Service<Service, Interface>()("@moku/web/Authentication") {}
+export class Service extends Context.Service<Service, Interface>()("@moku/web/AuthProvider") {}
 
 export type IdentityLookup<R> = Effect.Effect<Principal | null, Unavailable, R>;
 
@@ -50,9 +57,9 @@ export const layer = Layer.effect(
       secret: Redacted.value(secret),
     });
     const unavailable = (cause: unknown) => new Unavailable({ cause: Redacted.make(cause) });
-    yield* Effect.tryPromise({ try: () => auth.$context, catch: unavailable });
+    const context = yield* Effect.tryPromise({ try: () => auth.$context, catch: unavailable });
 
-    const authenticate = Effect.fn("Authentication.authenticate")(function* (headers: Headers) {
+    const authenticate = Effect.fn("AuthProvider.authenticate")(function* (headers: Headers) {
       const result: unknown = yield* Effect.tryPromise({
         try: () => auth.api.getSession({ headers }),
         catch: unavailable,
@@ -68,7 +75,7 @@ export const layer = Layer.effect(
           });
     }, Effect.uninterruptible);
 
-    const handle = Effect.fn("Authentication.handle")(function* (
+    const handle = Effect.fn("AuthProvider.handle")(function* (
       request: Request,
       clientAddress: string,
     ) {
@@ -83,8 +90,31 @@ export const layer = Layer.effect(
       return response;
     }, Effect.uninterruptible);
 
-    return Service.of({ authenticate, handle });
+    const createOrganization = Effect.fn("AuthProvider.createOrganization")(function* (
+      userId: UserId,
+      name: string,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        // Flatten Better Auth's declared Promise<Promise<...>> at the Promise boundary.
+        try: () =>
+          Promise.resolve(
+            // A plain adapter transaction does not enlist nested provider writes.
+            runWithTransaction(context.adapter, () =>
+              auth.api.createOrganization({
+                body: { userId, name, slug: generateId(), keepCurrentActiveOrganization: true },
+              }),
+            ),
+          ),
+        catch: unavailable,
+      });
+
+      return yield* Schema.decodeUnknownEffect(Organization)(result).pipe(
+        Effect.mapError(unavailable),
+      );
+    }, Effect.uninterruptible);
+
+    return Service.of({ authenticate, handle, createOrganization });
   }),
 );
 
-export * as Authentication from "./authentication.ts";
+export * as AuthProvider from "./auth-provider.ts";

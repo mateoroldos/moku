@@ -36,7 +36,7 @@ export const load: LayoutServerLoad = (event) => {
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
           "Access.Unverified": AuthGuard.reject,
-          "Authentication.Unavailable": AuthGuard.reject,
+          "AuthProvider.Unavailable": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
           "OrganizationMembershipStore.Unavailable": () =>

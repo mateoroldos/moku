@@ -33,6 +33,7 @@
     "svelte-sonner": "catalog:"
   },
   "devDependencies": {
+    "@better-auth/core": "1.7.4",
     "@better-auth/drizzle-adapter": "1.7.4",
     "@effect/vitest": "catalog:",
     "@sveltejs/adapter-node": "6.0.0-next.15",
@@ -43,6 +44,7 @@
     "better-auth": "1.7.4",
     "drizzle-orm": "catalog:",
     "eslint": "10.11.0",
+    "nanoid": "3.3.19",
     "svelte": "catalog:",
     "svelte-check": "4.7.6",
     "tailwindcss": "catalog:",

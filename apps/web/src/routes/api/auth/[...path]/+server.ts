@@ -1,5 +1,5 @@
 import { Result } from "effect";
-import { Authentication } from "#lib/server/authentication.ts";
+import { AuthProvider } from "#lib/server/auth-provider.ts";
 import type { RequestHandler } from "./$types";
 
 export const fallback: RequestHandler = ({ locals, request, getClientAddress }) => {
@@ -15,7 +15,7 @@ export const fallback: RequestHandler = ({ locals, request, getClientAddress }) 
   return locals
     .run(
       "Endpoint.authentication",
-      Authentication.Service.use((auth) => auth.handle(request, getClientAddress())),
+      AuthProvider.Service.use((auth) => auth.handle(request, getClientAddress())),
     )
     .then(
       Result.getOrElse(() =>
