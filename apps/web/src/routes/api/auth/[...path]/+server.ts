@@ -7,6 +7,9 @@ export const fallback: RequestHandler = ({ locals, request, getClientAddress }) 
   if (
     ![
       "POST /api/auth/sign-in/email",
+      "POST /api/auth/sign-up/email",
+      "POST /api/auth/email-otp/send-verification-otp",
+      "POST /api/auth/email-otp/verify-email",
       "POST /api/auth/sign-out",
       "GET /api/auth/get-session",
     ].includes(operation)

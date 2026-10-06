@@ -41,5 +41,9 @@ Do not trust caller-supplied forwarding headers; proxy configuration must match 
 deployment. Unexpected provider errors propagate to the Effect boundary for redacted
 diagnostics and safe responses.
 
+Better Auth catches awaited email failures; auth success does not confirm delivery.
+The Email bridge reports failures without message contents. Resend throttling is
+per endpoint/IP, not per address.
+
 Native signout attempts server deletion and clears the browser cookie even when
 storage fails. A copied token can remain valid until expiry after failed deletion.

@@ -7,6 +7,7 @@ import { Layer, ManagedRuntime, type Redacted } from "effect";
 import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
 import { AuthProvider } from "./auth-provider.ts";
+import { Email } from "./email.ts";
 
 const postgres = (url: Redacted.Redacted) =>
   PostgresConnection.layer({
@@ -25,6 +26,7 @@ export const layer = (url: Redacted.Redacted) => application.pipe(Layer.provide(
 export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
   ManagedRuntime.make(
     Layer.merge(application, AuthProvider.layer).pipe(
+      Layer.provide(Email.consoleLayer),
       Layer.provide(postgres(url)),
       Layer.provideMerge(Observability.layer(settings)),
     ),

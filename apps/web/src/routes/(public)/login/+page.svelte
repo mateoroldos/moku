@@ -16,6 +16,10 @@
     try {
       const { error } = await authClient.signIn.email({ email, password });
       if (error) {
+        if (error.code === 'EMAIL_NOT_VERIFIED') {
+          await goto(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
+        }
         message = error.code === 'INVALID_EMAIL_OR_PASSWORD'
           ? 'The email or password is incorrect.'
           : 'We couldn’t sign you in. Try again.';
@@ -36,7 +40,7 @@
 
 <section class="mx-auto max-w-sm py-12 sm:py-20" aria-labelledby="login-heading">
   <h1 id="login-heading" class="font-serif text-4xl tracking-tight">Sign in to review</h1>
-  <p class="mt-3 text-sm text-muted-foreground">Use the account provided by your administrator.</p>
+  <p class="mt-3 text-sm text-muted-foreground">Sign in with your email and password.</p>
   <form method="POST" onsubmit={submit} class="mt-8 flex flex-col gap-5" aria-busy={pending}>
     <div class="flex flex-col gap-2">
       <label for="email" class="text-sm font-medium">Email</label>
@@ -49,4 +53,5 @@
     {#if message}<p role="alert" class="text-sm text-destructive">{message}</p>{/if}
     <Button type="submit" size="lg" disabled={pending} class="w-full">{pending ? 'Signing in…' : 'Sign in'}</Button>
   </form>
+  <p class="mt-6 text-sm text-muted-foreground">New to Moku? <a href="/signup" class="text-primary underline underline-offset-4">Create an account</a></p>
 </section>

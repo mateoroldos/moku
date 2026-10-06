@@ -5,8 +5,9 @@ import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
-import { Config, Effect, Layer, Redacted } from "effect";
+import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
+import { Email } from "./email.ts";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };
@@ -25,7 +26,10 @@ const postgres = Layer.unwrap(
   ),
 );
 
-const fixture = Effect.fnUntraced(function* (clientAddress: string) {
+const fixture = Effect.fnUntraced(function* (
+  clientAddress: string,
+  delivery: Email.Interface = { send: () => Effect.void },
+) {
   const sql = yield* PgClient.PgClient;
   const storage = yield* AuthStorage.Service;
   let unavailable = false;
@@ -38,9 +42,17 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
     };
   });
   const auth = yield* AuthProvider.Service.pipe(
-    Effect.provide(AuthProvider.layer.pipe(Layer.provide(database))),
+    Effect.provide(
+      AuthProvider.layer.pipe(
+        Layer.provide(database),
+        Layer.provide(Layer.succeed(Email.Service, delivery)),
+      ),
+    ),
   );
-  const cleanup = sql`DELETE FROM "user" WHERE id = 'authentication-test'`;
+  const cleanup =
+    sql`DELETE FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'`.pipe(
+      Effect.andThen(sql`DELETE FROM verification WHERE identifier LIKE '%onboarding@moku.test'`),
+    );
   yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
   const password = yield* Effect.promise(() => hashPassword(credentials.password));
   yield* sql`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
@@ -69,6 +81,88 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
 });
 
 const verifiedPrincipal = { userId: "authentication-test", emailVerified: true };
+const signup = {
+  name: "New reviewer",
+  email: "onboarding@moku.test",
+  password: "onboarding-password",
+};
+
+it.live("verifies signup once without enabling passwordless sign-in", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth } = yield* fixture("192.0.2.20", {
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const post = (path: string, body: Record<string, string>) =>
+      auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.20");
+
+    assert.strictEqual((yield* post("sign-up/email", signup)).status, 200);
+    const message = messages.at(-1);
+    assert(message);
+    assert.strictEqual(message.to, signup.email);
+    const otp = Redacted.value(message.text).slice(0, 6);
+
+    const verified = yield* post("email-otp/verify-email", { email: signup.email, otp });
+    assert.strictEqual(verified.status, 200);
+    const headers = new Headers({
+      cookie: verified.headers
+        .getSetCookie()
+        .map((cookie) => cookie.split(";")[0])
+        .join("; "),
+    });
+    assert.strictEqual((yield* auth.authenticate(headers))?.emailVerified, true);
+    assert.strictEqual(
+      (yield* post("email-otp/verify-email", { email: signup.email, otp })).status,
+      400,
+    );
+
+    assert.strictEqual(
+      (yield* post("email-otp/send-verification-otp", {
+        email: signup.email,
+        type: "email-verification",
+      })).status,
+      200,
+    );
+    const latest = messages.at(-1);
+    assert(latest);
+    const repeated = yield* post("email-otp/verify-email", {
+      email: signup.email,
+      otp: Redacted.value(latest.text).slice(0, 6),
+    });
+    assert.strictEqual(repeated.status, 400);
+    assert.include(yield* Effect.promise(() => repeated.text()), "EMAIL_ALREADY_VERIFIED");
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("reports send failures without exposing email contents or verifying the account", () => {
+  const entries: unknown[] = [];
+  const logger = Logger.layer([
+    Logger.make((options) => {
+      entries.push(options.message);
+    }),
+  ]);
+
+  return Effect.gen(function* () {
+    const { auth, sql } = yield* fixture("192.0.2.21", {
+      send: () =>
+        Effect.fail(new Email.Unavailable({ cause: Redacted.make("private email body") })),
+    });
+
+    const response = yield* auth.handle(
+      request("sign-up/email", new Headers(), JSON.stringify(signup)),
+      "192.0.2.21",
+    );
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(
+      yield* sql`SELECT email_verified FROM "user" WHERE email = ${signup.email}`,
+      [{ email_verified: false }],
+    );
+    assert.deepStrictEqual(entries, [["email.send.failed"]]);
+  }).pipe(Effect.scoped, Effect.provide(Layer.merge(postgres, logger)));
+});
 
 it.live("maps provider identity to a principal and rejects an expired session", () =>
   Effect.gen(function* () {
