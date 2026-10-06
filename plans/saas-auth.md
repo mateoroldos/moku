@@ -45,12 +45,12 @@ createOrganization = form(strict { name }, callback): encoded Organization
             : Effect<Organization, AuthProvider.Unavailable>
             ├─ runWithTransaction → provider inserts organization + owner; failure rolls back
             └─ decode Organization; provider/decode failure → redacted Unavailable → 503
-enhance → submit().updates() → retain result → goto(/org/{id}, { refreshAll: true })
-  ├─ navigation failure after success → retain Open organization link
-  └─ unknown mutation outcome → preserve input; check organizations before retrying
+enhance → submit().updates() → goto(/org/{id}, { refreshAll: true })
+  ├─ mutation failure → preserve input; check organizations before retrying
+  └─ destination load failure → existing Kit error boundary
 ```
 
-Kit owns same-origin validation, fields, and pending state; the remote independently verifies identity. Use an unkeyed form: `.for(...)` adds an `id` that violates the name-only contract. `CreateOrganizationForm` owns submission and local recovery. Carry its confirmed result in `PageState` for `OrganizationCreationRecovery`, composed by root and authenticated error boundaries. Use AuthProvider's uninterruptible Promise bridge; the request runner owns surrounding cancellation and diagnostics. A non-enhanced success renders the organization link.
+Kit owns same-origin validation, fields, pending state, and navigation errors; the remote independently verifies identity. Use an unkeyed form: `.for(...)` adds an `id` that violates the name-only contract. `CreateOrganizationForm` owns submission and mutation feedback. Use AuthProvider's uninterruptible Promise bridge; the request runner owns surrounding cancellation and diagnostics. A non-enhanced success renders the organization link.
 
 **Atomic creation:** native creation leaves an orphan on failed membership insertion, and a plain `adapter.transaction` wrapper does not enlist provider writes. Use `runWithTransaction` with the explicit `@better-auth/core` dependency pinned to 1.7.4. This does not deduplicate submissions after a lost response.
 
@@ -71,7 +71,7 @@ Estimate: 150–250 hand-written implementation lines plus focused integration c
 | Existing PostgreSQL auth integration fixture | Successful creation persists the short ID and correct owner; membership-write failure leaves neither row. Removing the wrapper must fail the rollback test. |
 | Built Kit requests                           | Signed-out/unverified direct remote, forged user/role/slug, blank name, foreign origin, blocked provider endpoints; catches guard/input bypass              |
 | Browser                                      | Zero/one/many entry points, viewer elsewhere, validation/pending, create → empty inbox → refreshed sidebar; catches stale or missing navigation             |
-| Browser with controlled failures             | Lost response, provider outage, navigation failure after confirmed creation; catches lost input or creation repeated after known success                    |
+| Browser with controlled failures             | Lost response and provider outage preserve input; destination load errors use normal page recovery without repeating creation                               |
 | Browser                                      | Keyboard, ~375px/~1280px, light/dark, mobile menu dismissal, existing draft round trip; catches interaction regressions                                     |
 
 Run Svelte autofixer with `--async`, `bun run check`, `bun run test:postgres`, and `bun run build`. Add only the successful-creation integration case and the rollback regression case; put the persisted ID format assertion in the first. Existing tests own auth guards, tenant isolation, constraints, and pool lifetime. Keep RNG distribution/uniqueness sampling, config-only tests, mocked call-order assertions, repeated lower-layer contracts, and test-only production exports out of this PR. Built-request and browser proofs remain manual.
@@ -82,12 +82,11 @@ Run Svelte autofixer with `--async`, `bun run check`, `bun run test:postgres`, a
 - Reference: `mateoroldos/effect-forge`, `apps/web/src/routes/(authenticated)/+page.svelte`: native creation distinguishes uncertain outcomes from navigation failure; its slug-based UI differs from Moku.
 - Better Auth 1.7.4 installed organization routes/adapter, core `context/transaction.mjs`, and `db/adapter/get-id-field.mjs`; [organization API](https://www.better-auth.com/docs/plugins/organization) and [custom ID documentation](https://www.better-auth.com/docs/concepts/database#id-generation).
 - [Nano ID](https://github.com/ai/nanoid#custom-alphabet-or-size), [Crockford alphabet](https://www.crockford.com/base32.html), [Sqids limitations](https://sqids.org/faq), and [UUID formats](https://www.rfc-editor.org/rfc/rfc9562.html): short random IDs fit existing text keys; alternate encodings/resolvers add concepts without improving this flow.
-- Kit 3.0.0-next.30 installed remote form and client navigation sources: `.updates()` suppresses implicit refresh; handled load failures resolve navigation into error boundaries. `goto({ refreshAll: true })` discards preloads, so preloading cannot guarantee destination success.
+- Kit 3.0.0-next.30 installed remote form and client navigation sources: `.updates()` suppresses implicit refresh; `goto({ refreshAll: true })` refreshes destination data; Kit owns page errors.
 - Svelte 5.57.1, Effect 4.0.0-rc.112, and official [Field composition](https://shadcn-svelte.com/docs/components/field).
 
 ## Decided
 
-- Navigation state carries transient creation confirmation across form unmounting; it grants no access and is not restored on full reload. Prefer Kit's per-history-entry state over a custom store/session storage with cleanup, server flash storage, or URL flags that cannot establish mutation success. A form-local result cannot survive destination errors; a confirmation page would change the approved create → inbox flow.
 - Generated UI restoration and its check suppressions have completed user review. Keep official component families/APIs intact; approved diagnostic suppressions are separate from generated implementation. Application behavior belongs in consumers.
 - Follow [authentication boundaries](../apps/web/docs/authentication.md) for protected entrypoints, role capabilities, and transactional writes. Membership snapshots never authorize navigation destinations; live updates belong to #10.
 - Keep the organization picker visible with one membership. PR 6 adds a working creation entry for zero, one, and multiple memberships.

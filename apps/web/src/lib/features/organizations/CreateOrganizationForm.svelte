@@ -13,7 +13,6 @@
 {#if creation.result}
   <div class="mt-8 flex flex-col items-start gap-4">
     <p role="status">{creation.result.name} was created.</p>
-    {#if message}<p role="alert" class="text-sm text-destructive">{message}</p>{/if}
     <Button href={`/org/${encodeURIComponent(creation.result.id)}`} data-sveltekit-reload>Open organization</Button>
   </div>
 {:else}
@@ -31,15 +30,7 @@
 
     if (!submission.result) return;
 
-    try {
-      await goto(`/org/${encodeURIComponent(submission.result.id)}`, {
-        refreshAll: true,
-        state: { createdOrganization: submission.result },
-      });
-    } catch {
-      console.error('Opening the created organization failed');
-      message = 'Your organization was created, but we couldn’t open its inbox. Open it using the link below.';
-    }
+    await goto(`/org/${encodeURIComponent(submission.result.id)}`, { refreshAll: true });
   })}>
     <Field.Group>
       <Field.Field data-invalid={!!creation.fields.name.issues()?.length}>
