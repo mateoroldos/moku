@@ -1,6 +1,5 @@
 import { form, getRequestEvent } from "$app/server";
-import { Organization } from "@moku/domain/organization";
-import { error } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
 import { AuthProvider } from "#lib/server/auth-provider.ts";
@@ -38,6 +37,6 @@ export const createOrganization = form(
           }),
         ),
       )
-      .then(Schema.encodeSync(Organization));
+      .then((organization) => redirect(303, `/org/${encodeURIComponent(organization.id)}`));
   },
 );

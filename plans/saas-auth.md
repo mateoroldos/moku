@@ -36,7 +36,7 @@ Issue #8 owns the approved creation experience, short organization URLs, and ato
 The provider bridge generates an opaque random slug and calls server-only `auth.api.createOrganization` inside `runWithTransaction(context.adapter, ...)`, with the guarded `userId`, no session headers, and `keepCurrentActiveOrganization: true`. Keep public organization endpoints blocked and `allowUserToCreateOrganization: false`; server-only creation intentionally bypasses that setting. Better Auth owns storage; its transaction context binds the provider's writes, independently of Effect SQL transactions.
 
 ```text
-createOrganization = form(strict { name }, callback): encoded Organization
+createOrganization = form(strict { name }, callback): redirect to inbox
   ├─ Effect Schema trims/rejects blank names and extra keys → field issues
   └─ locals.run("Remote.createOrganization", program)
        ├─ AuthGuard.requireVerified(locals.authenticate)
@@ -45,12 +45,13 @@ createOrganization = form(strict { name }, callback): encoded Organization
             : Effect<Organization, AuthProvider.Unavailable>
             ├─ runWithTransaction → provider inserts organization + owner; failure rolls back
             └─ decode Organization; provider/decode failure → redacted Unavailable → 503
-enhance → submit().updates() → goto(/org/{id}, { refreshAll: true })
+enhance → submit() → Kit follows server redirect and refreshes destination data
+  ├─ success → clear name for the next creation
   ├─ mutation failure → preserve input; check organizations before retrying
   └─ destination load failure → existing Kit error boundary
 ```
 
-Kit owns same-origin validation, fields, pending state, and navigation errors; the remote independently verifies identity. Use an unkeyed form: `.for(...)` adds an `id` that violates the name-only contract. `CreateOrganizationForm` owns submission and mutation feedback. Use AuthProvider's uninterruptible Promise bridge; the request runner owns surrounding cancellation and diagnostics. A non-enhanced success renders the organization link.
+Kit owns same-origin validation, fields, pending state, and redirects; the remote independently verifies identity. Use an unkeyed form: `.for(...)` adds an `id` that violates the name-only contract. `CreateOrganizationForm` clears input after success because the remote form instance survives client navigation. Failures preserve input. Use AuthProvider's uninterruptible Promise bridge; the request runner owns surrounding cancellation and diagnostics. Enhanced and native submissions redirect to the inbox.
 
 **Atomic creation:** native creation leaves an orphan on failed membership insertion, and a plain `adapter.transaction` wrapper does not enlist provider writes. Use `runWithTransaction` with the explicit `@better-auth/core` dependency pinned to 1.7.4. This does not deduplicate submissions after a lost response.
 
@@ -70,7 +71,7 @@ Estimate: 150–250 hand-written implementation lines plus focused integration c
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Existing PostgreSQL auth integration fixture | Successful creation persists the short ID and correct owner; membership-write failure leaves neither row. Removing the wrapper must fail the rollback test. |
 | Built Kit requests                           | Signed-out/unverified direct remote, forged user/role/slug, blank name, foreign origin, blocked provider endpoints; catches guard/input bypass              |
-| Browser                                      | Zero/one/many entry points, viewer elsewhere, validation/pending, create → empty inbox → refreshed sidebar; catches stale or missing navigation             |
+| Browser                                      | Zero/one/many entry points, viewer elsewhere, validation/pending, create → inbox → Back/sidebar → create again; catches stale form state and navigation     |
 | Browser with controlled failures             | Lost response and provider outage preserve input; destination load errors use normal page recovery without repeating creation                               |
 | Browser                                      | Keyboard, ~375px/~1280px, light/dark, mobile menu dismissal, existing draft round trip; catches interaction regressions                                     |
 
@@ -82,7 +83,7 @@ Run Svelte autofixer with `--async`, `bun run check`, `bun run test:postgres`, a
 - Reference: `mateoroldos/effect-forge`, `apps/web/src/routes/(authenticated)/+page.svelte`: native creation distinguishes uncertain outcomes from navigation failure; its slug-based UI differs from Moku.
 - Better Auth 1.7.4 installed organization routes/adapter, core `context/transaction.mjs`, and `db/adapter/get-id-field.mjs`; [organization API](https://www.better-auth.com/docs/plugins/organization) and [custom ID documentation](https://www.better-auth.com/docs/concepts/database#id-generation).
 - [Nano ID](https://github.com/ai/nanoid#custom-alphabet-or-size), [Crockford alphabet](https://www.crockford.com/base32.html), [Sqids limitations](https://sqids.org/faq), and [UUID formats](https://www.rfc-editor.org/rfc/rfc9562.html): short random IDs fit existing text keys; alternate encodings/resolvers add concepts without improving this flow.
-- Kit 3.0.0-next.30 installed remote form and client navigation sources: `.updates()` suppresses implicit refresh; `goto({ refreshAll: true })` refreshes destination data; Kit owns page errors.
+- Kit 3.0.0-next.30 installed remote form and client navigation sources: unkeyed form results outlive components; `submit()` follows redirects and refreshes destination data.
 - Svelte 5.57.1, Effect 4.0.0-rc.112, and official [Field composition](https://shadcn-svelte.com/docs/components/field).
 
 ## Decided
