@@ -29,7 +29,7 @@ export const getHumanTask = query(
             "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
             "OrganizationMembershipStore.Unavailable": () =>
               error(503, "We couldn’t verify your access. Try again."),
-            "Authentication.Unavailable": AuthGuard.reject,
+            "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>
               error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
@@ -60,7 +60,7 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
           "OrganizationMembershipStore.Unavailable": () =>
             error(503, "We couldn’t verify your access. Try again."),
-          "Authentication.Unavailable": AuthGuard.reject,
+          "AuthProvider.Unavailable": AuthGuard.reject,
           "HumanTaskStore.PersistenceError": () =>
             error(503, "We couldn’t load your tasks. Try again."),
         }),
@@ -107,7 +107,7 @@ export const respondToHumanTask = form(
               error(503, "We couldn’t verify your access. Try again."),
             "Transaction.Unavailable": () =>
               error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
-            "Authentication.Unavailable": AuthGuard.reject,
+            "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>
               error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),

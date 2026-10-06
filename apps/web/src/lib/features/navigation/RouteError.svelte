@@ -1,10 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { Button } from '@moku/ui/ui/button';
+  import type { Snippet } from 'svelte';
+
+  let { recovery }: { recovery?: Snippet<[Snippet]> } = $props();
 
   const heading = $derived(page.status === 404 ? 'Page not found' : page.status === 403 ? 'Access denied' : 'Something went wrong');
-  const created = $derived(page.state.createdOrganization);
-  const openingCreated = $derived(created && page.url.pathname === `/org/${encodeURIComponent(created.id)}`);
 </script>
 
 <svelte:head>
@@ -13,10 +14,16 @@
 
 <div class="mx-auto flex max-w-xl flex-col items-start gap-4 py-12">
   <h1 class="font-serif text-3xl tracking-tight">{heading}</h1>
-  {#if openingCreated}<p role="status">{created?.name} was created, but its inbox could not be opened.</p>{/if}
   <p role="alert" class="text-sm text-muted-foreground">{page.error?.message ?? 'Please try again.'}</p>
-  {#if openingCreated || page.status >= 500}
-    <Button href={page.url.pathname + page.url.search} data-sveltekit-reload>{openingCreated ? 'Open organization' : 'Refresh page'}</Button>
+  {#snippet retry()}
+    {#if page.status >= 500}
+      <Button href={page.url.pathname + page.url.search} data-sveltekit-reload>Refresh page</Button>
+    {/if}
+  {/snippet}
+  {#if recovery}
+    {@render recovery(retry)}
+  {:else}
+    {@render retry()}
   {/if}
   <Button href="/" variant="outline">Back to home</Button>
 </div>

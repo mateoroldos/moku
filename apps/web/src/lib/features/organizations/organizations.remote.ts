@@ -3,7 +3,7 @@ import { Organization } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
-import { Authentication } from "#lib/server/authentication.ts";
+import { AuthProvider } from "#lib/server/auth-provider.ts";
 
 export const createOrganization = form(
   Schema.toStandardSchemaV1(
@@ -20,9 +20,9 @@ export const createOrganization = form(
         "Remote.createOrganization",
         Effect.gen(function* () {
           const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-          const authentication = yield* Authentication.Service;
+          const provider = yield* AuthProvider.Service;
 
-          return yield* authentication.createOrganization(principal.userId, name);
+          return yield* provider.createOrganization(principal.userId, name);
         }),
       )
       .then(
@@ -30,7 +30,7 @@ export const createOrganization = form(
           Match.valueTags(failure, {
             "AuthGuard.Required": AuthGuard.reject,
             "Access.Unverified": AuthGuard.reject,
-            "Authentication.Unavailable": () =>
+            "AuthProvider.Unavailable": () =>
               error(
                 503,
                 "We couldn’t confirm creation. Check your organizations before trying again.",

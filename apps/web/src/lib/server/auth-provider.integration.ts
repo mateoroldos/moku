@@ -6,7 +6,7 @@ import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
 import { Config, Effect, Layer, Redacted } from "effect";
-import { Authentication } from "./authentication.ts";
+import { AuthProvider } from "./auth-provider.ts";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };
@@ -37,8 +37,8 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
         unavailable ? Promise.reject(new Error("private storage failure")) : adapter.findOne(input),
     };
   });
-  const auth = yield* Authentication.Service.pipe(
-    Effect.provide(Authentication.layer.pipe(Layer.provide(database))),
+  const auth = yield* AuthProvider.Service.pipe(
+    Effect.provide(AuthProvider.layer.pipe(Layer.provide(database))),
   );
   const cleanup = sql`DELETE FROM "user" WHERE id = 'authentication-test'`;
   yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
@@ -86,7 +86,7 @@ it.live("keeps lookup outages distinct from an absent session", () =>
     assert.strictEqual(yield* auth.authenticate(new Headers()), null);
     assert.strictEqual(
       (yield* Effect.flip(auth.authenticate(headers)))._tag,
-      "Authentication.Unavailable",
+      "AuthProvider.Unavailable",
     );
     setUnavailable(false);
     assert.deepStrictEqual(yield* auth.authenticate(headers), verifiedPrincipal);

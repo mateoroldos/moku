@@ -22,7 +22,7 @@ export const load: LayoutServerLoad = (event) => {
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
           "Access.Unverified": AuthGuard.reject,
-          "Authentication.Unavailable": AuthGuard.reject,
+          "AuthProvider.Unavailable": AuthGuard.reject,
           "OrganizationMembershipStore.Unavailable": () =>
             error(503, "We couldn’t load your organizations. Try again."),
         }),

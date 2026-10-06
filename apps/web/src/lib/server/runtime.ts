@@ -6,7 +6,7 @@ import { PostgresConnection } from "@moku/database-postgres/postgres-connection"
 import { Layer, ManagedRuntime, type Redacted } from "effect";
 import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
-import { Authentication } from "./authentication.ts";
+import { AuthProvider } from "./auth-provider.ts";
 
 const postgres = (url: Redacted.Redacted) =>
   PostgresConnection.layer({
@@ -24,7 +24,7 @@ export const layer = (url: Redacted.Redacted) => application.pipe(Layer.provide(
 
 export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
   ManagedRuntime.make(
-    Layer.merge(application, Authentication.layer).pipe(
+    Layer.merge(application, AuthProvider.layer).pipe(
       Layer.provide(postgres(url)),
       Layer.provideMerge(Observability.layer(settings)),
     ),
