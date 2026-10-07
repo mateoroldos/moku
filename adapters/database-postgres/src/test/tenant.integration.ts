@@ -1,16 +1,27 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { HumanTaskStore } from "@moku/core/human-task-store";
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
-import { Transaction } from "@moku/core/transaction";
+import { OrganizationAccess } from "@moku/core/organization-access";
 import { HumanTaskTitle } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
 import { makeWithDefaults } from "drizzle-orm/effect-postgres";
 import { migrate } from "drizzle-orm/effect-postgres/migrator";
-import { Cause, Config, Deferred, Effect, Exit, Fiber, Layer, Option, Schema } from "effect";
+import {
+  Cause,
+  Config,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Option,
+  Schema,
+} from "effect";
 import { migrationConfig } from "../migrations.ts";
 import { PersistencePostgres } from "../persistence-postgres.ts";
 
@@ -21,7 +32,7 @@ const postgres = Layer.unwrap(
     ),
   ),
 );
-const application = HumanTaskDirectory.layer.pipe(
+const application = Layer.merge(HumanTasks.layer, OrganizationAccess.layer).pipe(
   Layer.provideMerge(PersistencePostgres.layer),
   Layer.provide(NodeCrypto.layer),
   Layer.provideMerge(postgres),
@@ -29,7 +40,7 @@ const application = HumanTaskDirectory.layer.pipe(
 
 const actor = { userId: UserId.make("tenant-user"), emailVerified: true };
 const organizationId = OrganizationId.make("tenant-org");
-const input = HumanTaskDirectory.CreateInput.make({
+const input = HumanTasks.CreateInput.make({
   intent: "authorize",
   subject: { title: HumanTaskTitle.make("Tenant review") },
   response: { type: "approval" },
@@ -81,20 +92,32 @@ const waitForBlocker = (pid: number) =>
 it.live("rolls back completion and attribution across the production core ports", () =>
   fixture(
     Effect.gen(function* () {
-      const directory = yield* HumanTaskDirectory.Service;
-      const transaction = yield* Transaction.Service;
-      const pending = yield* directory.create(actor, organizationId, input);
+      const humanTasks = yield* HumanTasks.Service;
+      const access = yield* OrganizationAccess.Service;
+      const store = yield* HumanTaskStore.Service;
+      const pending = yield* humanTasks.create(actor, organizationId, input);
       const ref = { organizationId, taskId: pending.id };
+      const rejected = { reason: "rollback" };
+
       const failure = yield* Effect.flip(
-        transaction.run(
-          Effect.gen(function* () {
-            yield* directory.respond(actor, ref, { decision: "approved" });
-            return yield* Effect.fail("rollback");
-          }),
+        access.withWriteAccess(
+          actor,
+          organizationId,
+          HumanTasks.allowedRoles.respond,
+          (membership) =>
+            Effect.gen(function* () {
+              yield* store.complete(ref, { decision: "approved" }, yield* DateTime.now, {
+                userId: membership.userId,
+                role: membership.role,
+              });
+
+              return yield* Effect.fail(rejected);
+            }),
         ),
       );
-      assert.strictEqual(failure, "rollback");
-      assert.deepStrictEqual(yield* directory.get(actor, ref), pending);
+
+      assert.strictEqual(failure, rejected);
+      assert.deepStrictEqual(yield* humanTasks.get(actor, ref), pending);
     }),
   ),
 );
@@ -109,23 +132,63 @@ it.live("rejects malformed persisted roles without confusing absence", () =>
         yield* Effect.flip(memberships.find(actor.userId, organizationId)),
         OrganizationMembershipStore.Unavailable,
       );
+      assert.instanceOf(
+        yield* Effect.flip(
+          memberships.withLock(actor.userId, organizationId, () =>
+            Effect.die("Malformed membership reached the callback"),
+          ),
+        ),
+        OrganizationMembershipStore.Unavailable,
+      );
+
       yield* sql`DELETE FROM member WHERE id = 'tenant-member'`;
       assert.deepStrictEqual(yield* memberships.find(actor.userId, organizationId), Option.none());
+      assert.deepStrictEqual(
+        yield* memberships.withLock(actor.userId, organizationId, Effect.succeed),
+        Option.none(),
+      );
     }),
   ),
 );
 
-it.live("refuses a locked membership lookup without an active transaction", () =>
+it.live("rolls back interrupted writes and releases the membership lock", () =>
   fixture(
     Effect.gen(function* () {
-      const memberships = yield* OrganizationMembershipStore.Service;
-      const exit = yield* Effect.exit(memberships.findForWrite(actor.userId, organizationId));
-      assert.isTrue(Exit.isFailure(exit));
-      if (Exit.isSuccess(exit)) return assert.fail("Expected transaction prerequisite defect");
-      assert.deepStrictEqual(
-        Cause.squash(exit.cause),
-        new Error("OrganizationMembershipStore.findForWrite requires Transaction.run"),
+      const humanTasks = yield* HumanTasks.Service;
+      const access = yield* OrganizationAccess.Service;
+      const store = yield* HumanTaskStore.Service;
+      const sql = yield* PgClient.PgClient;
+      const pending = yield* humanTasks.create(actor, organizationId, input);
+      const ref = { organizationId, taskId: pending.id };
+      const written = yield* Deferred.make<number>();
+
+      const writer = yield* access
+        .withWriteAccess(actor, organizationId, HumanTasks.allowedRoles.respond, (membership) =>
+          Effect.gen(function* () {
+            yield* store.complete(ref, { decision: "approved" }, yield* DateTime.now, {
+              userId: membership.userId,
+              role: membership.role,
+            });
+            yield* Deferred.succeed(written, yield* backendPid);
+
+            return yield* Effect.never;
+          }),
+        )
+        .pipe(Effect.forkScoped);
+      const pid = yield* Deferred.await(written);
+      const removal = yield* sql`DELETE FROM member WHERE id = 'tenant-member'`.pipe(
+        Effect.forkScoped,
       );
+      yield* waitForBlocker(pid);
+
+      yield* Fiber.interrupt(writer);
+      yield* Fiber.join(removal);
+
+      const exit = yield* Fiber.await(writer);
+      assert.isTrue(Exit.isFailure(exit));
+      if (Exit.isSuccess(exit)) return assert.fail("Expected interrupted writer");
+      assert.isTrue(Cause.hasInterruptsOnly(exit.cause));
+      assert.deepStrictEqual(yield* store.get(ref), pending);
     }),
   ),
 );
@@ -141,15 +204,15 @@ it.live.each(races)(
   ({ operation, status }) =>
     fixture(
       Effect.gen(function* () {
-        const directory = yield* HumanTaskDirectory.Service;
+        const humanTasks = yield* HumanTasks.Service;
         const store = yield* HumanTaskStore.Service;
         const sql = yield* PgClient.PgClient;
 
-        const pending = yield* directory.create(actor, organizationId, input);
+        const pending = yield* humanTasks.create(actor, organizationId, input);
         const ref = { organizationId, taskId: pending.id };
         const locked = yield* Deferred.make<number>();
         const release = yield* Deferred.make<void>();
-        // Pause at the existing store boundary after the directory's own access check.
+        // Pause at the existing store boundary after the operation's own access check.
         const pause = Effect.gen(function* () {
           yield* Deferred.succeed(locked, yield* backendPid);
           yield* Deferred.await(release);
@@ -161,13 +224,13 @@ it.live.each(races)(
         });
 
         const answer = yield* Effect.gen(function* () {
-          const directory = yield* HumanTaskDirectory.Service;
+          const humanTasks = yield* HumanTasks.Service;
           return yield* operation === "answer"
-            ? directory.respond(actor, ref, { decision: "approved" })
-            : directory.create(actor, organizationId, input);
+            ? humanTasks.respond(actor, ref, { decision: "approved" })
+            : humanTasks.create(actor, organizationId, input);
         }).pipe(
           Effect.provide(
-            HumanTaskDirectory.layer.pipe(
+            HumanTasks.layer.pipe(
               Layer.provide(Layer.merge(pausedStore, NodeCrypto.layer)),
               Layer.fresh,
             ),
@@ -194,7 +257,9 @@ it.live.each(races)(
           yield* store.get({ organizationId, taskId: completed.id }),
           completed,
         );
-        const failure = yield* Effect.flip(directory.respond(actor, ref, { decision: "rejected" }));
+        const failure = yield* Effect.flip(
+          humanTasks.respond(actor, ref, { decision: "rejected" }),
+        );
         assert.strictEqual(failure._tag, "Access.NotFound");
       }),
     ).pipe(Effect.scoped),
@@ -203,11 +268,11 @@ it.live.each(races)(
 it.live.each(races)("waits for concurrent removal and refuses $operation", ({ operation }) =>
   fixture(
     Effect.gen(function* () {
-      const directory = yield* HumanTaskDirectory.Service;
+      const humanTasks = yield* HumanTasks.Service;
       const store = yield* HumanTaskStore.Service;
       const sql = yield* PgClient.PgClient;
 
-      const pending = yield* directory.create(actor, organizationId, input);
+      const pending = yield* humanTasks.create(actor, organizationId, input);
       const ref = { organizationId, taskId: pending.id };
       const locked = yield* Deferred.make<number>();
       const release = yield* Deferred.make<void>();
@@ -223,8 +288,8 @@ it.live.each(races)("waits for concurrent removal and refuses $operation", ({ op
         .pipe(Effect.forkScoped);
       const pid = yield* Deferred.await(locked);
       const answer = yield* Effect.gen(function* () {
-        if (operation === "answer") yield* directory.respond(actor, ref, { decision: "approved" });
-        else yield* directory.create(actor, organizationId, input);
+        if (operation === "answer") yield* humanTasks.respond(actor, ref, { decision: "approved" });
+        else yield* humanTasks.create(actor, organizationId, input);
       }).pipe(Effect.flip, Effect.forkScoped);
       yield* waitForBlocker(pid);
       yield* Deferred.succeed(release, undefined);

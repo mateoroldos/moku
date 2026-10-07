@@ -1,5 +1,5 @@
 import { Access } from "@moku/core/access";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { OrganizationAccess } from "@moku/core/organization-access";
 import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
@@ -15,19 +15,16 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.organization",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
+        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
         const access = yield* OrganizationAccess.Service;
-        const member = yield* access.require(
+        const membership = yield* access.require(
           principal,
           organizationId,
-          HumanTaskDirectory.permissions.list,
+          HumanTasks.allowedRoles.list,
         );
         return {
           organizationId,
-          canRespondToHumanTasks: Access.allows(
-            HumanTaskDirectory.permissions.respond,
-            member.role,
-          ),
+          canRespondToHumanTasks: Access.allows(HumanTasks.allowedRoles.respond, membership.role),
         };
       }),
     )
@@ -35,7 +32,7 @@ export const load: LayoutServerLoad = (event) => {
       Result.getOrElse((failure) =>
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
-          "Access.Unverified": AuthGuard.reject,
+          "Access.UnverifiedEmail": AuthGuard.reject,
           "AuthProvider.Unavailable": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),

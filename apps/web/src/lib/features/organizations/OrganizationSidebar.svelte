@@ -12,6 +12,7 @@
   import CaretUpDownIcon from 'phosphor-svelte/lib/CaretUpDownIcon';
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
   import TrayIcon from 'phosphor-svelte/lib/TrayIcon';
+  import UsersIcon from 'phosphor-svelte/lib/UsersIcon';
   import CircleHalfIcon from 'phosphor-svelte/lib/CircleHalfIcon';
   import SignOutIcon from 'phosphor-svelte/lib/SignOutIcon';
   import { authClient } from '#lib/features/auth/client.ts';
@@ -27,6 +28,7 @@
   const label = $derived(current?.name ?? (organizations.length > 0 ? 'Choose organization' : 'No organization access'));
   const inbox = $derived(current ? `/org/${encodeURIComponent(current.id)}` : undefined);
   const inboxActive = $derived(inbox !== undefined && (page.url.pathname === inbox || page.url.pathname.startsWith(`${inbox}/tasks/`)));
+  const team = $derived(inbox ? `${inbox}/team` : undefined);
   let signingOut = $state(false);
   let switcherOpen = $state(false);
 
@@ -131,6 +133,17 @@
                 {/snippet}
               </Sidebar.MenuButton>
             </Sidebar.MenuItem>
+            {#if team}
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton isActive={page.url.pathname === team} tooltipContent="Team">
+                  {#snippet child({ props })}
+                    <a {...props} href={team} aria-current={page.url.pathname === team ? 'page' : undefined}>
+                      <UsersIcon weight="regular" aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">Team</span>
+                    </a>
+                  {/snippet}
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+            {/if}
           </Sidebar.Menu>
         </nav>
       {/if}

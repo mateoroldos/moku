@@ -1,5 +1,5 @@
 import { form, getRequestEvent, query } from "$app/server";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { ApprovalResult, HumanTask, HumanTaskId, TaskRef } from "@moku/domain/human-task";
 import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
@@ -15,16 +15,17 @@ export const getHumanTask = query(
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-          const directory = yield* HumanTaskDirectory.Service;
-          return yield* directory.get(principal, ref);
+          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          const humanTasks = yield* HumanTasks.Service;
+
+          return yield* humanTasks.get(principal, ref);
         }),
       )
       .then(
         Result.getOrElse((failure) =>
           Match.valueTags(failure, {
             "AuthGuard.Required": AuthGuard.reject,
-            "Access.Unverified": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This task could not be found."),
             "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
             "OrganizationMembershipStore.Unavailable": () =>
@@ -46,16 +47,17 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-        const directory = yield* HumanTaskDirectory.Service;
-        return yield* directory.list(principal, organizationId);
+        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+        const humanTasks = yield* HumanTasks.Service;
+
+        return yield* humanTasks.list(principal, organizationId);
       }),
     )
     .then(
       Result.getOrElse((failure) =>
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
-          "Access.Unverified": AuthGuard.reject,
+          "Access.UnverifiedEmail": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
           "OrganizationMembershipStore.Unavailable": () =>
@@ -83,12 +85,13 @@ export const respondToHumanTask = form(
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-          const directory = yield* HumanTaskDirectory.Service;
-          return yield* directory.respond(principal, ref, answer).pipe(
+          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          const humanTasks = yield* HumanTasks.Service;
+
+          return yield* humanTasks.respond(principal, ref, answer).pipe(
             Effect.map((task) => ({ outcome: "recorded" as const, task })),
             Effect.catchTag("HumanTaskStore.AlreadyCompleted", () =>
-              directory
+              humanTasks
                 .get(principal, ref)
                 .pipe(Effect.map((task) => ({ outcome: "already-completed" as const, task }))),
             ),
@@ -99,14 +102,12 @@ export const respondToHumanTask = form(
         Result.getOrElse((failure) =>
           Match.valueTags(failure, {
             "AuthGuard.Required": AuthGuard.reject,
-            "Access.Unverified": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This task could not be found."),
             "Access.Denied": () =>
               error(403, "Your role allows viewing tasks, but not answering them."),
             "OrganizationMembershipStore.Unavailable": () =>
               error(503, "We couldn’t verify your access. Try again."),
-            "Transaction.Unavailable": () =>
-              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
             "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>

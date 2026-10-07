@@ -8,27 +8,32 @@ and later consumers share that result. Requests that never consume identity skip
 the lookup. Better Auth also skips session storage without a valid session cookie.
 Login/signout changes are reflected on the next request.
 
-Protected entrypoints call `AuthGuard.requireVerified(locals.authenticate)`. A principal
+Protected entrypoints call `AuthGuard.requirePrincipal(locals.authenticate)`. A principal
 identifies the caller; it does not prove verification or grant task permissions.
 Layout loads can be reused during client navigation, so each protected remote needs
-its own guard. Core owns principal verification and task permissions; the web guard
-delegates verification to that policy and owns login redirects.
+its own guard and core authorization. Core operations own email verification and
+permissions; the web guard requires identity, and `AuthGuard.reject` translates
+authentication and verification failures to login redirects or HTTP errors.
 
 Neither the organization URL nor Better Auth's active organization grants access.
 Map `Access.NotFound` to 404, never 403, so outsiders cannot discover organizations
 or tasks; viewers who attempt writes get 403 (`Access.Denied`).
-Derive UI capabilities from the [task permissions](../../../packages/core/src/human-task/human-task-directory.ts)
+Derive UI capabilities from the [task role policy](../../../packages/core/src/human-task/human-tasks.ts)
 rather than maintaining a separate role policy. Membership checks and scoped task
 queries protect different boundaries; completion fallback reads need both too.
 
 Server-side organization creation bypasses Better Auth's browser creation restriction.
-Derive the creator from verified request identity, never caller-supplied input.
+`Organizations.create` derives the creator from verified request identity, never
+caller-supplied input. `OrganizationCreation.createWithOwner` atomically creates
+the organization and owner membership through the shared Better Auth instance.
 Provider transactions are independent of Effect SQL's task-write transactions.
 
-Write authorization must use uncached membership on the task write's Effect SQL
-transaction. Lock membership before task rows and keep external calls outside the
-transaction. A write that locks membership first may finish before removal or
-demotion; if the membership change commits first, the write must observe it.
+`OrganizationAccess.withWriteAccess` verifies the principal and checks allowed roles
+before running the supplied write. `OrganizationMembershipStore.withLock` owns the
+Effect SQL transaction, reading uncached membership and locking it before task rows.
+Keep task writes inside the callback and external calls outside it. A write that
+locks membership first may finish before removal or demotion; if the membership
+change commits first, the write must observe it.
 Reads check membership without holding it stable through the task lookup.
 
 The [auth route](../src/routes/api/auth/[...path]/+server.ts) restricts the exposed

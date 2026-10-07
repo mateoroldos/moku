@@ -85,9 +85,8 @@ it("checks allowed dependencies, all dependency sections, and workspace registra
 
 it("checks ESM boundaries through Oxlint, including relative and absolute paths", () => {
   const forbidden = {
-    "packages/domain/src/static.ts": 'import "@moku/core/human-task-directory";',
-    "packages/domain/src/relative.ts":
-      'import "../../core/src/human-task/human-task-directory.ts";',
+    "packages/domain/src/static.ts": 'import "@moku/core/human-tasks";',
+    "packages/domain/src/relative.ts": 'import "../../core/src/human-task/human-tasks.ts";',
     "packages/domain/src/reexport.ts": 'export * from "@moku/core";',
     "packages/domain/src/named.ts": 'export { value } from "@moku/core";',
     "packages/domain/src/type.ts": 'import type { Value } from "@moku/core";',
@@ -125,7 +124,7 @@ it("checks ESM boundaries through Oxlint, including relative and absolute paths"
       symlinkSync(path.join(repository, "node_modules"), path.join(root, "node_modules"));
       writeFileSync(
         path.join(root, "packages/domain/src/absolute.ts"),
-        `import ${JSON.stringify(path.join(root, "packages/core/src/human-task/human-task-directory.ts"))};`,
+        `import ${JSON.stringify(path.join(root, "packages/core/src/human-task/human-tasks.ts"))};`,
       );
 
       const result = run(root, oxlint, ["-c", ".oxlintrc.json", "--format", "json", "packages"]);

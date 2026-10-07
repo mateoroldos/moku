@@ -1,4 +1,4 @@
-import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
+import { Organizations } from "@moku/core/organizations";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
@@ -10,9 +10,9 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.authenticated",
       Effect.gen(function* () {
-        const viewer = yield* AuthGuard.requireVerified(event.locals.authenticate);
-        const memberships = yield* OrganizationMembershipStore.Service;
-        const organizations = yield* memberships.list(viewer.userId);
+        const viewer = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+        const service = yield* Organizations.Service;
+        const organizations = yield* service.list(viewer);
 
         return { viewer, organizations };
       }),
@@ -21,7 +21,7 @@ export const load: LayoutServerLoad = (event) => {
       Result.getOrElse((failure) =>
         Match.valueTags(failure, {
           "AuthGuard.Required": AuthGuard.reject,
-          "Access.Unverified": AuthGuard.reject,
+          "Access.UnverifiedEmail": AuthGuard.reject,
           "AuthProvider.Unavailable": AuthGuard.reject,
           "OrganizationMembershipStore.Unavailable": () =>
             error(503, "We couldn’t load your organizations. Try again."),

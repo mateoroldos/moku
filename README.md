@@ -131,7 +131,7 @@ runtime and authentication against a migrated disposable database. Library packa
 export TypeScript source; the Node build bundles internal packages into the server output.
 
 - [Domain](packages/domain/src/human-task/human-task.ts): HumanTask schemas.
-- [Core](packages/core/src/human-task/human-task-directory.ts): directory service and store port.
+- [Core](packages/core/src/human-task/human-tasks.ts): application operations and store port.
 - [PostgreSQL](adapters/database-postgres/README.md): persistence adapter and migrations.
 - [Web](apps/web/AGENTS.md) and [shared UI](packages/ui/AGENTS.md): frontend conventions.
 - [Agent instructions](AGENTS.md) and [architecture](.agents/skills/moku/references/architecture.md).

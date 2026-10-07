@@ -10,7 +10,7 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "test": "vitest run src/human-task",
+    "test": "vitest run",
     "test:postgres": "vitest run --config vitest.postgres.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun --env-file=../../.env src/migrate.ts"
