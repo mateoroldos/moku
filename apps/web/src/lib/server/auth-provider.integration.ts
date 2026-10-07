@@ -1,14 +1,20 @@
 /* oxlint-disable effecttsgo/prefer-schema-over-json -- Exercise raw provider HTTP inputs. */
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
+import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
+import { Invitations } from "@moku/core/invitations";
+import { OrganizationAccess } from "@moku/core/organization-access";
 import { OrganizationCreation } from "@moku/core/organization-creation";
+import { PersistencePostgres } from "@moku/database-postgres";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
 import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
+
+const invitationAccess = OrganizationAccess.layer.pipe(Layer.provide(PersistencePostgres.layer));
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };
@@ -343,4 +349,178 @@ it.live("rolls back organization creation when its owner cannot be stored", () =
       [],
     );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+const invitationFixture = Effect.fnUntraced(function* (delivery: Email.Interface) {
+  const { auth, creation, sql, headers } = yield* fixture("192.0.2.30", delivery);
+  const cleanup = sql`DELETE FROM organization WHERE name = 'invitation-test'`;
+  yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+  const organization = yield* creation.createWithOwner(UserId.make("authentication-test"), {
+    name: "invitation-test",
+  });
+  yield* sql`INSERT INTO "user" (id, name, email, email_verified) VALUES ('invitation-recipient', 'Recipient', ${signup.email}, true)`;
+  yield* sql`INSERT INTO account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+    SELECT 'invitation-recipient', 'invitation-recipient', 'credential', 'invitation-recipient', password, now(), now()
+    FROM account WHERE id = 'authentication-test'`;
+  const response = yield* auth.handle(
+    request(
+      "sign-in/email",
+      new Headers(),
+      JSON.stringify({ email: signup.email, password: credentials.password }),
+    ),
+    "192.0.2.31",
+  );
+  assert.strictEqual(response.status, 200);
+  const recipientHeaders = new Headers({
+    cookie: response.headers
+      .getSetCookie()
+      .map((cookie) => cookie.split(";")[0])
+      .join("; "),
+  });
+  const sender = yield* auth.invitationSession(headers);
+  const recipient = yield* auth.invitationSession(recipientHeaders);
+  assert(sender);
+  assert(recipient);
+
+  return {
+    auth,
+    sql,
+    sender,
+    recipient,
+    recipientHeaders,
+    input: {
+      organizationId: organization.id,
+      email: signup.email,
+      role: "viewer",
+      resend: false,
+    } satisfies Invitations.CreateInput,
+  };
+});
+
+it.live("delivers an invitation and grants its role only to the verified recipient", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth, sql, sender, recipient, recipientHeaders, input } = yield* invitationFixture({
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const id = yield* Invitations.create(sender, input);
+    assert.deepStrictEqual(
+      messages.map(({ to, subject }) => ({ to, subject })),
+      [{ to: signup.email, subject: "Join invitation-test on Moku" }],
+    );
+    const message = messages[0];
+    assert(message);
+    assert.include(Redacted.value(message.text), `${origin}/invitations/${id}`);
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.create(sender, input)),
+      new Invitations.Rejected({ reason: "AlreadyInvited" }),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.accept(sender, id)),
+      new Invitations.Rejected({ reason: "WrongRecipient" }),
+    );
+
+    yield* sql`UPDATE "user" SET email_verified = false WHERE id = 'invitation-recipient'`;
+    const unverified = yield* auth.invitationSession(recipientHeaders);
+    assert(unverified);
+    assert.strictEqual(
+      (yield* Effect.flip(Invitations.accept(unverified, id)))._tag,
+      "Access.UnverifiedEmail",
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(unverified.accept(id)),
+      new Invitations.Rejected({ reason: "UnverifiedEmail" }),
+    );
+    yield* sql`UPDATE "user" SET email_verified = true WHERE id = 'invitation-recipient'`;
+
+    assert.deepStrictEqual(yield* Invitations.accept(recipient, id), {
+      userId: "invitation-recipient",
+      organizationId: input.organizationId,
+      role: "viewer",
+    });
+    assert.deepStrictEqual(
+      yield* sql`SELECT role FROM member WHERE user_id = 'invitation-recipient' AND organization_id = ${input.organizationId}`,
+      [{ role: "viewer" }],
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.accept(recipient, id)),
+      new Invitations.Rejected({ reason: "InvalidInvitation" }),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.create(sender, input)),
+      new Invitations.Rejected({ reason: "AlreadyMember" }),
+    );
+    assert.strictEqual(yield* auth.invitationSession(new Headers()), null);
+    yield* sql`DELETE FROM session WHERE user_id = 'authentication-test'`;
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.create(sender, input)),
+      new Invitations.Rejected({ reason: "SessionRequired" }),
+    );
+  }).pipe(Effect.provide(invitationAccess), Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("keeps failed delivery pending and resends the same invitation", () =>
+  Effect.gen(function* () {
+    let fail = true;
+    const messages: Email.Message[] = [];
+    const { sql, sender, recipient, input } = yield* invitationFixture({
+      send: (message) =>
+        fail
+          ? Effect.fail(new Email.Unavailable({ cause: Redacted.make("delivery offline") }))
+          : Effect.sync(() => {
+              messages.push(message);
+            }),
+    });
+    const created = yield* Invitations.create(sender, input);
+    const pending =
+      yield* sql`SELECT id, status FROM invitation WHERE organization_id = ${input.organizationId}`;
+    assert.lengthOf(pending, 1);
+    assert.strictEqual(pending[0]?.id, created);
+    assert.strictEqual(pending[0]?.status, "pending");
+
+    fail = false;
+    const id = yield* Invitations.create(sender, { ...input, resend: true });
+    assert.strictEqual(id, pending[0]?.id);
+    assert.lengthOf(messages, 1);
+    yield* sql`UPDATE invitation SET expires_at = '2000-01-01' WHERE id = ${id}`;
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.accept(recipient, id)),
+      new Invitations.Rejected({ reason: "InvalidInvitation" }),
+    );
+    assert.deepStrictEqual(
+      yield* sql`SELECT role FROM member WHERE user_id = 'invitation-recipient'`,
+      [],
+    );
+  }).pipe(Effect.provide(invitationAccess), Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live(
+  "restricts invitations to verified owners and admins, with owner grants reserved for owners",
+  () =>
+    Effect.gen(function* () {
+      const { sql, sender, input } = yield* invitationFixture({ send: () => Effect.void });
+      yield* sql`UPDATE member SET role = 'admin' WHERE user_id = 'authentication-test'`;
+      assert.deepStrictEqual(
+        yield* Effect.flip(Invitations.create(sender, { ...input, role: "owner" })),
+        new Access.Denied({}),
+      );
+      const id = yield* Invitations.create(sender, input);
+      assert.deepStrictEqual(yield* sql`SELECT role, inviter_id FROM invitation WHERE id = ${id}`, [
+        { role: "viewer", inviter_id: "authentication-test" },
+      ]);
+
+      yield* sql`UPDATE member SET role = 'viewer' WHERE user_id = 'authentication-test'`;
+      assert.deepStrictEqual(
+        yield* Effect.flip(Invitations.create(sender, { ...input, resend: true })),
+        new Access.Denied({}),
+      );
+      yield* sql`DELETE FROM member WHERE user_id = 'authentication-test'`;
+      assert.deepStrictEqual(
+        yield* Effect.flip(Invitations.create(sender, input)),
+        new Access.NotFound({}),
+      );
+    }).pipe(Effect.provide(invitationAccess), Effect.scoped, Effect.provide(postgres)),
 );

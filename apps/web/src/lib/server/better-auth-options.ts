@@ -1,9 +1,15 @@
 import type { BetterAuthOptions } from "better-auth";
 import { generateId } from "@better-auth/core/utils/id";
 import { organization } from "better-auth/plugins/organization";
+import { defaultAc, defaultRoles } from "better-auth/plugins/organization/access";
 import { customAlphabet } from "nanoid";
 
-const organizations = organization({ allowUserToCreateOrganization: false });
+export const organizationOptions = {
+  allowUserToCreateOrganization: false,
+  requireEmailVerificationOnInvitation: true,
+  roles: { ...defaultRoles, viewer: defaultAc.newRole({}) },
+};
+const organizations = organization(organizationOptions);
 const organizationId = customAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 12);
 
 export const betterAuthOptions = {

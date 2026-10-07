@@ -2,12 +2,15 @@ import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { runWithTransaction } from "@better-auth/core/context";
 import { generateId } from "@better-auth/core/utils/id";
 import { Email } from "@moku/core/email";
+import { Invitations } from "@moku/core/invitations";
 import { OrganizationCreation } from "@moku/core/organization-creation";
 import { Principal, UserId } from "@moku/domain/identity";
-import { Organization } from "@moku/domain/organization";
+import { Membership, Organization } from "@moku/domain/organization";
+import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
+import { organization } from "better-auth/plugins/organization";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
-import { betterAuthOptions } from "./better-auth-options.ts";
+import { betterAuthOptions, organizationOptions } from "./better-auth-options.ts";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
@@ -31,6 +34,9 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider
 
 export interface Interface {
   readonly authenticate: (headers: Headers) => IdentityLookup<never>;
+  readonly invitationSession: (
+    headers: Headers,
+  ) => Effect.Effect<Invitations.Session | null, Unavailable>;
   readonly handle: (
     request: Request,
     clientAddress: string,
@@ -58,6 +64,20 @@ export const layer = Layer.effectContext(
 
     const auth = betterAuth({
       ...betterAuthOptions,
+      plugins: [
+        {
+          ...organization({
+            ...organizationOptions,
+            sendInvitationEmail: ({ id, email, organization: team }) =>
+              send(
+                email,
+                `Join ${team.name} on Moku`,
+                `${origin.origin}/invitations/${encodeURIComponent(id)}\n\nYou have been invited to join ${team.name}. Sign in or create an account with this email address to accept.`,
+              ),
+          }),
+          schema: betterAuthOptions.plugins[0].schema,
+        },
+      ],
       emailVerification: {
         sendOnSignUp: true,
         sendOnSignIn: false,
@@ -124,6 +144,70 @@ export const layer = Layer.effectContext(
       return response;
     }, Effect.uninterruptible);
 
+    const invitationFailure = (cause: unknown) => {
+      if (isAPIError(cause)) {
+        const reasons = new Map<string, Invitations.Rejected["reason"]>([
+          ["INVALID_EMAIL", "InvalidEmail"],
+          ["USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION", "AlreadyInvited"],
+          ["USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION", "AlreadyMember"],
+          ["INVITATION_NOT_FOUND", "InvalidInvitation"],
+          ["ORGANIZATION_NOT_FOUND", "InvalidInvitation"],
+          ["YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION", "WrongRecipient"],
+          ["MEMBER_NOT_FOUND", "Denied"],
+          ["YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION", "Denied"],
+          ["YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE", "Denied"],
+          [
+            "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION",
+            "UnverifiedEmail",
+          ],
+          ["INVITATION_LIMIT_REACHED", "LimitReached"],
+          ["ORGANIZATION_MEMBERSHIP_LIMIT_REACHED", "LimitReached"],
+        ]);
+        const reason =
+          cause.statusCode === 401 ? "SessionRequired" : reasons.get(cause.body?.code ?? "");
+        if (reason) return new Invitations.Rejected({ reason });
+      }
+
+      return new Invitations.Unavailable({ cause: Redacted.make(cause) });
+    };
+    const invitationSession = Effect.fn("AuthProvider.invitationSession")(function* (
+      requestHeaders: Headers,
+    ) {
+      const headers = new Headers(requestHeaders);
+      const principal = yield* authenticate(headers);
+      if (principal === null) return null;
+
+      return {
+        principal,
+        create: Effect.fn("InvitationsBetterAuth.create")(function* (
+          input: Invitations.CreateInput,
+        ) {
+          const result = yield* Effect.tryPromise({
+            try: () => auth.api.createInvitation({ headers, body: input }),
+            catch: invitationFailure,
+          });
+
+          const invitation = yield* Schema.decodeEffect(
+            Schema.Struct({ id: Invitations.InvitationId }),
+          )(result).pipe(Effect.mapError(invitationFailure));
+
+          return invitation.id;
+        }, Effect.uninterruptible),
+        accept: Effect.fn("InvitationsBetterAuth.accept")(function* (id: Invitations.InvitationId) {
+          const result = yield* Effect.tryPromise({
+            try: () => auth.api.acceptInvitation({ headers, body: { invitationId: id } }),
+            catch: invitationFailure,
+          });
+
+          const accepted = yield* Schema.decodeUnknownEffect(Schema.Struct({ member: Membership }))(
+            result,
+          ).pipe(Effect.mapError(invitationFailure));
+
+          return accepted.member;
+        }, Effect.uninterruptible),
+      } satisfies Invitations.Session;
+    });
+
     const creationUnavailable = (cause: unknown) =>
       new OrganizationCreation.Unavailable({ cause: Redacted.make(cause) });
     const createWithOwner = Effect.fn("OrganizationCreationBetterAuth.createWithOwner")(function* (
@@ -154,7 +238,7 @@ export const layer = Layer.effectContext(
       );
     }, Effect.uninterruptible);
 
-    return Context.make(Service, { authenticate, handle }).pipe(
+    return Context.make(Service, { authenticate, handle, invitationSession }).pipe(
       Context.add(OrganizationCreation.Service, { createWithOwner }),
     );
   }),
