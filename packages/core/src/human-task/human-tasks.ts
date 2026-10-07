@@ -7,9 +7,10 @@ import {
   type TaskRef,
 } from "@moku/domain/human-task";
 import type { Principal } from "@moku/domain/identity";
-import type { OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import type { OrganizationId } from "@moku/domain/organization";
 import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
-import { OrganizationAccess } from "../access/organization-access.ts";
+import type { Access } from "../access/access.ts";
+import { OrganizationAccess } from "../organization/organization-access.ts";
 import { Transaction } from "../transaction/transaction.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 
@@ -21,12 +22,12 @@ export const CreateInput = Schema.Struct({
 });
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 
-export const permissions = {
+export const allowedRoles = {
   get: ["owner", "admin", "member", "viewer"],
   list: ["owner", "admin", "member", "viewer"],
   create: ["owner", "admin", "member"],
   respond: ["owner", "admin", "member"],
-} as const satisfies Record<"get" | "list" | "create" | "respond", ReadonlyArray<OrganizationRole>>;
+} as const satisfies Record<"get" | "list" | "create" | "respond", Access.AllowedRoles>;
 
 export interface Interface {
   readonly create: (
@@ -68,12 +69,10 @@ export interface Interface {
   >;
 }
 
-export class Service extends Context.Service<Service, Interface>()(
-  "@moku/core/HumanTaskDirectory",
-) {}
+export class Service extends Context.Service<Service, Interface>()("@moku/core/HumanTasks") {}
 
 export class IdGenerationError extends Schema.TaggedError<IdGenerationError>()(
-  "HumanTaskDirectory.IdGenerationError",
+  "HumanTasks.IdGenerationError",
   { cause: Schema.Defect() },
 ) {}
 
@@ -85,14 +84,15 @@ export const layer = Layer.effect(
     const transaction = yield* Transaction.Service;
     const crypto = yield* Crypto.Crypto;
 
-    const create = Effect.fn("HumanTaskDirectory.create")(function* (
+    const create = Effect.fn("HumanTasks.create")(function* (
       principal: Principal,
       organizationId: OrganizationId,
       { subject, ...input }: CreateInput,
     ) {
       return yield* transaction.run(
         Effect.gen(function* () {
-          yield* access.requireForWrite(principal, organizationId, permissions.create);
+          yield* access.requireForWrite(principal, organizationId, allowedRoles.create);
+
           const id = yield* crypto.randomUUIDv4.pipe(
             Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
             Effect.mapError((cause) => new IdGenerationError({ cause })),
@@ -112,37 +112,41 @@ export const layer = Layer.effect(
       );
     });
 
-    const respond = Effect.fn("HumanTaskDirectory.respond")(function* (
+    const respond = Effect.fn("HumanTasks.respond")(function* (
       principal: Principal,
       ref: TaskRef,
       result: ApprovalResult,
     ) {
       return yield* transaction.run(
         Effect.gen(function* () {
-          const member = yield* access.requireForWrite(
+          const membership = yield* access.requireForWrite(
             principal,
             ref.organizationId,
-            permissions.respond,
+            allowedRoles.respond,
           );
+
           const completedAt = yield* DateTime.now;
+
           return yield* store.complete(ref, result, completedAt, {
-            userId: member.userId,
-            role: member.role,
+            userId: membership.userId,
+            role: membership.role,
           });
         }),
       );
     });
 
-    const get = Effect.fn("HumanTaskDirectory.get")(function* (principal: Principal, ref: TaskRef) {
-      yield* access.require(principal, ref.organizationId, permissions.get);
+    const get = Effect.fn("HumanTasks.get")(function* (principal: Principal, ref: TaskRef) {
+      yield* access.require(principal, ref.organizationId, allowedRoles.get);
+
       return yield* store.get(ref);
     });
 
-    const list = Effect.fn("HumanTaskDirectory.list")(function* (
+    const list = Effect.fn("HumanTasks.list")(function* (
       principal: Principal,
       organizationId: OrganizationId,
     ) {
-      yield* access.require(principal, organizationId, permissions.list);
+      yield* access.require(principal, organizationId, allowedRoles.list);
+
       return yield* store.list(organizationId);
     });
 
@@ -150,4 +154,4 @@ export const layer = Layer.effect(
   }),
 ).pipe(Layer.provide(OrganizationAccess.layer));
 
-export * as HumanTaskDirectory from "./human-task-directory.ts";
+export * as HumanTasks from "./human-tasks.ts";

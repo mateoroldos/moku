@@ -11,19 +11,19 @@ it.effect.each([
   {
     name: "unverified",
     auth: Effect.succeed({ userId: UserId.make("alice"), emailVerified: false }),
-    tag: "Access.Unverified",
+    tag: "Access.UnverifiedEmail",
   },
   { name: "unavailable", auth: Effect.fail(unavailable), tag: "AuthProvider.Unavailable" },
 ])("rejects $name identity without treating outages as signout", ({ auth, tag }) =>
   Effect.gen(function* () {
-    const failure = yield* Effect.flip(AuthGuard.requireVerified(auth));
+    const failure = yield* Effect.flip(AuthGuard.requireVerifiedEmail(auth));
     assert.strictEqual(failure._tag, tag);
   }),
 );
 
 it.effect("allows a verified principal", () =>
   Effect.gen(function* () {
-    const principal = yield* AuthGuard.requireVerified(
+    const principal = yield* AuthGuard.requireVerifiedEmail(
       Effect.succeed({ userId: UserId.make("alice"), emailVerified: true }),
     );
     assert.deepStrictEqual(principal, { userId: "alice", emailVerified: true });

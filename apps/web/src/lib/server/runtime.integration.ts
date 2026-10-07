@@ -1,6 +1,6 @@
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { UserId } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
 import { Config, Effect, Layer, Schedule, Schema } from "effect";
@@ -39,7 +39,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
       (runtime) => Effect.promise(() => runtime.dispose()),
     );
 
-    const input = yield* Schema.decodeEffect(HumanTaskDirectory.CreateInput)({
+    const input = yield* Schema.decodeEffect(HumanTasks.CreateInput)({
       intent: "authorize",
       subject: { title: "Runtime persistence verification" },
       response: { type: "approval" },
@@ -50,8 +50,8 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
         const runtime = yield* acquire;
         return yield* Effect.promise(() =>
           runtime.runPromise(
-            HumanTaskDirectory.Service.use((directory) =>
-              directory.create(principal, organizationId, input),
+            HumanTasks.Service.use((humanTasks) =>
+              humanTasks.create(principal, organizationId, input),
             ),
           ),
         );
@@ -67,12 +67,12 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
           return yield* Effect.promise(() =>
             runtime.runPromise(
               Effect.gen(function* () {
-                const directory = yield* HumanTaskDirectory.Service;
+                const humanTasks = yield* HumanTasks.Service;
                 assert.deepStrictEqual(
-                  yield* directory.get(principal, { organizationId, taskId: pending.id }),
+                  yield* humanTasks.get(principal, { organizationId, taskId: pending.id }),
                   pending,
                 );
-                return yield* directory.respond(
+                return yield* humanTasks.respond(
                   principal,
                   { organizationId, taskId: pending.id },
                   {
@@ -91,8 +91,8 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
           const runtime = yield* acquire;
           const saved = yield* Effect.promise(() =>
             runtime.runPromise(
-              HumanTaskDirectory.Service.use((directory) =>
-                directory.get(principal, { organizationId, taskId: pending.id }),
+              HumanTasks.Service.use((humanTasks) =>
+                humanTasks.get(principal, { organizationId, taskId: pending.id }),
               ),
             ),
           );

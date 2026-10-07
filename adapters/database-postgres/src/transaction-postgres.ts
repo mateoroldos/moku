@@ -10,7 +10,7 @@ export const layer = Layer.effect(
     return Transaction.Service.of({
       run: (effect) =>
         sql
-          .withTransaction(effect)
+          .withTransaction(effect.pipe(Effect.provideService(Transaction.Active, {})))
           .pipe(
             Effect.mapError((cause) =>
               SqlError.isSqlError(cause) ? new Transaction.Unavailable({ cause }) : cause,

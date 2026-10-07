@@ -2,6 +2,7 @@
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
 import { Email } from "@moku/core/email";
+import { OrganizationCreation } from "@moku/core/organization-creation";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
@@ -41,7 +42,12 @@ const fixture = Effect.fnUntraced(function* (
         unavailable ? Promise.reject(new Error("private storage failure")) : adapter.findOne(input),
     };
   });
-  const auth = yield* AuthProvider.Service.pipe(
+  const { auth, creation } = yield* Effect.gen(function* () {
+    const auth = yield* AuthProvider.Service;
+    const creation = yield* OrganizationCreation.Service;
+
+    return { auth, creation };
+  }).pipe(
     Effect.provide(
       AuthProvider.layer.pipe(
         Layer.provide(database),
@@ -75,6 +81,7 @@ const fixture = Effect.fnUntraced(function* (
   });
   return {
     auth,
+    creation,
     sql,
     headers,
     setUnavailable: (value: boolean) => {
@@ -267,14 +274,13 @@ it.live("uses the supplied transport address instead of caller IP headers for th
 
 it.live("creates a short-ID organization with the caller as its owner", () =>
   Effect.gen(function* () {
-    const { auth, sql } = yield* fixture("192.0.2.7");
+    const { creation, sql } = yield* fixture("192.0.2.7");
     const cleanup = sql`DELETE FROM organization WHERE name = 'auth-creation-test'`;
     yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
 
-    const organization = yield* auth.createOrganization(
-      UserId.make("authentication-test"),
-      "auth-creation-test",
-    );
+    const organization = yield* creation.createWithOwner(UserId.make("authentication-test"), {
+      name: "auth-creation-test",
+    });
 
     assert.match(organization.id, /^[0-9A-HJKMNP-TV-Z]{12}$/);
     assert.deepStrictEqual(
@@ -300,7 +306,7 @@ it.live("creates a short-ID organization with the caller as its owner", () =>
 
 it.live("rolls back organization creation when its owner cannot be stored", () =>
   Effect.gen(function* () {
-    const { auth, sql } = yield* fixture("192.0.2.8");
+    const { creation, sql } = yield* fixture("192.0.2.8");
     const cleanup = sql`DELETE FROM organization WHERE name = 'auth-rollback-test'`;
     yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
     yield* Effect.acquireRelease(
@@ -320,7 +326,7 @@ it.live("rolls back organization creation when its owner cannot be stored", () =
     );
 
     const failure = yield* Effect.flip(
-      auth.createOrganization(UserId.make("authentication-test"), "auth-rollback-test"),
+      creation.createWithOwner(UserId.make("authentication-test"), { name: "auth-rollback-test" }),
     );
 
     assert.nestedPropertyVal(

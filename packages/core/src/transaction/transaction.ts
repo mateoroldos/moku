@@ -5,8 +5,13 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Transaction.
 }) {}
 
 export interface Interface {
-  readonly run: <A, E, R>(effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E | Unavailable, R>;
+  readonly run: <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | Unavailable, Exclude<R, Active>>;
 }
+
+/** Available only within the transaction adapter's run boundary. */
+export class Active extends Context.Service<Active, {}>()("@moku/core/Transaction.Active") {}
 
 export class Service extends Context.Service<Service, Interface>()("@moku/core/Transaction") {}
 

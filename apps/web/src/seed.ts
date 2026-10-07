@@ -1,6 +1,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
@@ -106,7 +106,7 @@ const provisionAccount = Effect.fn("provisionAccount")(function* () {
 const examples = Schema.decodeSync(
   Schema.Array(
     Schema.Struct({
-      request: HumanTaskDirectory.CreateInput,
+      request: HumanTasks.CreateInput,
       result: Schema.optionalKey(ApprovalResult),
     }),
   ),
@@ -177,14 +177,14 @@ NodeRuntime.runMain(
 
     if (baseUrl === undefined) return;
 
-    const directory = yield* HumanTaskDirectory.Service;
+    const humanTasks = yield* HumanTasks.Service;
 
     for (const { request, result } of examples) {
-      const pending = yield* directory.create(principal, organizationId, request);
+      const pending = yield* humanTasks.create(principal, organizationId, request);
       const task =
         result === undefined
           ? pending
-          : yield* directory.respond(principal, { organizationId, taskId: pending.id }, result);
+          : yield* humanTasks.respond(principal, { organizationId, taskId: pending.id }, result);
 
       yield* Console.log(
         `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(organizationId)}/tasks/${task.id}`, baseUrl).href}`,
@@ -197,7 +197,7 @@ NodeRuntime.runMain(
       Layer.unwrap(
         Config.redacted("DATABASE_URL").pipe(
           Effect.map((url) =>
-            HumanTaskDirectory.layer.pipe(
+            HumanTasks.layer.pipe(
               Layer.provide(PersistencePostgres.layer),
               Layer.provide(NodeCrypto.layer),
               Layer.provideMerge(

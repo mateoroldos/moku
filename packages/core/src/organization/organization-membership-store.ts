@@ -1,13 +1,14 @@
 import { UserId } from "@moku/domain/identity";
 import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { Context, Effect, Option, Schema } from "effect";
+import type { Transaction } from "../transaction/transaction.ts";
 
-export const Member = Schema.Struct({
+export const Membership = Schema.Struct({
   userId: UserId,
   organizationId: OrganizationId,
   role: OrganizationRole,
 });
-export interface Member extends Schema.Schema.Type<typeof Member> {}
+export interface Membership extends Schema.Schema.Type<typeof Membership> {}
 
 export const MemberSummary = Schema.Struct({
   userId: UserId,
@@ -28,13 +29,15 @@ export interface Interface {
   readonly find: (
     userId: UserId,
     organizationId: OrganizationId,
-  ) => Effect.Effect<Option.Option<Member>, Unavailable>;
+  ) => Effect.Effect<Option.Option<Membership>, Unavailable>;
   /** Requires Transaction.run; hold membership stable until the write commits. */
   readonly findForWrite: (
     userId: UserId,
     organizationId: OrganizationId,
-  ) => Effect.Effect<Option.Option<Member>, Unavailable>;
-  readonly list: (userId: UserId) => Effect.Effect<ReadonlyArray<Organization>, Unavailable>;
+  ) => Effect.Effect<Option.Option<Membership>, Unavailable, Transaction.Active>;
+  readonly listOrganizationsForUser: (
+    userId: UserId,
+  ) => Effect.Effect<ReadonlyArray<Organization>, Unavailable>;
   readonly listMembers: (
     organizationId: OrganizationId,
   ) => Effect.Effect<ReadonlyArray<MemberSummary>, Unavailable>;

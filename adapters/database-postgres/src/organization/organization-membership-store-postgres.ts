@@ -1,4 +1,5 @@
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
+import { Transaction } from "@moku/core/transaction";
 import type { UserId } from "@moku/domain/identity";
 import { Organization, type OrganizationId } from "@moku/domain/organization";
 import { and, asc, eq } from "drizzle-orm";
@@ -26,7 +27,9 @@ export const layer = Layer.effect(
       const row = rows[0];
       return row === undefined
         ? Option.none()
-        : Option.some(yield* Schema.decodeUnknownEffect(OrganizationMembershipStore.Member)(row));
+        : Option.some(
+            yield* Schema.decodeUnknownEffect(OrganizationMembershipStore.Membership)(row),
+          );
     });
     const unavailable = (cause: unknown) => new OrganizationMembershipStore.Unavailable({ cause });
 
@@ -39,6 +42,8 @@ export const layer = Layer.effect(
       userId: UserId,
       organizationId: OrganizationId,
     ) {
+      yield* Transaction.Active;
+
       if (Option.isNone(yield* Effect.serviceOption(sql.transactionService))) {
         return yield* Effect.die(
           new Error("OrganizationMembershipStore.findForWrite requires Transaction.run"),
@@ -49,7 +54,9 @@ export const layer = Layer.effect(
         .pipe(Effect.flatMap(decode), Effect.mapError(unavailable));
     });
 
-    const list = Effect.fn("OrganizationMembershipStorePostgres.list")((userId: UserId) =>
+    const listOrganizationsForUser = Effect.fn(
+      "OrganizationMembershipStorePostgres.listOrganizationsForUser",
+    )((userId: UserId) =>
       database
         .select({ id: organization.id, name: organization.name })
         .from(organization)
@@ -78,7 +85,12 @@ export const layer = Layer.effect(
           ),
     );
 
-    return OrganizationMembershipStore.Service.of({ find, findForWrite, list, listMembers });
+    return OrganizationMembershipStore.Service.of({
+      find,
+      findForWrite,
+      listOrganizationsForUser,
+      listMembers,
+    });
   }),
 );
 

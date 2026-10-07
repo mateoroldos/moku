@@ -1,7 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { HumanTaskStore } from "@moku/core/human-task-store";
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import { Transaction } from "@moku/core/transaction";
@@ -21,7 +21,7 @@ const postgres = Layer.unwrap(
     ),
   ),
 );
-const application = HumanTaskDirectory.layer.pipe(
+const application = HumanTasks.layer.pipe(
   Layer.provideMerge(PersistencePostgres.layer),
   Layer.provide(NodeCrypto.layer),
   Layer.provideMerge(postgres),
@@ -29,7 +29,7 @@ const application = HumanTaskDirectory.layer.pipe(
 
 const actor = { userId: UserId.make("tenant-user"), emailVerified: true };
 const organizationId = OrganizationId.make("tenant-org");
-const input = HumanTaskDirectory.CreateInput.make({
+const input = HumanTasks.CreateInput.make({
   intent: "authorize",
   subject: { title: HumanTaskTitle.make("Tenant review") },
   response: { type: "approval" },
@@ -81,20 +81,20 @@ const waitForBlocker = (pid: number) =>
 it.live("rolls back completion and attribution across the production core ports", () =>
   fixture(
     Effect.gen(function* () {
-      const directory = yield* HumanTaskDirectory.Service;
+      const humanTasks = yield* HumanTasks.Service;
       const transaction = yield* Transaction.Service;
-      const pending = yield* directory.create(actor, organizationId, input);
+      const pending = yield* humanTasks.create(actor, organizationId, input);
       const ref = { organizationId, taskId: pending.id };
       const failure = yield* Effect.flip(
         transaction.run(
           Effect.gen(function* () {
-            yield* directory.respond(actor, ref, { decision: "approved" });
+            yield* humanTasks.respond(actor, ref, { decision: "approved" });
             return yield* Effect.fail("rollback");
           }),
         ),
       );
       assert.strictEqual(failure, "rollback");
-      assert.deepStrictEqual(yield* directory.get(actor, ref), pending);
+      assert.deepStrictEqual(yield* humanTasks.get(actor, ref), pending);
     }),
   ),
 );
@@ -119,7 +119,10 @@ it.live("refuses a locked membership lookup without an active transaction", () =
   fixture(
     Effect.gen(function* () {
       const memberships = yield* OrganizationMembershipStore.Service;
-      const exit = yield* Effect.exit(memberships.findForWrite(actor.userId, organizationId));
+      // Even a miswired core capability must not bypass the SQL transaction guard.
+      const exit = yield* Effect.exit(memberships.findForWrite(actor.userId, organizationId)).pipe(
+        Effect.provideService(Transaction.Active, {}),
+      );
       assert.isTrue(Exit.isFailure(exit));
       if (Exit.isSuccess(exit)) return assert.fail("Expected transaction prerequisite defect");
       assert.deepStrictEqual(
@@ -141,15 +144,15 @@ it.live.each(races)(
   ({ operation, status }) =>
     fixture(
       Effect.gen(function* () {
-        const directory = yield* HumanTaskDirectory.Service;
+        const humanTasks = yield* HumanTasks.Service;
         const store = yield* HumanTaskStore.Service;
         const sql = yield* PgClient.PgClient;
 
-        const pending = yield* directory.create(actor, organizationId, input);
+        const pending = yield* humanTasks.create(actor, organizationId, input);
         const ref = { organizationId, taskId: pending.id };
         const locked = yield* Deferred.make<number>();
         const release = yield* Deferred.make<void>();
-        // Pause at the existing store boundary after the directory's own access check.
+        // Pause at the existing store boundary after the operation's own access check.
         const pause = Effect.gen(function* () {
           yield* Deferred.succeed(locked, yield* backendPid);
           yield* Deferred.await(release);
@@ -161,13 +164,13 @@ it.live.each(races)(
         });
 
         const answer = yield* Effect.gen(function* () {
-          const directory = yield* HumanTaskDirectory.Service;
+          const humanTasks = yield* HumanTasks.Service;
           return yield* operation === "answer"
-            ? directory.respond(actor, ref, { decision: "approved" })
-            : directory.create(actor, organizationId, input);
+            ? humanTasks.respond(actor, ref, { decision: "approved" })
+            : humanTasks.create(actor, organizationId, input);
         }).pipe(
           Effect.provide(
-            HumanTaskDirectory.layer.pipe(
+            HumanTasks.layer.pipe(
               Layer.provide(Layer.merge(pausedStore, NodeCrypto.layer)),
               Layer.fresh,
             ),
@@ -194,7 +197,9 @@ it.live.each(races)(
           yield* store.get({ organizationId, taskId: completed.id }),
           completed,
         );
-        const failure = yield* Effect.flip(directory.respond(actor, ref, { decision: "rejected" }));
+        const failure = yield* Effect.flip(
+          humanTasks.respond(actor, ref, { decision: "rejected" }),
+        );
         assert.strictEqual(failure._tag, "Access.NotFound");
       }),
     ).pipe(Effect.scoped),
@@ -203,11 +208,11 @@ it.live.each(races)(
 it.live.each(races)("waits for concurrent removal and refuses $operation", ({ operation }) =>
   fixture(
     Effect.gen(function* () {
-      const directory = yield* HumanTaskDirectory.Service;
+      const humanTasks = yield* HumanTasks.Service;
       const store = yield* HumanTaskStore.Service;
       const sql = yield* PgClient.PgClient;
 
-      const pending = yield* directory.create(actor, organizationId, input);
+      const pending = yield* humanTasks.create(actor, organizationId, input);
       const ref = { organizationId, taskId: pending.id };
       const locked = yield* Deferred.make<number>();
       const release = yield* Deferred.make<void>();
@@ -223,8 +228,8 @@ it.live.each(races)("waits for concurrent removal and refuses $operation", ({ op
         .pipe(Effect.forkScoped);
       const pid = yield* Deferred.await(locked);
       const answer = yield* Effect.gen(function* () {
-        if (operation === "answer") yield* directory.respond(actor, ref, { decision: "approved" });
-        else yield* directory.create(actor, organizationId, input);
+        if (operation === "answer") yield* humanTasks.respond(actor, ref, { decision: "approved" });
+        else yield* humanTasks.create(actor, organizationId, input);
       }).pipe(Effect.flip, Effect.forkScoped);
       yield* waitForBlocker(pid);
       yield* Deferred.succeed(release, undefined);

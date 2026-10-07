@@ -1,7 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
-import { HumanTaskDirectory } from "@moku/core/human-task-directory";
+import { HumanTasks } from "@moku/core/human-tasks";
 import { OrganizationAccess } from "@moku/core/organization-access";
-import { OrganizationDirectory } from "@moku/core/organization-directory";
+import { Organizations } from "@moku/core/organizations";
 import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { EmailCloudflare } from "@moku/email-cloudflare";
@@ -39,21 +39,20 @@ const postgres = (url: Redacted.Redacted) =>
   });
 
 const application = Layer.mergeAll(
-  HumanTaskDirectory.layer,
-  OrganizationDirectory.layer,
+  HumanTasks.layer,
+  Organizations.layer,
   OrganizationAccess.layer,
-).pipe(Layer.provideMerge(PersistencePostgres.layer), Layer.provide(NodeCrypto.layer));
+).pipe(Layer.provide(PersistencePostgres.layer), Layer.provide(NodeCrypto.layer));
 
-export const layer = (url: Redacted.Redacted) => application.pipe(Layer.provide(postgres(url)));
+export const layer = (url: Redacted.Redacted) =>
+  application.pipe(
+    Layer.provideMerge(AuthProvider.layer),
+    Layer.provide(email),
+    Layer.provide(postgres(url)),
+  );
 
 export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
-  ManagedRuntime.make(
-    Layer.merge(application, AuthProvider.layer).pipe(
-      Layer.provide(email),
-      Layer.provide(postgres(url)),
-      Layer.provideMerge(Observability.layer(settings)),
-    ),
-  );
+  ManagedRuntime.make(layer(url).pipe(Layer.provideMerge(Observability.layer(settings))));
 
 export type Runtime = ReturnType<typeof make>;
 export type Run = ReturnType<

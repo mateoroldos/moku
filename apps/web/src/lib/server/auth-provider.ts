@@ -2,6 +2,7 @@ import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { runWithTransaction } from "@better-auth/core/context";
 import { generateId } from "@better-auth/core/utils/id";
 import { Email } from "@moku/core/email";
+import { OrganizationCreation } from "@moku/core/organization-creation";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
@@ -30,10 +31,6 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider
 
 export interface Interface {
   readonly authenticate: (headers: Headers) => IdentityLookup<never>;
-  readonly createOrganization: (
-    userId: UserId,
-    name: string,
-  ) => Effect.Effect<Organization, Unavailable>;
   readonly handle: (
     request: Request,
     clientAddress: string,
@@ -44,8 +41,7 @@ export class Service extends Context.Service<Service, Interface>()("@moku/web/Au
 
 export type IdentityLookup<R> = Effect.Effect<Principal | null, Unavailable, R>;
 
-export const layer = Layer.effect(
-  Service,
+export const layer = Layer.effectContext(
   Effect.gen(function* () {
     const database = yield* AuthStorage.Service;
     const origin = yield* Config.schema(Origin, "ORIGIN");
@@ -128,9 +124,11 @@ export const layer = Layer.effect(
       return response;
     }, Effect.uninterruptible);
 
-    const createOrganization = Effect.fn("AuthProvider.createOrganization")(function* (
-      userId: UserId,
-      name: string,
+    const creationUnavailable = (cause: unknown) =>
+      new OrganizationCreation.Unavailable({ cause: Redacted.make(cause) });
+    const createWithOwner = Effect.fn("OrganizationCreationBetterAuth.createWithOwner")(function* (
+      ownerUserId: UserId,
+      { name }: OrganizationCreation.Input,
     ) {
       const result: unknown = yield* Effect.tryPromise({
         // Flatten Better Auth's declared Promise<Promise<...>> at the Promise boundary.
@@ -139,19 +137,26 @@ export const layer = Layer.effect(
             // A plain adapter transaction does not enlist nested provider writes.
             runWithTransaction(context.adapter, () =>
               auth.api.createOrganization({
-                body: { userId, name, slug: generateId(), keepCurrentActiveOrganization: true },
+                body: {
+                  userId: ownerUserId,
+                  name,
+                  slug: generateId(),
+                  keepCurrentActiveOrganization: true,
+                },
               }),
             ),
           ),
-        catch: unavailable,
+        catch: creationUnavailable,
       });
 
       return yield* Schema.decodeUnknownEffect(Organization)(result).pipe(
-        Effect.mapError(unavailable),
+        Effect.mapError(creationUnavailable),
       );
     }, Effect.uninterruptible);
 
-    return Service.of({ authenticate, handle, createOrganization });
+    return Context.make(Service, { authenticate, handle }).pipe(
+      Context.add(OrganizationCreation.Service, { createWithOwner }),
+    );
   }),
 );
 

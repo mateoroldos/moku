@@ -13,10 +13,11 @@ The installed Effect guide owns API mechanics. These are repository choices.
 
 Use `Context.Service` and `Layer`. Keep cohesive files together and use local role
 names such as `Interface`, `Service`, and `layer`. Export one self-named module
-namespace so callers can see the owner: `HumanTaskDirectory.Service`, for example.
+namespace so callers can see the owner: `HumanTasks.Service`, for example.
 
 Acquire stable dependencies while building the service. Keep method requirements
-empty unless a dependency truly varies per operation. Name effectful operations
+empty unless a dependency truly varies per operation, such as `Transaction.Active`
+for locked membership reads. Name effectful operations
 with `Effect.fn`; add useful span attributes without logging private data.
 
 Define the smallest domain-shaped port the workflow needs. A port exposes neither
@@ -37,5 +38,5 @@ Keep dependencies open when callers must choose them. Reuse Layer values for
 memoization and use scoped resources for cleanup. A production-ready Layer may
 close dependencies only when its package owns every nested implementation.
 
-See [HumanTaskDirectory](../../../../packages/core/src/human-task/human-task-directory.ts)
+See [HumanTasks](../../../../packages/core/src/human-task/human-tasks.ts)
 for the service pattern.
