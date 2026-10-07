@@ -1,7 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
-import { OrganizationId, type OrganizationRole } from "@moku/domain/organization";
+import { Membership, OrganizationId, type OrganizationRole } from "@moku/domain/organization";
 import { DateTime, Effect, Layer, Option, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
 import { OrganizationMembershipStore } from "../organization/organization-membership-store.ts";
@@ -27,9 +27,7 @@ const pending = PendingHumanTask.make({
   createdAt: DateTime.makeUnsafe(0),
 });
 const membership = (role: OrganizationRole) =>
-  Option.some(
-    OrganizationMembershipStore.Membership.make({ userId: principal.userId, organizationId, role }),
-  );
+  Option.some(Membership.make({ userId: principal.userId, organizationId, role }));
 const unavailable = new OrganizationMembershipStore.Unavailable({ cause: "offline" });
 
 // Policy tests deliberately do not simulate database transactions; PostgreSQL owns that proof.

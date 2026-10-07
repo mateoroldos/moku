@@ -13,6 +13,10 @@ Domain and core stay independent of frameworks, SQL, and provider SDKs.
 Core owns domain-shaped ports and their expected failures. Adapters translate
 technology into those contracts; entrypoints choose implementations.
 
+Domain owns relationships such as `Membership`, independently of the store that
+loads them. Operation-specific read projections such as `MemberSummary` stay in
+core beside their ports. Using Schema does not determine which layer owns a value.
+
 Core application operations own their permission checks and the reads or writes
 they authorize. Web resolves request identity and translates operation results
 to HTTP; it must not assemble an operation's authorization and persistence sequence.

@@ -1,13 +1,11 @@
 import { UserId } from "@moku/domain/identity";
-import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import {
+  type Membership,
+  Organization,
+  OrganizationId,
+  OrganizationRole,
+} from "@moku/domain/organization";
 import { Context, Effect, Option, Schema } from "effect";
-
-export const Membership = Schema.Struct({
-  userId: UserId,
-  organizationId: OrganizationId,
-  role: OrganizationRole,
-});
-export interface Membership extends Schema.Schema.Type<typeof Membership> {}
 
 export const MemberSummary = Schema.Struct({
   userId: UserId,

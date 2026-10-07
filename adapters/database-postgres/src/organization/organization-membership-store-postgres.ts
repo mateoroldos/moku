@@ -1,6 +1,6 @@
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import type { UserId } from "@moku/domain/identity";
-import { Organization, type OrganizationId } from "@moku/domain/organization";
+import { Membership, Organization, type OrganizationId } from "@moku/domain/organization";
 import { and, asc, eq } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 import { SqlClient, SqlError } from "effect/unstable/sql";
@@ -26,9 +26,7 @@ export const layer = Layer.effect(
       const row = rows[0];
       return row === undefined
         ? Option.none()
-        : Option.some(
-            yield* Schema.decodeUnknownEffect(OrganizationMembershipStore.Membership)(row),
-          );
+        : Option.some(yield* Schema.decodeUnknownEffect(Membership)(row));
     });
     const unavailable = (cause: unknown) => new OrganizationMembershipStore.Unavailable({ cause });
 
@@ -40,9 +38,7 @@ export const layer = Layer.effect(
     const withLock = Effect.fn("OrganizationMembershipStorePostgres.withLock")(function* <A, E, R>(
       userId: UserId,
       organizationId: OrganizationId,
-      use: (
-        membership: Option.Option<OrganizationMembershipStore.Membership>,
-      ) => Effect.Effect<A, E, R>,
+      use: (membership: Option.Option<Membership>) => Effect.Effect<A, E, R>,
     ) {
       return yield* sql
         .withTransaction(
