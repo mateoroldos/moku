@@ -18,9 +18,15 @@ const email = Layer.unwrap(
       "EMAIL_DELIVERY",
     ).pipe(Config.withDefault("cloudflare"));
 
-    return delivery === "console"
-      ? EmailConsole.layer
-      : EmailCloudflare.layer.pipe(Layer.provide(FetchHttpClient.layer));
+    if (delivery === "console") return EmailConsole.layer;
+
+    const accountId = yield* Config.schema(Schema.NonEmptyString, "CLOUDFLARE_ACCOUNT_ID");
+    const token = yield* Config.redacted("CLOUDFLARE_API_TOKEN");
+    const from = yield* Config.schema(Schema.NonEmptyString, "EMAIL_FROM");
+
+    return EmailCloudflare.layer({ accountId, token, from }).pipe(
+      Layer.provide(FetchHttpClient.layer),
+    );
   }),
 );
 

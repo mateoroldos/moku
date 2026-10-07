@@ -1,13 +1,13 @@
 /* oxlint-disable effecttsgo/prefer-schema-over-json -- Exercise raw provider HTTP inputs. */
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
+import { Email } from "@moku/core/email";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
 import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
-import { Email } from "@moku/core/email";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };

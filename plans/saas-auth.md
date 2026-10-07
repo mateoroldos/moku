@@ -40,7 +40,7 @@ Use Better Auth's standard email links to avoid retaining signup credentials or 
 
 Use Show/Hide instead of a repeat-password field to reduce typing. Email verification signs the user in where they open the link; password recovery requires explicit sign-in afterward.
 
-Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 replaces [pre-release console delivery](../README.md#develop) with Cloudflare.
+Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 makes Cloudflare the default; [console delivery](../README.md#develop) remains an explicit local-development choice.
 
 Sources: [Better Auth email and password](https://www.better-auth.com/docs/authentication/email-password) and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
 
@@ -59,9 +59,11 @@ apps/web/src/lib/server/runtime.ts
   Email Layer selection and configuration
 ```
 
-The adapter depends on core, never web. Provider credentials and response types stay inside the adapter. Register `@moku/email-cloudflare` and its allowed dependencies in `tools/architecture/workspaces.ts`, add the web dependency, and update the architecture table with the implementation.
+The adapter depends on core, never web. Following `adapters/database-postgres/src/postgres-connection.ts`, web parses environment configuration and passes typed options to `EmailCloudflare.layer({ accountId, token, from })`. The adapter owns credential use and provider response types. Workspace dependencies belong in `tools/architecture/workspaces.ts` and the architecture table.
 
 Use [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Preserve synchronous delivery and explicit resend.
+
+Keep safe failure categories and HTTP status in adapter diagnostics, not the core error contract. Retain redacted causes and suppress the HTTP client's raw failure span; the email-operation span remains. Use a bare sender email address, the documented REST string form.
 
 Cloudflare REST documentation and installed Effect 4.0.0-rc.112 APIs establish the implementation contract. Confirm the Cloudflare sender, account access, Node host, and trusted proxy during deployment verification.
 

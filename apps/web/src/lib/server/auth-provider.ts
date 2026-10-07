@@ -1,12 +1,12 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { runWithTransaction } from "@better-auth/core/context";
 import { generateId } from "@better-auth/core/utils/id";
+import { Email } from "@moku/core/email";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
-import { Email } from "@moku/core/email";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
