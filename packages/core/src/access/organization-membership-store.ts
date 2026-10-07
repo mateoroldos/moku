@@ -9,6 +9,14 @@ export const Member = Schema.Struct({
 });
 export interface Member extends Schema.Schema.Type<typeof Member> {}
 
+export const MemberSummary = Schema.Struct({
+  userId: UserId,
+  name: Schema.String,
+  email: Schema.String,
+  role: OrganizationRole,
+});
+export interface MemberSummary extends Schema.Schema.Type<typeof MemberSummary> {}
+
 export class Unavailable extends Schema.TaggedError<Unavailable>()(
   "OrganizationMembershipStore.Unavailable",
   {
@@ -27,6 +35,9 @@ export interface Interface {
     organizationId: OrganizationId,
   ) => Effect.Effect<Option.Option<Member>, Unavailable>;
   readonly list: (userId: UserId) => Effect.Effect<ReadonlyArray<Organization>, Unavailable>;
+  readonly listMembers: (
+    organizationId: OrganizationId,
+  ) => Effect.Effect<ReadonlyArray<MemberSummary>, Unavailable>;
 }
 
 export class Service extends Context.Service<Service, Interface>()(

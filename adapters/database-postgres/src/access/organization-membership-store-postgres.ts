@@ -4,7 +4,7 @@ import { Organization, type OrganizationId } from "@moku/domain/organization";
 import { and, asc, eq } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql";
-import { member, organization } from "../auth/schema.ts";
+import { member, organization, user } from "../auth/schema.ts";
 import { Database } from "../internal/database.ts";
 
 export const layer = Layer.effect(
@@ -62,7 +62,23 @@ export const layer = Layer.effect(
         ),
     );
 
-    return OrganizationMembershipStore.Service.of({ find, findForWrite, list });
+    const listMembers = Effect.fn("OrganizationMembershipStorePostgres.listMembers")(
+      (organizationId: OrganizationId) =>
+        database
+          .select({ userId: user.id, name: user.name, email: user.email, role: member.role })
+          .from(member)
+          .innerJoin(user, eq(member.userId, user.id))
+          .where(eq(member.organizationId, organizationId))
+          .orderBy(asc(user.name), asc(user.id))
+          .pipe(
+            Effect.flatMap(
+              Schema.decodeUnknownEffect(Schema.Array(OrganizationMembershipStore.MemberSummary)),
+            ),
+            Effect.mapError(unavailable),
+          ),
+    );
+
+    return OrganizationMembershipStore.Service.of({ find, findForWrite, list, listMembers });
   }),
 );
 

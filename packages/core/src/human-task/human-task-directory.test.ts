@@ -40,6 +40,7 @@ const memberships = (lookup: ReturnType<OrganizationMembershipStore.Interface["f
     find: () => lookup,
     findForWrite: () => lookup,
     list: () => Effect.succeed([]),
+    listMembers: () => Effect.succeed([]),
   });
 const dependencies = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
   Layer.mergeAll(

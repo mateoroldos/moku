@@ -4,6 +4,10 @@ import { Context, Effect, Layer, Option } from "effect";
 import { Access } from "./access.ts";
 import { OrganizationMembershipStore } from "./organization-membership-store.ts";
 
+export const permissions = {
+  listMembers: ["owner", "admin", "member", "viewer"],
+} as const satisfies Record<"listMembers", Access.Permission>;
+
 export type Failure =
   | Access.Unverified
   | Access.NotFound

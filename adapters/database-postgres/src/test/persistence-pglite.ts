@@ -30,7 +30,7 @@ export const databaseLayer = Layer.effect(
 
     return database;
   }),
-).pipe(Layer.provide(PgliteClient.layer()));
+).pipe(Layer.provideMerge(PgliteClient.layer()));
 
 export const layer = HumanTaskStorePostgres.layer.pipe(Layer.provideMerge(databaseLayer));
 
