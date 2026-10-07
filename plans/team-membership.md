@@ -8,7 +8,7 @@ Issue: [#10](https://github.com/mateoroldos/moku/issues/10)
 | --- | ----------------------------------------------------------------------------------------------- | ---------------- | ---------------- |
 | 1   | Read-only Team page listing members and roles                                                   | design           | merged: #25      |
 | 2   | Invitation creation, delivery, and acceptance; entry points wait for PR 3                       | design below     | ready for review |
-| 3   | Invite/sign-in-or-signup/accept journey, pending invitations, cancellation                      | design when next |                  |
+| 3   | Invite/sign-in-or-signup/accept journey, pending invitations, cancellation, request throttling  | design when next |                  |
 | 4   | Role changes/removal with last-owner and task-write ordering protection; controls wait for PR 5 | design when next |                  |
 | 5   | Membership controls and failure feedback; retire this plan                                      | design when next |                  |
 
@@ -51,6 +51,10 @@ Invitations.accept(session, InvitationId): Effect<Membership, …>
 Configure `viewer` without provider management permissions and explicitly require verified email for invitations. Retain provider expiry, limits, resend, and concurrency behavior. Success confirms invitation persistence, not email delivery: the provider catches email failures; Moku's email bridge logs them. Resend reuses the pending invitation.
 
 Email links target `/invitations/[invitationId]`, supplied by PR 3. Provider HTTP endpoints remain restricted until the user-facing journey is available.
+
+PR 3 must choose and enforce request rate limits before exposing invite/resend. Server-side `auth.api` calls bypass Better Auth's HTTP rate limiter.
+
+Source-identified limitation, not runtime-reproduced: concurrent creation can leave multiple pending invitations for one recipient. Accepting another after membership exists can surface the membership uniqueness failure as `Invitations.Unavailable`. Preserve provider behavior; reproduce before adding constraint-specific translation.
 
 ## Proof
 
