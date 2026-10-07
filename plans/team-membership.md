@@ -6,13 +6,17 @@ Issue: [#10](https://github.com/mateoroldos/moku/issues/10)
 
 | #   | Trunk gains                                                                                     | Approach              | Done           |
 | --- | ----------------------------------------------------------------------------------------------- | --------------------- | -------------- |
-| 1   | Read-only Team page listing members and roles                                                   | approved design below | in review: #25 |
+| 1   | Read-only Team page listing members and roles                                                   | approved design below | merged: #25    |
 | 2   | Invitation creation, delivery, and acceptance; entry points wait for PR 3                       | design when next      |                |
 | 3   | Invite/sign-in-or-signup/accept journey, pending invitations, cancellation                      | design when next      |                |
 | 4   | Role changes/removal with last-owner and task-write ordering protection; controls wait for PR 5 | design when next      |                |
 | 5   | Membership controls and failure feedback; retire this plan                                      | design when next      |                |
 
 Each PR leaves trunk usable. Split a row if its design exceeds the small-PR limit; only PR 1 is designed here.
+
+## Decided
+
+- Use Better Auth's documented invitation APIs and lifecycle defaults. Application requirements justify departures; hypothetical stronger guarantees do not. Keep session credentials and provider translation at the web boundary, following Moku's core-owned application policy.
 
 ## Design: PR 1 — Team page (approved)
 
