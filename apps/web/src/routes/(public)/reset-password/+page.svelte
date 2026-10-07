@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { Button } from '@moku/ui/ui/button';
   import ResetPasswordForm from '#lib/features/auth/ResetPasswordForm.svelte';
@@ -15,8 +16,14 @@
     if (!active) return;
 
     complete = true;
-    await tick();
-    heading?.focus();
+
+    try {
+      await goto('/login?reset=true', { replaceState: true });
+    } catch {
+      console.error('Navigation after password reset failed');
+      await tick();
+      heading?.focus();
+    }
   };
 </script>
 
@@ -25,7 +32,8 @@
 <section class="mx-auto max-w-sm py-12 sm:py-20" aria-labelledby="auth-heading">
   <h1 id="auth-heading" bind:this={heading} tabindex="-1" class="font-serif text-4xl tracking-tight">{complete ? 'Password reset' : 'Reset your password'}</h1>
   {#if complete}
-    <Button href="/login" class="mt-8 w-full">Sign in</Button>
+    <p role="status" class="mt-3 text-sm text-muted-foreground">Your password has been reset. Sign in with your new password.</p>
+    <Button href="/login?reset=true" data-sveltekit-reload class="mt-8 w-full">Sign in</Button>
   {:else}
     {#if token && !page.url.searchParams.has('error')}
       {#key token}<ResetPasswordForm {token} onreset={reset} />{/key}
