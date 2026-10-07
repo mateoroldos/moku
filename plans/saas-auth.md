@@ -50,7 +50,7 @@ Follow precedent `adapters/database-postgres` for the workspace boundary. Core o
 
 ```text
 packages/core/src/email.ts
-  Email.Service, Message, Unavailable moved from web
+  Email.Service, Message, Unavailable
 adapters/email-cloudflare/
   Cloudflare HTTP transport, response decoding, failure translation
 apps/web/src/lib/server/auth-provider.ts
@@ -59,13 +59,13 @@ apps/web/src/lib/server/runtime.ts
   Email Layer selection and configuration
 ```
 
-The adapter depends on core, never web. Following `adapters/database-postgres/src/postgres-connection.ts`, web parses environment configuration and passes typed options to `EmailCloudflare.layer({ accountId, token, from })`. The adapter owns credential use and provider response types. Workspace dependencies belong in `tools/architecture/workspaces.ts` and the architecture table.
+The adapter depends on core, never web. Following `adapters/database-postgres/src/postgres-connection.ts`, web parses environment configuration and passes typed options to `EmailCloudflare.layer({ accountId, token, from })`. The adapter owns credential use and provider response types.
 
 Use [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Preserve synchronous delivery and explicit resend.
 
 Keep safe failure categories and HTTP status in adapter diagnostics, not the core error contract. Retain redacted causes and suppress the HTTP client's raw failure span; the email-operation span remains. Use a bare sender email address, the documented REST string form.
 
-Cloudflare REST documentation and installed Effect 4.0.0-rc.112 APIs establish the implementation contract. Confirm the Cloudflare sender, account access, Node host, and trusted proxy during deployment verification.
+Confirm the Cloudflare sender, account access, Node host, and trusted proxy during deployment verification.
 
 Cloudflare is the default delivery implementation. Explicit `EMAIL_DELIVERY=console` preserves local development without provider credentials; `.env.example` opts into it. Provider configuration is required only when Cloudflare is selected.
 
