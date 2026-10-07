@@ -15,7 +15,7 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.organization",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requireVerifiedEmail(event.locals.authenticate);
+        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
         const access = yield* OrganizationAccess.Service;
         const membership = yield* access.require(
           principal,

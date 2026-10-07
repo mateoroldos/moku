@@ -8,11 +8,12 @@ and later consumers share that result. Requests that never consume identity skip
 the lookup. Better Auth also skips session storage without a valid session cookie.
 Login/signout changes are reflected on the next request.
 
-Protected entrypoints call `AuthGuard.requireVerifiedEmail(locals.authenticate)`. A principal
+Protected entrypoints call `AuthGuard.requirePrincipal(locals.authenticate)`. A principal
 identifies the caller; it does not prove verification or grant task permissions.
 Layout loads can be reused during client navigation, so each protected remote needs
-its own guard. Core owns principal verification and task permissions; the web guard
-delegates verification to that policy and owns login redirects.
+its own guard and core authorization. Core operations own email verification and
+permissions; the web guard requires identity, and `AuthGuard.reject` translates
+authentication and verification failures to login redirects or HTTP errors.
 
 Neither the organization URL nor Better Auth's active organization grants access.
 Map `Access.NotFound` to 404, never 403, so outsiders cannot discover organizations

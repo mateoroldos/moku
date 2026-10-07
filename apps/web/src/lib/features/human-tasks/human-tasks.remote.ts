@@ -15,7 +15,7 @@ export const getHumanTask = query(
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requireVerifiedEmail(event.locals.authenticate);
+          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
           const humanTasks = yield* HumanTasks.Service;
 
           return yield* humanTasks.get(principal, ref);
@@ -47,7 +47,7 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requireVerifiedEmail(event.locals.authenticate);
+        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
         const humanTasks = yield* HumanTasks.Service;
 
         return yield* humanTasks.list(principal, organizationId);
@@ -85,7 +85,7 @@ export const respondToHumanTask = form(
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requireVerifiedEmail(event.locals.authenticate);
+          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
           const humanTasks = yield* HumanTasks.Service;
 
           return yield* humanTasks.respond(principal, ref, answer).pipe(

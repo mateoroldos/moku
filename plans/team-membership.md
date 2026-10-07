@@ -25,9 +25,9 @@ Extend the membership read path and follow `HumanTasks` for application ownershi
 listOrganizationMembers(id: OrganizationId): Promise<readonly Encoded<MemberSummary>[]>
   → remote query schema                                  invalid → Kit validation failure
   → locals.run("Remote.listOrganizationMembers", program)
-    → AuthGuard.requireVerifiedEmail(locals.authenticate) absent/unverified/unavailable → auth rejection
+    → AuthGuard.requirePrincipal(locals.authenticate)    absent/unavailable → auth rejection
     → Organizations.listMembers(principal, id)
-      → OrganizationAccess.require(..., allowedRoles)    outsider → 404; denied → 403; lookup failure → 503
+      → OrganizationAccess.require(..., allowedRoles)    unverified → 403; outsider → 404; denied → 403; lookup failure → 503
       → OrganizationMembershipStore.listMembers(id)
         → member JOIN user WHERE organization_id=id      SQL/decoding failure → Unavailable → 503
     → encode MemberSummary[] → Team page

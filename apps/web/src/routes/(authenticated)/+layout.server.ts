@@ -10,7 +10,7 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.authenticated",
       Effect.gen(function* () {
-        const viewer = yield* AuthGuard.requireVerifiedEmail(event.locals.authenticate);
+        const viewer = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
         const service = yield* Organizations.Service;
         const organizations = yield* service.list(viewer);
 
