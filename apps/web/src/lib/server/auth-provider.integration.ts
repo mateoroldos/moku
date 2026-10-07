@@ -426,13 +426,13 @@ it.live("delivers an invitation and grants its role only to the verified recipie
     yield* sql`UPDATE "user" SET email_verified = false WHERE id = 'invitation-recipient'`;
     const unverified = yield* auth.invitationSession(recipientHeaders);
     assert(unverified);
-    assert.strictEqual(
-      (yield* Effect.flip(Invitations.accept(unverified, id)))._tag,
-      "Access.UnverifiedEmail",
+    assert.deepStrictEqual(
+      yield* Effect.flip(Invitations.accept(unverified, id)),
+      new Access.UnverifiedEmail({}),
     );
     assert.deepStrictEqual(
       yield* Effect.flip(unverified.accept(id)),
-      new Invitations.Rejected({ reason: "UnverifiedEmail" }),
+      new Access.UnverifiedEmail({}),
     );
     yield* sql`UPDATE "user" SET email_verified = true WHERE id = 'invitation-recipient'`;
 
@@ -507,6 +507,10 @@ it.live(
         yield* Effect.flip(Invitations.create(sender, { ...input, role: "owner" })),
         new Access.Denied({}),
       );
+      assert.deepStrictEqual(
+        yield* Effect.flip(sender.create({ ...input, role: "owner" })),
+        new Access.Denied({}),
+      );
       const id = yield* Invitations.create(sender, input);
       assert.deepStrictEqual(yield* sql`SELECT role, inviter_id FROM invitation WHERE id = ${id}`, [
         { role: "viewer", inviter_id: "authentication-test" },
@@ -517,10 +521,15 @@ it.live(
         yield* Effect.flip(Invitations.create(sender, { ...input, resend: true })),
         new Access.Denied({}),
       );
+      assert.deepStrictEqual(
+        yield* Effect.flip(sender.create({ ...input, resend: true })),
+        new Access.Denied({}),
+      );
       yield* sql`DELETE FROM member WHERE user_id = 'authentication-test'`;
       assert.deepStrictEqual(
         yield* Effect.flip(Invitations.create(sender, input)),
         new Access.NotFound({}),
       );
+      assert.deepStrictEqual(yield* Effect.flip(sender.create(input)), new Access.NotFound({}));
     }).pipe(Effect.provide(invitationAccess), Effect.scoped, Effect.provide(postgres)),
 );

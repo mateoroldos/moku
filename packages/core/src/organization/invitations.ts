@@ -22,9 +22,7 @@ export class Rejected extends Schema.TaggedError<Rejected>()("Invitations.Reject
     "AlreadyMember",
     "InvalidInvitation",
     "WrongRecipient",
-    "Denied",
     "SessionRequired",
-    "UnverifiedEmail",
     "LimitReached",
   ]),
 }) {}
@@ -33,11 +31,18 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Invitations.
   cause: Schema.Redacted(Schema.Unknown),
 }) {}
 
+export type Failure =
+  | Rejected
+  | Unavailable
+  | Access.NotFound
+  | Access.Denied
+  | Access.UnverifiedEmail;
+
 /** A request-bound capability; identity and invitation operations share the same credentials. */
 export interface Session {
   readonly principal: Principal;
-  readonly create: (input: CreateInput) => Effect.Effect<InvitationId, Rejected | Unavailable>;
-  readonly accept: (id: InvitationId) => Effect.Effect<Membership, Rejected | Unavailable>;
+  readonly create: (input: CreateInput) => Effect.Effect<InvitationId, Failure>;
+  readonly accept: (id: InvitationId) => Effect.Effect<Membership, Failure>;
 }
 
 export const create = Effect.fn("Invitations.create")(function* (

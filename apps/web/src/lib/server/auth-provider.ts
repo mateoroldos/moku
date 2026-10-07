@@ -6,11 +6,11 @@ import { Invitations } from "@moku/core/invitations";
 import { OrganizationCreation } from "@moku/core/organization-creation";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Membership, Organization } from "@moku/domain/organization";
-import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { organization } from "better-auth/plugins/organization";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions, organizationOptions } from "./better-auth-options.ts";
+import { invitationFailure } from "./better-auth-errors.ts";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
@@ -144,32 +144,6 @@ export const layer = Layer.effectContext(
       return response;
     }, Effect.uninterruptible);
 
-    const invitationFailure = (cause: unknown) => {
-      if (isAPIError(cause)) {
-        const reasons = new Map<string, Invitations.Rejected["reason"]>([
-          ["INVALID_EMAIL", "InvalidEmail"],
-          ["USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION", "AlreadyInvited"],
-          ["USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION", "AlreadyMember"],
-          ["INVITATION_NOT_FOUND", "InvalidInvitation"],
-          ["ORGANIZATION_NOT_FOUND", "InvalidInvitation"],
-          ["YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION", "WrongRecipient"],
-          ["MEMBER_NOT_FOUND", "Denied"],
-          ["YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION", "Denied"],
-          ["YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE", "Denied"],
-          [
-            "EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION",
-            "UnverifiedEmail",
-          ],
-          ["INVITATION_LIMIT_REACHED", "LimitReached"],
-          ["ORGANIZATION_MEMBERSHIP_LIMIT_REACHED", "LimitReached"],
-        ]);
-        const reason =
-          cause.statusCode === 401 ? "SessionRequired" : reasons.get(cause.body?.code ?? "");
-        if (reason) return new Invitations.Rejected({ reason });
-      }
-
-      return new Invitations.Unavailable({ cause: Redacted.make(cause) });
-    };
     const invitationSession = Effect.fn("AuthProvider.invitationSession")(function* (
       requestHeaders: Headers,
     ) {

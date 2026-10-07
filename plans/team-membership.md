@@ -36,14 +36,14 @@ Invitations.create(session, CreateInput): Effect<InvitationId, …, Organization
   → OrganizationAccess.require → unverified / outsider / denied / lookup unavailable
   → owner grant requires owner → denied
   → session.create → auth.api.createInvitation({ headers, body })
-    → provider validation → Invitations.Rejected(reason)
+    → provider validation → Access.* or Invitations.Rejected(reason)
     → persist pending invitation → email callback → Email.send
     → decode invitation ID → Invitations.Unavailable on unexpected failure
 
 Invitations.accept(session, InvitationId): Effect<Membership, …>
   → requireVerifiedEmail → unverified
   → session.accept → auth.api.acceptInvitation({ headers, body })
-    → recipient, verification, expiration, status checks → Invitations.Rejected(reason)
+    → recipient, verification, expiration, status checks → Access.* or Invitations.Rejected(reason)
     → provider membership creation → decode Membership
     → unexpected provider/decoding failure → Invitations.Unavailable
 ```
