@@ -7,9 +7,18 @@ export const fallback: RequestHandler = ({ locals, request, getClientAddress }) 
   if (
     ![
       "POST /api/auth/sign-in/email",
+      "POST /api/auth/sign-up/email",
+      "POST /api/auth/send-verification-email",
+      "GET /api/auth/verify-email",
+      "POST /api/auth/request-password-reset",
+      "POST /api/auth/reset-password",
       "POST /api/auth/sign-out",
       "GET /api/auth/get-session",
-    ].includes(operation)
+    ].includes(operation) &&
+    !(
+      request.method === "GET" &&
+      /^\/api\/auth\/reset-password\/[^/]+$/.test(new URL(request.url).pathname)
+    )
   )
     return new Response(null, { status: 404 });
   return locals

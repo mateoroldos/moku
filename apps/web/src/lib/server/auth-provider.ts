@@ -6,6 +6,7 @@ import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
+import { Email } from "./email.ts";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
@@ -49,8 +50,45 @@ export const layer = Layer.effect(
     const database = yield* AuthStorage.Service;
     const origin = yield* Config.schema(Origin, "ORIGIN");
     const secret = yield* Config.redacted("BETTER_AUTH_SECRET");
+    const email = yield* Email.Service;
+    const runEmail = Effect.runPromiseWith(yield* Effect.context<never>());
+    const send = (to: string, subject: string, text: string) =>
+      runEmail(
+        email.send({ to, subject, text: Redacted.make(text) }).pipe(
+          // Better Auth catches some send failures; its disabled logger cannot report them.
+          Effect.tapCause(() => Effect.logError("email.send.failed")),
+        ),
+      );
+
     const auth = betterAuth({
       ...betterAuthOptions,
+      emailVerification: {
+        sendOnSignUp: true,
+        sendOnSignIn: false,
+        autoSignInAfterVerification: true,
+        sendVerificationEmail: ({ user, url }) =>
+          send(
+            user.email,
+            "Verify your Moku email",
+            `${url}\n\nVerify your email to sign in to Moku. If you did not request this, ignore this email.`,
+          ),
+      },
+      emailAndPassword: {
+        ...betterAuthOptions.emailAndPassword,
+        sendResetPassword: ({ user, url }) =>
+          send(
+            user.email,
+            "Reset your Moku password",
+            `${url}\n\nChoose a new password. If you did not request this, ignore this email.`,
+          ),
+      },
+      rateLimit: {
+        enabled: true,
+        customRules: {
+          "/send-verification-email": { window: 60, max: 1 },
+          "/request-password-reset": { window: 60, max: 1 },
+        },
+      },
       database,
       baseURL: origin.origin,
       trustedOrigins: [origin.origin],

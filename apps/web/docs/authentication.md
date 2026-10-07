@@ -41,5 +41,19 @@ Do not trust caller-supplied forwarding headers; proxy configuration must match 
 deployment. Unexpected provider errors propagate to the Effect boundary for redacted
 diagnostics and safe responses.
 
+Auth success does not confirm email delivery. The email bridge logs send failures,
+including those Better Auth catches. Link requests are throttled per endpoint/IP,
+not per address.
+
+Better Auth's standard verification links preserve a pre-registered account's password
+after duplicate signup. This credential-ownership risk is accepted for pre-launch;
+password reset recovers access but does not prevent access before recovery. Reassess
+before launch. [Better Auth #11023](https://github.com/better-auth/better-auth/issues/11023)
+reports the related OTP case; the link case is also reproduced against 1.7.4.
+
+Password reset revokes existing sessions, but password replacement and revocation are
+not one transaction. An uncertain response must offer sign-in with the chosen password
+before another reset attempt.
+
 Native signout attempts server deletion and clears the browser cookie even when
 storage fails. A copied token can remain valid until expiry after failed deletion.

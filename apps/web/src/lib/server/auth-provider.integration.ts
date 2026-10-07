@@ -5,8 +5,9 @@ import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
-import { Config, Effect, Layer, Redacted } from "effect";
+import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
+import { Email } from "./email.ts";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };
@@ -25,7 +26,10 @@ const postgres = Layer.unwrap(
   ),
 );
 
-const fixture = Effect.fnUntraced(function* (clientAddress: string) {
+const fixture = Effect.fnUntraced(function* (
+  clientAddress: string,
+  delivery: Email.Interface = { send: () => Effect.void },
+) {
   const sql = yield* PgClient.PgClient;
   const storage = yield* AuthStorage.Service;
   let unavailable = false;
@@ -38,9 +42,20 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
     };
   });
   const auth = yield* AuthProvider.Service.pipe(
-    Effect.provide(AuthProvider.layer.pipe(Layer.provide(database))),
+    Effect.provide(
+      AuthProvider.layer.pipe(
+        Layer.provide(database),
+        Layer.provide(Layer.succeed(Email.Service, delivery)),
+      ),
+    ),
   );
-  const cleanup = sql`DELETE FROM "user" WHERE id = 'authentication-test'`;
+  const cleanup = sql`DELETE FROM verification WHERE value IN (
+    SELECT id FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'
+  )`.pipe(
+    Effect.andThen(
+      sql`DELETE FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'`,
+    ),
+  );
   yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
   const password = yield* Effect.promise(() => hashPassword(credentials.password));
   yield* sql`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
@@ -69,6 +84,116 @@ const fixture = Effect.fnUntraced(function* (clientAddress: string) {
 });
 
 const verifiedPrincipal = { userId: "authentication-test", emailVerified: true };
+const signup = {
+  name: "New reviewer",
+  email: "onboarding@moku.test",
+  password: "onboarding-password",
+};
+
+it.live("blocks unverified sign-in and establishes a session through the emailed link", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth } = yield* fixture("192.0.2.20", {
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const post = (path: string, body: Record<string, string>) =>
+      auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.20");
+
+    assert.strictEqual(
+      (yield* post("sign-up/email", { ...signup, callbackURL: "/login?verified=true" })).status,
+      200,
+    );
+    assert.strictEqual((yield* post("sign-in/email", signup)).status, 403);
+    assert.strictEqual(messages.length, 1);
+    const message = messages.at(-1);
+    assert(message);
+    assert.strictEqual(message.to, signup.email);
+    const link = Redacted.value(message.text).split("\n")[0];
+    assert(link);
+    const verified = yield* auth.handle(new Request(link), "192.0.2.20");
+    assert.strictEqual(verified.status, 302);
+    assert.strictEqual(verified.headers.get("location"), "/login?verified=true");
+    const headers = new Headers({
+      cookie: verified.headers
+        .getSetCookie()
+        .map((cookie) => cookie.split(";")[0])
+        .join("; "),
+    });
+    assert.strictEqual((yield* auth.authenticate(headers))?.emailVerified, true);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("recovers a verified account and revokes its previous session", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth, headers } = yield* fixture("192.0.2.23", {
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const post = (path: string, body: Record<string, string>) =>
+      auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.23");
+
+    assert.strictEqual(
+      (yield* post("request-password-reset", {
+        email: credentials.email,
+        redirectTo: "/reset-password",
+      })).status,
+      200,
+    );
+    const message = messages.at(-1);
+    assert(message);
+    const link = Redacted.value(message.text).split("\n")[0];
+    assert(link);
+    const response = yield* auth.handle(new Request(link), "192.0.2.23");
+    assert.strictEqual(response.status, 302);
+    const location = response.headers.get("location");
+    assert(location);
+    const token = new URL(location).searchParams.get("token");
+    assert(token);
+    const password = "recovered-password";
+    assert.strictEqual(
+      (yield* post("reset-password", {
+        token,
+        newPassword: password,
+      })).status,
+      200,
+    );
+    assert.strictEqual(yield* auth.authenticate(headers), null);
+    assert.strictEqual((yield* post("sign-in/email", { ...credentials, password })).status, 200);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("reports a delivery failure even when the provider returns success", () => {
+  const entries: unknown[] = [];
+  const logger = Logger.layer([
+    Logger.make((options) => {
+      entries.push(options.message);
+    }),
+  ]);
+
+  return Effect.gen(function* () {
+    const { auth } = yield* fixture("192.0.2.21", {
+      send: () =>
+        Effect.fail(new Email.Unavailable({ cause: Redacted.make("private email body") })),
+    });
+
+    const response = yield* auth.handle(
+      request(
+        "request-password-reset",
+        new Headers(),
+        JSON.stringify({ email: credentials.email }),
+      ),
+      "192.0.2.21",
+    );
+    assert.strictEqual(response.status, 200);
+    assert.deepStrictEqual(entries, [["email.send.failed"]]);
+  }).pipe(Effect.scoped, Effect.provide(Layer.merge(postgres, logger)));
+});
 
 it.live("maps provider identity to a principal and rejects an expired session", () =>
   Effect.gen(function* () {

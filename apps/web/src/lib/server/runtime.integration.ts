@@ -3,7 +3,7 @@ import { assert, it } from "@effect/vitest";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { UserId } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
-import { Config, Effect, Layer, Schema } from "effect";
+import { Config, Effect, Layer, Schedule, Schema } from "effect";
 import { WebRuntime } from "./runtime.ts";
 
 const observer = Layer.unwrap(
@@ -16,6 +16,19 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
   Effect.gen(function* () {
     const url = yield* Config.redacted("TEST_DATABASE_URL");
     const sql = yield* PgClient.PgClient;
+
+    // pg-pool resolves end() before PostgreSQL finishes closing its backends.
+    const assertReleased = sql`
+      SELECT pid FROM pg_stat_activity
+      WHERE datname = current_database() AND application_name = 'moku-web'
+    `.pipe(
+      Effect.repeat({
+        while: (connections) => connections.length > 0,
+        schedule: Schedule.spaced("10 millis"),
+        times: 100,
+      }),
+      Effect.tap((connections) => Effect.sync(() => assert.lengthOf(connections, 0))),
+    );
 
     yield* sql`INSERT INTO "user" (id, name, email, email_verified) VALUES ('runtime-user', 'Runtime', 'runtime@example.test', true) ON CONFLICT DO NOTHING`;
     yield* sql`INSERT INTO organization (id, name, slug, created_at) VALUES ('runtime-org', 'Runtime', 'runtime', now()) ON CONFLICT DO NOTHING`;
@@ -46,11 +59,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
     );
 
     yield* Effect.gen(function* () {
-      const connections = yield* sql`
-        SELECT pid FROM pg_stat_activity
-        WHERE datname = current_database() AND application_name = 'moku-web'
-      `;
-      assert.lengthOf(connections, 0);
+      yield* assertReleased;
 
       const completed = yield* Effect.scoped(
         Effect.gen(function* () {
@@ -91,11 +100,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
         }),
       );
 
-      const remaining = yield* sql`
-        SELECT pid FROM pg_stat_activity
-        WHERE datname = current_database() AND application_name = 'moku-web'
-      `;
-      assert.lengthOf(remaining, 0);
+      yield* assertReleased;
     }).pipe(
       Effect.ensuring(sql`DELETE FROM human_tasks WHERE id = ${pending.id}`.pipe(Effect.orDie)),
     );

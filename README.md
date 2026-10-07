@@ -43,7 +43,11 @@ SEED_EMAIL=reviewer@example.com SEED_PASSWORD='<private password>' bun run db:se
 
 The seed creates an owner membership in the `moku` organization; set
 `SEED_ORGANIZATION_SLUG` to seed another organization. Repeated seeds preserve
-existing credentials and memberships. Public signup and membership endpoints are disabled.
+existing credentials and memberships. Membership administration endpoints are disabled.
+
+Create an account at `/signup`; open its email verification link from the server
+terminal. Use `/forgot-password` if you forget your password.
+Pre-release email delivery uses the console in every environment.
 
 To provision only the account and organization:
 
