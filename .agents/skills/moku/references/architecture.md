@@ -13,9 +13,10 @@ Domain and core stay independent of frameworks, SQL, and provider SDKs.
 Core owns domain-shaped ports and their expected failures. Adapters translate
 technology into those contracts; entrypoints choose implementations.
 
-Domain owns relationships such as `Membership`, independently of the store that
-loads them. Operation-specific read projections such as `MemberSummary` stay in
-core beside their ports. Using Schema does not determine which layer owns a value.
+Place values in domain when their meaning belongs to the business model independently
+of a particular operation. Keep operation-specific read projections in core beside
+their ports. Choose ownership by meaning and reason to change, not by where data is
+loaded or whether it uses Schema.
 
 Core application operations own their permission checks and the reads or writes
 they authorize. Web resolves request identity and translates operation results
