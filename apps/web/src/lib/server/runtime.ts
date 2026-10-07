@@ -3,11 +3,32 @@ import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { OrganizationAccess } from "@moku/core/organization-access";
 import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
-import { Layer, ManagedRuntime, type Redacted } from "effect";
+import { EmailCloudflare } from "@moku/email-cloudflare";
+import { Config, Effect, Layer, ManagedRuntime, type Redacted, Schema } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
 import { AuthProvider } from "./auth-provider.ts";
-import { Email } from "./email.ts";
+import { EmailConsole } from "./email-console.ts";
+
+const email = Layer.unwrap(
+  Effect.gen(function* () {
+    const delivery = yield* Config.schema(
+      Schema.Literals(["cloudflare", "console"]),
+      "EMAIL_DELIVERY",
+    ).pipe(Config.withDefault("cloudflare"));
+
+    if (delivery === "console") return EmailConsole.layer;
+
+    const accountId = yield* Config.schema(Schema.NonEmptyString, "CLOUDFLARE_ACCOUNT_ID");
+    const token = yield* Config.redacted("CLOUDFLARE_API_TOKEN");
+    const from = yield* Config.schema(Schema.NonEmptyString, "EMAIL_FROM");
+
+    return EmailCloudflare.layer({ accountId, token, from }).pipe(
+      Layer.provide(FetchHttpClient.layer),
+    );
+  }),
+);
 
 const postgres = (url: Redacted.Redacted) =>
   PostgresConnection.layer({
@@ -26,7 +47,7 @@ export const layer = (url: Redacted.Redacted) => application.pipe(Layer.provide(
 export const make = (url: Redacted.Redacted, settings: Observability.Settings = {}) =>
   ManagedRuntime.make(
     Layer.merge(application, AuthProvider.layer).pipe(
-      Layer.provide(Email.consoleLayer),
+      Layer.provide(email),
       Layer.provide(postgres(url)),
       Layer.provideMerge(Observability.layer(settings)),
     ),

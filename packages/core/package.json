@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./email": "./src/email.ts",
     "./access": "./src/access/access.ts",
     "./organization-access": "./src/access/organization-access.ts",
     "./organization-membership-store": "./src/access/organization-membership-store.ts",

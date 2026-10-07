@@ -26,6 +26,7 @@
     "@moku/core": "workspace:*",
     "@moku/database-postgres": "workspace:*",
     "@moku/domain": "workspace:*",
+    "@moku/email-cloudflare": "workspace:*",
     "@moku/ui": "workspace:*",
     "effect": "catalog:",
     "mode-watcher": "catalog:",

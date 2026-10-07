@@ -44,6 +44,18 @@
         "vitest": "catalog:",
       },
     },
+    "adapters/email-cloudflare": {
+      "name": "@moku/email-cloudflare",
+      "version": "0.0.0",
+      "dependencies": {
+        "@moku/core": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "vitest": "catalog:",
+      },
+    },
     "apps/web": {
       "name": "@moku/web",
       "version": "0.0.0",
@@ -53,6 +65,7 @@
         "@moku/core": "workspace:*",
         "@moku/database-postgres": "workspace:*",
         "@moku/domain": "workspace:*",
+        "@moku/email-cloudflare": "workspace:*",
         "@moku/ui": "workspace:*",
         "effect": "catalog:",
         "mode-watcher": "catalog:",
@@ -406,6 +419,8 @@
     "@moku/database-postgres": ["@moku/database-postgres@workspace:adapters/database-postgres"],
 
     "@moku/domain": ["@moku/domain@workspace:packages/domain"],
+
+    "@moku/email-cloudflare": ["@moku/email-cloudflare@workspace:adapters/email-cloudflare"],
 
     "@moku/ui": ["@moku/ui@workspace:packages/ui"],
 

@@ -7,6 +7,10 @@
         "DATABASE_URL",
         "ORIGIN",
         "BETTER_AUTH_SECRET",
+        "EMAIL_DELIVERY",
+        "EMAIL_FROM",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
         "OTEL_EXPORTER_OTLP_ENDPOINT"
       ],
       "cache": false,

@@ -45,9 +45,10 @@ The seed creates an owner membership in the `moku` organization; set
 `SEED_ORGANIZATION_SLUG` to seed another organization. Repeated seeds preserve
 existing credentials and memberships. Membership administration endpoints are disabled.
 
-Create an account at `/signup`; open its email verification link from the server
-terminal. Use `/forgot-password` if you forget your password.
-Pre-release email delivery uses the console in every environment.
+Create an account at `/signup`; use `/forgot-password` if you forget your password.
+With `EMAIL_DELIVERY=console` (as in `.env.example`), email links appear in the
+server terminal.
+Console delivery prints private authentication links; use it only for local development.
 
 To provision only the account and organization:
 
@@ -96,6 +97,26 @@ explicitly before starting each deployment. `HOST` and `PORT` configure the list
 (defaults: `0.0.0.0:3000`). Send SIGTERM/SIGINT for graceful shutdown.
 
 The build lives in `apps/web/build` and requires installed production dependencies.
+
+### Email delivery
+
+Set `EMAIL_DELIVERY=cloudflare` (the default) and configure:
+
+| Variable                | Value                                                                   |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `CLOUDFLARE_ACCOUNT_ID` | Account with Email Sending access                                       |
+| `CLOUDFLARE_API_TOKEN`  | API token permitted to send email for that account                      |
+| `EMAIL_FROM`            | Email address on a verified sending domain, such as `hello@example.com` |
+
+Complete [Cloudflare sender onboarding](https://developers.cloudflare.com/email-service/)
+before sending. Configuration is read at startup; building needs no email credentials.
+Sending waits for Cloudflare to report the recipient delivered or queued. Failures
+do not retry automatically; users can request another link. Queued acceptance does
+not confirm inbox delivery.
+
+The adapter logs `email.cloudflare.failed` with a controlled `reason` and
+`http.status` when a response is available. Credentials, email content, and raw
+provider errors remain redacted.
 
 ## Verify
 
