@@ -90,7 +90,7 @@ const signup = {
   password: "onboarding-password",
 };
 
-it.live("requires the emailed verification link before password sign-in", () =>
+it.live("blocks unverified sign-in and establishes a session through the emailed link", () =>
   Effect.gen(function* () {
     const messages: Email.Message[] = [];
     const { auth } = yield* fixture("192.0.2.20", {
@@ -116,14 +116,8 @@ it.live("requires the emailed verification link before password sign-in", () =>
     const verified = yield* auth.handle(new Request(link), "192.0.2.20");
     assert.strictEqual(verified.status, 302);
     assert.strictEqual(verified.headers.get("location"), "/login?verified=true");
-    assert.lengthOf(verified.headers.getSetCookie(), 0);
-    const signedIn = yield* auth.handle(
-      request("sign-in/email", new Headers(), JSON.stringify(signup)),
-      "192.0.2.22",
-    );
-    assert.strictEqual(signedIn.status, 200);
     const headers = new Headers({
-      cookie: signedIn.headers
+      cookie: verified.headers
         .getSetCookie()
         .map((cookie) => cookie.split(";")[0])
         .join("; "),

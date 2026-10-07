@@ -10,17 +10,17 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 No PR removes the working inbox. Drafts ship before organization switching so unfinished feedback survives navigation.
 
-| PR  | Trunk gains                               | Users see                           | Approach                | Done    |
-| --- | ----------------------------------------- | ----------------------------------- | ----------------------- | ------- |
-| 1   | Auth tables and one scoped pool           | Existing inbox                      | known                   | ✅ #14  |
-| 2   | Seeded login protects read and answer     | Working inbox after login           | known                   | ✅ #18  |
-| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers            | known                   | ✅ #19  |
-| 4   | Tab-local feedback drafts                 | Return to unfinished feedback       | known                   | ✅ #20  |
-| 5   | Organization chooser and sidebar switcher | Switch seeded organizations         | known                   | ✅ #21  |
-| 5a  | Official generated UI source              | Existing organization sidebar       | known · review complete | ✅ main |
-| 6   | Organization creation                     | Create org → inbox                  | approved · implemented  | ✅ #22  |
-| 7   | Signup, email links, console email        | Verify email → sign in → create org | revised · implemented   | #23     |
-| 8   | Cloudflare email; plan deleted; #8 closed | Links arrive in a real inbox        | deployment verification |         |
+| PR  | Trunk gains                               | Users see                       | Approach                | Done    |
+| --- | ----------------------------------------- | ------------------------------- | ----------------------- | ------- |
+| 1   | Auth tables and one scoped pool           | Existing inbox                  | known                   | ✅ #14  |
+| 2   | Seeded login protects read and answer     | Working inbox after login       | known                   | ✅ #18  |
+| 3   | Tenant scope, role policy, attribution    | Scoped inbox and answers        | known                   | ✅ #19  |
+| 4   | Tab-local feedback drafts                 | Return to unfinished feedback   | known                   | ✅ #20  |
+| 5   | Organization chooser and sidebar switcher | Switch seeded organizations     | known                   | ✅ #21  |
+| 5a  | Official generated UI source              | Existing organization sidebar   | known · review complete | ✅ main |
+| 6   | Organization creation                     | Create org → inbox              | approved · implemented  | ✅ #22  |
+| 7   | Signup, email links, console email        | Verify email → app → create org | revised · implemented   | #23     |
+| 8   | Cloudflare email; plan deleted; #8 closed | Links arrive in a real inbox    | deployment verification |         |
 
 ## Design: PR 7 onboarding and email (approved)
 
@@ -31,14 +31,14 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 Follow [authentication boundaries](../apps/web/docs/authentication.md) for the accepted pre-launch credential-ownership risk, delivery outcomes, and reset failures.
 
 ```text
-Signup → verification link → sign in
-Unverified sign-in → request verification link → sign in
+Signup → verification link → app
+Unverified sign-in → request verification link → app
 Forgot password → reset link → new password → sign in
 ```
 
 Use Better Auth's standard email links to avoid retaining signup credentials or composing verification from password reset. Pages own navigation and results; operation-specific forms report outcomes.
 
-Use Show/Hide instead of a repeat-password field to reduce typing. Verification and reset both require explicit sign-in afterward.
+Use Show/Hide instead of a repeat-password field to reduce typing. Email verification signs the user in where they open the link; password recovery requires explicit sign-in afterward.
 
 Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 replaces [pre-release console delivery](../README.md#develop) with Cloudflare.
 

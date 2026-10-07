@@ -65,7 +65,7 @@ export const layer = Layer.effect(
       emailVerification: {
         sendOnSignUp: true,
         sendOnSignIn: false,
-        autoSignInAfterVerification: false,
+        autoSignInAfterVerification: true,
         sendVerificationEmail: ({ user, url }) =>
           send(
             user.email,
