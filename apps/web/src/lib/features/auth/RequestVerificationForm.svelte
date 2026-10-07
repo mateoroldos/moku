@@ -5,9 +5,8 @@
   import * as Field from '@moku/ui/ui/field';
   import { authClient } from '#lib/features/auth/client.ts';
 
-  let { onrequested }: { onrequested: (email: string) => void } = $props();
-
   let email = $state('');
+  let requestedEmail = $state<string | null>(null);
   let seconds = $state(0);
   let pending = $state(false);
   let message = $state<string | null>(null);
@@ -23,6 +22,7 @@
 
     pending = true;
     message = null;
+    requestedEmail = null;
     seconds = 60;
 
     try {
@@ -39,7 +39,7 @@
       pending = false;
     }
 
-    onrequested(email);
+    requestedEmail = email;
   };
 </script>
 
@@ -53,3 +53,4 @@
     <Button type="submit" disabled={pending || seconds > 0}>{pending ? 'Requesting…' : seconds > 0 ? `Send verification link in ${seconds}s` : 'Send verification link'}</Button>
   </Field.Group>
 </form>
+{#if requestedEmail}<p role="status" class="mt-4 text-sm text-muted-foreground">If <span class="break-all text-foreground">{requestedEmail}</span> needs verification, check its inbox for a link.</p>{/if}

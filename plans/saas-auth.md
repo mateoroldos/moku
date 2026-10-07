@@ -36,7 +36,7 @@ Unverified sign-in → request verification link → app
 Forgot password → reset link → new password → sign in
 ```
 
-Use Better Auth's standard email links to avoid retaining signup credentials or composing verification from password reset. Pages own navigation and results; operation-specific forms report outcomes.
+Use Better Auth's standard email links to avoid retaining signup credentials or composing verification from password reset. Pages own navigation and page transitions; forms own submission feedback and report outcomes when the page must react.
 
 Use Show/Hide instead of a repeat-password field to reduce typing. Email verification signs the user in where they open the link; password recovery requires explicit sign-in afterward.
 

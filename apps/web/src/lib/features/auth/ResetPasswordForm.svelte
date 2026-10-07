@@ -4,7 +4,7 @@
   import { authClient } from '#lib/features/auth/client.ts';
   import NewPasswordField from './NewPasswordField.svelte';
 
-  let { token, onreset }: { token: string; onreset: () => void } = $props();
+  let { token, onreset }: { token: string; onreset: () => Promise<void> } = $props();
 
   let password = $state('');
   let pending = $state(false);
@@ -34,7 +34,7 @@
     }
 
     password = '';
-    onreset();
+    await onreset();
   };
 </script>
 

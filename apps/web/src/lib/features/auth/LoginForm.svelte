@@ -20,18 +20,17 @@
 
     pending = true;
     message = null;
+    let requiresConfirmation = false;
 
     try {
       const { error } = await authClient.signIn.email({ email, password });
       if (error) {
         if (error.code === 'EMAIL_NOT_VERIFIED') {
-          password = '';
-          await onconfirmationrequired();
+          requiresConfirmation = true;
+        } else {
+          message = error.code === 'INVALID_EMAIL_OR_PASSWORD' ? 'The email or password is incorrect.' : 'We couldn’t sign you in. Try again.';
           return;
         }
-
-        message = error.code === 'INVALID_EMAIL_OR_PASSWORD' ? 'The email or password is incorrect.' : 'We couldn’t sign you in. Try again.';
-        return;
       }
     } catch {
       console.error('Sign-in request failed');
@@ -42,7 +41,8 @@
     }
 
     password = '';
-    await onsignedin();
+    if (requiresConfirmation) await onconfirmationrequired();
+    else await onsignedin();
   };
 </script>
 

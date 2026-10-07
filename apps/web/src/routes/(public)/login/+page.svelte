@@ -6,6 +6,7 @@
   import LoginForm from '#lib/features/auth/LoginForm.svelte';
 
   let navigationFailed = $state(false);
+  let verificationNavigationFailed = $state(false);
   let active = true;
 
   onDestroy(() => { active = false; });
@@ -22,7 +23,14 @@
   };
 
   const confirmationRequired = async () => {
-    if (active) await goto('/verify-email');
+    if (!active) return;
+
+    try {
+      await goto('/verify-email');
+    } catch {
+      console.error('Navigation to email verification failed');
+      verificationNavigationFailed = true;
+    }
   };
 </script>
 
@@ -33,6 +41,9 @@
   {#if navigationFailed}
     <p role="status" class="mt-3 text-sm text-muted-foreground">You’re signed in. Continue to open the app.</p>
     <Button href="/" class="mt-8 w-full">Continue</Button>
+  {:else if verificationNavigationFailed}
+    <p role="status" class="mt-3 text-sm text-muted-foreground">Your email needs verification. Continue to request a verification link.</p>
+    <Button href="/verify-email" data-sveltekit-reload class="mt-8 w-full">Verify email</Button>
   {:else}
     {#if page.url.searchParams.has('error')}
       <p role="alert" class="mt-3 text-sm text-destructive">This verification link is invalid or expired. <a href="/verify-email" class="underline underline-offset-4">Request another link</a>.</p>
