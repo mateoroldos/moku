@@ -7,9 +7,8 @@ import { OrganizationCreation } from "@moku/core/organization-creation";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Membership, Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
-import { organization } from "better-auth/plugins/organization";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
-import { betterAuthOptions, organizationOptions } from "./better-auth-options.ts";
+import { betterAuthOptions } from "./better-auth-options.ts";
 import { invitationFailure } from "./better-auth-errors.ts";
 
 const ProviderSession = Schema.NullOr(
@@ -62,22 +61,16 @@ export const layer = Layer.effectContext(
         ),
       );
 
+    const options = betterAuthOptions(({ id, email, organization }) =>
+      send(
+        email,
+        `Join ${organization.name} on Moku`,
+        `${origin.origin}/invitations/${encodeURIComponent(id)}\n\nYou have been invited to join ${organization.name}. Sign in or create an account with this email address to accept.`,
+      ),
+    );
+
     const auth = betterAuth({
-      ...betterAuthOptions,
-      plugins: [
-        {
-          ...organization({
-            ...organizationOptions,
-            sendInvitationEmail: ({ id, email, organization: team }) =>
-              send(
-                email,
-                `Join ${team.name} on Moku`,
-                `${origin.origin}/invitations/${encodeURIComponent(id)}\n\nYou have been invited to join ${team.name}. Sign in or create an account with this email address to accept.`,
-              ),
-          }),
-          schema: betterAuthOptions.plugins[0].schema,
-        },
-      ],
+      ...options,
       emailVerification: {
         sendOnSignUp: true,
         sendOnSignIn: false,
@@ -90,7 +83,7 @@ export const layer = Layer.effectContext(
           ),
       },
       emailAndPassword: {
-        ...betterAuthOptions.emailAndPassword,
+        ...options.emailAndPassword,
         sendResetPassword: ({ user, url }) =>
           send(
             user.email,

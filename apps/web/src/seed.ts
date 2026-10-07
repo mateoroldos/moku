@@ -32,7 +32,7 @@ const provisionAccount = Effect.fn("provisionAccount")(function* () {
   const slug = yield* Config.string("SEED_ORGANIZATION_SLUG").pipe(Config.withDefault("moku"));
 
   const auth = betterAuth({
-    ...betterAuthOptions,
+    ...betterAuthOptions(),
     database,
     secret: Redacted.value(secret),
     baseURL: "http://localhost",

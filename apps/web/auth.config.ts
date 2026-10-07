@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { betterAuthOptions } from "./src/lib/server/better-auth-options.ts";
 
 export const auth = betterAuth({
-  ...betterAuthOptions,
+  ...betterAuthOptions(),
   baseURL: "http://localhost:5173",
   database: drizzleAdapter(drizzle.mock(), { provider: "pg" }),
   advanced: { database: { validateSchema: false } },
