@@ -26,13 +26,13 @@
     seconds = 60;
 
     try {
-      const { error } = await authClient.requestPasswordReset({ email, redirectTo: '/reset-password' });
+      const { error } = await authClient.sendVerificationEmail({ email, callbackURL: '/login?verified=true' });
       if (error) {
         message = 'We couldn’t request a link. Try again in a minute.';
         return;
       }
     } catch {
-      console.error('Password reset link request failed');
+      console.error('Verification link request failed');
       message = 'Check your connection and try again in a minute.';
       return;
     } finally {
@@ -50,6 +50,6 @@
       <Input id="email" name="email" type="email" autocomplete="email" required bind:value={email} disabled={pending} />
     </Field.Field>
     {#if message}<Field.Error role="alert">{message}</Field.Error>{/if}
-    <Button type="submit" disabled={pending || seconds > 0}>{pending ? 'Requesting…' : seconds > 0 ? `Send reset link in ${seconds}s` : 'Send reset link'}</Button>
+    <Button type="submit" disabled={pending || seconds > 0}>{pending ? 'Requesting…' : seconds > 0 ? `Send verification link in ${seconds}s` : 'Send verification link'}</Button>
   </Field.Group>
 </form>

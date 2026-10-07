@@ -16,6 +16,7 @@ Effect Schema.
   only when its execution is confirmed, not merely because a human approved it.
 - Keep feature state and navigation in the app. Prefer derived values to effects;
   use native events, snippets, semantic HTML, and visible keyboard focus.
+- Separate a component's `$props()` declaration from local state with a blank line.
 - Keep compatible pinned Kit/Svelte/Vite versions together. Confirm
   prerelease APIs against installed sources/types before changing configuration.
 - Adapter selection belongs to deployment composition. Discuss consequential

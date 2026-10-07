@@ -4,7 +4,6 @@ import { generateId } from "@better-auth/core/utils/id";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
-import { emailOTP } from "better-auth/plugins/email-otp";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
 import { Email } from "./email.ts";
@@ -53,33 +52,42 @@ export const layer = Layer.effect(
     const secret = yield* Config.redacted("BETTER_AUTH_SECRET");
     const email = yield* Email.Service;
     const runEmail = Effect.runPromiseWith(yield* Effect.context<never>());
+    const send = (to: string, subject: string, text: string) =>
+      runEmail(
+        email.send({ to, subject, text: Redacted.make(text) }).pipe(
+          // Better Auth catches some send failures; its disabled logger cannot report them.
+          Effect.tapCause(() => Effect.logError("email.send.failed")),
+        ),
+      );
+
     const auth = betterAuth({
       ...betterAuthOptions,
-      plugins: [
-        ...betterAuthOptions.plugins,
-        emailOTP({
-          storeOTP: "hashed",
-          disableSignUp: true,
-          sendVerificationOTP: ({ email: to, otp }) =>
-            runEmail(
-              email
-                .send({
-                  to,
-                  subject: "Set your Moku password",
-                  text: Redacted.make(
-                    `${otp}\n\nUse this code within five minutes to finish signup or reset your password. If you did not request this, ignore this email.`,
-                  ),
-                })
-                .pipe(
-                  // Better Auth catches send failures; its disabled logger cannot report them.
-                  Effect.tapCause(() => Effect.logError("email.send.failed")),
-                ),
-            ),
-        }),
-      ],
+      emailVerification: {
+        sendOnSignUp: true,
+        sendOnSignIn: false,
+        autoSignInAfterVerification: false,
+        sendVerificationEmail: ({ user, url }) =>
+          send(
+            user.email,
+            "Verify your Moku email",
+            `${url}\n\nVerify your email to sign in to Moku. If you did not request this, ignore this email.`,
+          ),
+      },
+      emailAndPassword: {
+        ...betterAuthOptions.emailAndPassword,
+        sendResetPassword: ({ user, url }) =>
+          send(
+            user.email,
+            "Reset your Moku password",
+            `${url}\n\nChoose a new password. If you did not request this, ignore this email.`,
+          ),
+      },
       rateLimit: {
         enabled: true,
-        customRules: { "/email-otp/request-password-reset": { window: 60, max: 1 } },
+        customRules: {
+          "/send-verification-email": { window: 60, max: 1 },
+          "/request-password-reset": { window: 60, max: 1 },
+        },
       },
       database,
       baseURL: origin.origin,

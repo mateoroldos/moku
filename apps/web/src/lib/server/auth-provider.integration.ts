@@ -49,10 +49,13 @@ const fixture = Effect.fnUntraced(function* (
       ),
     ),
   );
-  const cleanup =
-    sql`DELETE FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'`.pipe(
-      Effect.andThen(sql`DELETE FROM verification WHERE identifier LIKE '%onboarding@moku.test'`),
-    );
+  const cleanup = sql`DELETE FROM verification WHERE value IN (
+    SELECT id FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'
+  )`.pipe(
+    Effect.andThen(
+      sql`DELETE FROM "user" WHERE id = 'authentication-test' OR email = 'onboarding@moku.test'`,
+    ),
+  );
   yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
   const password = yield* Effect.promise(() => hashPassword(credentials.password));
   yield* sql`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
@@ -87,7 +90,7 @@ const signup = {
   password: "onboarding-password",
 };
 
-it.live("establishes the mailbox owner's password after an attacker registers first", () =>
+it.live("requires the emailed verification link before password sign-in", () =>
   Effect.gen(function* () {
     const messages: Email.Message[] = [];
     const { auth } = yield* fixture("192.0.2.20", {
@@ -99,34 +102,21 @@ it.live("establishes the mailbox owner's password after an attacker registers fi
     const post = (path: string, body: Record<string, string>) =>
       auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.20");
 
-    const attacker = { ...signup, password: "attacker-password" };
-    assert.strictEqual((yield* post("sign-up/email", attacker)).status, 200);
-    assert.strictEqual((yield* post("sign-up/email", signup)).status, 200);
-    assert.strictEqual(messages.length, 0);
     assert.strictEqual(
-      (yield* post("email-otp/request-password-reset", { email: signup.email })).status,
+      (yield* post("sign-up/email", { ...signup, callbackURL: "/login?verified=true" })).status,
       200,
     );
-    assert.strictEqual(
-      (yield* post("email-otp/request-password-reset", { email: signup.email })).status,
-      429,
-    );
-    assert.strictEqual((yield* post("sign-in/email", attacker)).status, 403);
+    assert.strictEqual((yield* post("sign-in/email", signup)).status, 403);
     assert.strictEqual(messages.length, 1);
     const message = messages.at(-1);
     assert(message);
     assert.strictEqual(message.to, signup.email);
-    const otp = Redacted.value(message.text).slice(0, 6);
-
-    assert.strictEqual(
-      (yield* post("email-otp/reset-password", {
-        email: signup.email,
-        otp,
-        password: signup.password,
-      })).status,
-      200,
-    );
-    assert.strictEqual((yield* post("sign-in/email", attacker)).status, 401);
+    const link = Redacted.value(message.text).split("\n")[0];
+    assert(link);
+    const verified = yield* auth.handle(new Request(link), "192.0.2.20");
+    assert.strictEqual(verified.status, 302);
+    assert.strictEqual(verified.headers.get("location"), "/login?verified=true");
+    assert.lengthOf(verified.headers.getSetCookie(), 0);
     const signedIn = yield* auth.handle(
       request("sign-in/email", new Headers(), JSON.stringify(signup)),
       "192.0.2.22",
@@ -155,17 +145,27 @@ it.live("recovers a verified account and revokes its previous session", () =>
       auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.23");
 
     assert.strictEqual(
-      (yield* post("email-otp/request-password-reset", { email: credentials.email })).status,
+      (yield* post("request-password-reset", {
+        email: credentials.email,
+        redirectTo: "/reset-password",
+      })).status,
       200,
     );
     const message = messages.at(-1);
     assert(message);
+    const link = Redacted.value(message.text).split("\n")[0];
+    assert(link);
+    const response = yield* auth.handle(new Request(link), "192.0.2.23");
+    assert.strictEqual(response.status, 302);
+    const location = response.headers.get("location");
+    assert(location);
+    const token = new URL(location).searchParams.get("token");
+    assert(token);
     const password = "recovered-password";
     assert.strictEqual(
-      (yield* post("email-otp/reset-password", {
-        email: credentials.email,
-        otp: Redacted.value(message.text).slice(0, 6),
-        password,
+      (yield* post("reset-password", {
+        token,
+        newPassword: password,
       })).status,
       200,
     );
@@ -190,7 +190,7 @@ it.live("reports a delivery failure even when the provider returns success", () 
 
     const response = yield* auth.handle(
       request(
-        "email-otp/request-password-reset",
+        "request-password-reset",
         new Headers(),
         JSON.stringify({ email: credentials.email }),
       ),

@@ -5,7 +5,7 @@
   import { authClient } from '#lib/features/auth/client.ts';
   import NewPasswordField from './NewPasswordField.svelte';
 
-  let { oncreated }: { oncreated: (credentials: { email: string; password: string }) => Promise<void> } = $props();
+  let { oncreated }: { oncreated: (email: string) => Promise<void> } = $props();
 
   let name = $state('');
   let email = $state('');
@@ -21,7 +21,7 @@
     message = null;
 
     try {
-      const { error } = await authClient.signUp.email({ name, email, password });
+      const { error } = await authClient.signUp.email({ name, email, password, callbackURL: '/login?verified=true' });
       if (error) {
         message = 'We couldn’t create your account. Check your details and try again.';
         return;
@@ -34,8 +34,8 @@
       pending = false;
     }
 
-    await oncreated({ email, password });
     password = '';
+    await oncreated(email);
   };
 </script>
 

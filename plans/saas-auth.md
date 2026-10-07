@@ -19,8 +19,8 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 | 5   | Organization chooser and sidebar switcher | Switch seeded organizations         | known                   | ✅ #21  |
 | 5a  | Official generated UI source              | Existing organization sidebar       | known · review complete | ✅ main |
 | 6   | Organization creation                     | Create org → inbox                  | approved · implemented  | ✅ #22  |
-| 7   | Signup, email code, console email         | Confirm email → create org → review | revised · implemented   | #23     |
-| 8   | Cloudflare email; plan deleted; #8 closed | Code arrives in a real inbox        | deployment verification |         |
+| 7   | Signup, email links, console email        | Verify email → sign in → create org | revised · implemented   | #23     |
+| 8   | Cloudflare email; plan deleted; #8 closed | Links arrive in a real inbox        | deployment verification |         |
 
 ## Design: PR 7 onboarding and email (approved)
 
@@ -28,30 +28,23 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 - Inline sender: fewer lines, but mixes authentication and delivery configuration.
 - Durable outbox: adds storage, a worker, retries, and crash/concurrency tests without an approved durability requirement.
 
-Follow [authentication boundaries](../apps/web/docs/authentication.md) for credential ownership, delivery outcomes, and reset failures.
+Follow [authentication boundaries](../apps/web/docs/authentication.md) for the accepted pre-launch credential-ownership risk, delivery outcomes, and reset failures.
 
 ```text
-Signup → email code → app
-Unverified sign-in → request code → email code → app
-Forgot password → request code → code + new password → sign in
+Signup → verification link → sign in
+Unverified sign-in → request verification link → sign in
+Forgot password → reset link → new password → sign in
 ```
 
-Keep confirmation on the signup or login page so the password stays in memory. Refresh restarts that journey. Pages own steps and navigation; feature forms report outcomes. Recovery is separate because the user chooses a replacement password rather than confirming one already supplied.
+Use Better Auth's standard email links to avoid retaining signup credentials or composing verification from password reset. Pages own navigation and results; operation-specific forms report outcomes.
 
-Use Show/Hide instead of a repeat-password field to reduce typing. Resend and Edit remain secondary to the step's submit action.
+Use Show/Hide instead of a repeat-password field to reduce typing. Verification and reset both require explicit sign-in afterward.
 
 Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 replaces [pre-release console delivery](../README.md#develop) with Cloudflare.
 
 PR 8 uses [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Confirm sender onboarding, account access, and live delivery then.
 
-| Proof                                                                            | Owner and regression caught                                                                                                             |
-| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Attacker signup → owner signup → code + owner password → authenticated principal | Real PostgreSQL and capturing Email Layer: old password fails, owner's password works, implicit sends cannot bypass request throttling. |
-| Recovery revokes the previous session                                            | Same fixture with an already-verified user; catches missing session revocation wiring.                                                  |
-| Failing Email Layer emits a diagnostic despite successful HTTP response          | Same fixture; catches silent send failure at the bridge.                                                                                |
-| Signup, confirmation, recovery, and interrupted requests                         | Running app: keyboard, mobile/desktop, light/dark; catches lost credentials, stale callbacks, and incorrect success or retry guidance.  |
-
-Sources: installed Effect **4.0.0-rc.112** and Better Auth **1.7.4**; [OTP plugin](https://www.better-auth.com/docs/plugins/email-otp), [InputOTP](https://shadcn-svelte.com/docs/components/input-otp), and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
+Sources: [Better Auth email and password](https://www.better-auth.com/docs/authentication/email-password) and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
 
 ## Decided
 

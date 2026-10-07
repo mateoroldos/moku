@@ -6,8 +6,9 @@
 
   let { onsignedin, onconfirmationrequired }: {
     onsignedin: () => Promise<void>;
-    onconfirmationrequired: (credentials: { email: string; password: string }) => void;
+    onconfirmationrequired: () => Promise<void>;
   } = $props();
+
   let email = $state('');
   let password = $state('');
   let pending = $state(false);
@@ -24,8 +25,8 @@
       const { error } = await authClient.signIn.email({ email, password });
       if (error) {
         if (error.code === 'EMAIL_NOT_VERIFIED') {
-          onconfirmationrequired({ email, password });
           password = '';
+          await onconfirmationrequired();
           return;
         }
 
