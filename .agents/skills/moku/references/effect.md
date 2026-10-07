@@ -15,6 +15,10 @@ Use `Context.Service` and `Layer`. Keep cohesive files together and use local ro
 names such as `Interface`, `Service`, and `layer`. Export one self-named module
 namespace so callers can see the owner: `HumanTasks.Service`, for example.
 
+Keep deterministic prerequisite checks as plain functions, even when they return
+an Effect for typed failure. `Access.requireVerifiedEmail` checks the supplied
+principal; it neither fetches identity nor needs an injectable service.
+
 Acquire stable dependencies while building the service. Keep method requirements
 empty unless a dependency truly varies per operation; callback-based operations
 preserve the callback's requirements. Name effectful operations
@@ -27,6 +31,9 @@ When correctness depends on holding a resource while work runs, prefer a capabil
 that owns that lifetime over marker services that callers must supply. For organization
 writes, `OrganizationAccess.withWriteAccess` owns authorization and the membership
 store's `withLock` owns the transaction and lock; ordinary reads use `require`.
+Use direct checks for prerequisites and callbacks for resource lifetimes. Prefer
+named capabilities over a generic authorization wrapper with transaction flags:
+a transaction alone does not establish stable membership authorization.
 
 ## Failures
 
