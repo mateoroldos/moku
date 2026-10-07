@@ -13,6 +13,10 @@ Domain and core stay independent of frameworks, SQL, and provider SDKs.
 Core owns domain-shaped ports and their expected failures. Adapters translate
 technology into those contracts; entrypoints choose implementations.
 
+Core application operations own their permission checks and the reads or writes
+they authorize. Web resolves request identity and translates operation results
+to HTTP; it must not assemble an operation's authorization and persistence sequence.
+
 As the [review model](../../../../VISION.md#scope) is implemented, domain owns
 semantic task and response contracts; core owns response validation policy and
 lifecycle rules. Web owns presentation and task-specific rendering; shared UI

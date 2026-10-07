@@ -1,5 +1,5 @@
 import { form, getRequestEvent, query } from "$app/server";
-import { OrganizationAccess } from "@moku/core/organization-access";
+import { OrganizationDirectory } from "@moku/core/organization-directory";
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import { OrganizationId } from "@moku/domain/organization";
 import { error, redirect } from "@sveltejs/kit";
@@ -17,17 +17,9 @@ export const listOrganizationMembers = query(
         "Remote.listOrganizationMembers",
         Effect.gen(function* () {
           const principal = yield* AuthGuard.requireVerified(event.locals.authenticate);
-          const access = yield* OrganizationAccess.Service;
+          const directory = yield* OrganizationDirectory.Service;
 
-          yield* access.require(
-            principal,
-            organizationId,
-            OrganizationAccess.permissions.listMembers,
-          );
-
-          const memberships = yield* OrganizationMembershipStore.Service;
-
-          return yield* memberships.listMembers(organizationId);
+          return yield* directory.listMembers(principal, organizationId);
         }),
       )
       .then(

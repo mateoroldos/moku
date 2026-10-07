@@ -7,6 +7,7 @@
     "./email": "./src/email.ts",
     "./access": "./src/access/access.ts",
     "./organization-access": "./src/access/organization-access.ts",
+    "./organization-directory": "./src/organization/organization-directory.ts",
     "./organization-membership-store": "./src/access/organization-membership-store.ts",
     "./transaction": "./src/transaction/transaction.ts",
     "./human-task-directory": "./src/human-task/human-task-directory.ts",

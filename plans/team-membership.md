@@ -4,80 +4,55 @@ Issue: [#10](https://github.com/mateoroldos/moku/issues/10)
 
 ## Pull requests
 
-| #   | Trunk gains                                                                                         | Approach         | Done |
-| --- | --------------------------------------------------------------------------------------------------- | ---------------- | ---- |
-| 1   | Read-only Team page listing organization members and roles                                          | design below     |      |
-| 2   | Invitation creation, email delivery, and acceptance behavior; entry points wait for PR 3            | design when next |      |
-| 3   | Invite/sign-in-or-signup/accept journey, pending invitations, and cancellation                      | design when next |      |
-| 4   | Role changes and removal with last-owner and task-write ordering protection; controls wait for PR 5 | design when next |      |
-| 5   | Membership controls and failure feedback; retire this plan                                          | design when next |      |
+| #   | Trunk gains                                                                                     | Approach              | Done           |
+| --- | ----------------------------------------------------------------------------------------------- | --------------------- | -------------- |
+| 1   | Read-only Team page listing members and roles                                                   | approved design below | in review: #25 |
+| 2   | Invitation creation, delivery, and acceptance; entry points wait for PR 3                       | design when next      |                |
+| 3   | Invite/sign-in-or-signup/accept journey, pending invitations, cancellation                      | design when next      |                |
+| 4   | Role changes/removal with last-owner and task-write ordering protection; controls wait for PR 5 | design when next      |                |
+| 5   | Membership controls and failure feedback; retire this plan                                      | design when next      |                |
 
 Each PR leaves trunk usable. Split a row if its design exceeds the small-PR limit; only PR 1 is designed here.
 
 ## Design: PR 1 — Team page (approved)
 
-Recommend extending the membership read path: the smallest change preserving Moku's organization authorization and failure behavior.
+Extend the membership read path and follow `HumanTaskDirectory` for application ownership. Core's `OrganizationDirectory` owns the roster permission and authorized read; web resolves identity and translates results.
 
-- **Membership store:** one projection/method, scoped SQL join, remote query, page, and sidebar link. Proof: adapter isolation/decoding and direct-entrypoint authorization.
-- **Better Auth `listMembers`:** adds an AuthProvider method, provider-result decoding, permission-error translation, and pagination handling. Proof: provider integration/mapping plus the same UI checks.
-
-The existing adapter already reads provider-owned memberships for authorization and navigation. This read-path choice does not decide later mutation ownership.
+- **Membership store:** one scoped SQL projection behind the existing port. Add a core operation, remote query, page, and sidebar link; prove policy in core and SQL at the adapter.
+- **Better Auth `listMembers`:** requires provider-result decoding, permission-error translation, and pagination handling, plus provider integration coverage. Existing membership reads already use Moku's port, making that the smaller consistent option.
 
 ```text
-MemberSummary = { userId: UserId, name: string, email: string, role: OrganizationRole }
-OrganizationMembershipStore.listMembers(id: OrganizationId)
-  : Effect<readonly MemberSummary[], OrganizationMembershipStore.Unavailable>
 listOrganizationMembers(id: OrganizationId): Promise<readonly Encoded<MemberSummary>[]>
-  → remote query schema: OrganizationId                    invalid → Kit validation failure
+  → remote query schema                                  invalid → Kit validation failure
   → locals.run("Remote.listOrganizationMembers", program)
-    → AuthGuard.requireVerified(locals.authenticate)       absent/unverified/unavailable → existing auth rejection
-    → OrganizationAccess.require(principal, id, permission) outsider → 404; denied → 403; lookup failure → 503
-    → OrganizationMembershipStore.listMembers(id)
-      → member JOIN user WHERE organization_id=id          SQL/row decoding failure → Unavailable → 503
+    → AuthGuard.requireVerified(locals.authenticate)     absent/unverified/unavailable → auth rejection
+    → OrganizationDirectory.listMembers(principal, id)
+      → OrganizationAccess.require(..., permission)      outsider → 404; denied → 403; lookup failure → 503
+      → OrganizationMembershipStore.listMembers(id)
+        → member JOIN user WHERE organization_id=id      SQL/decoding failure → Unavailable → 503
     → encode MemberSummary[] → Team page
 ```
 
-Core owns `OrganizationAccess.permissions.listMembers` and the store's projection schema; reuse UserId/OrganizationRole. PostgreSQL selects only the projection, ordered by name then user ID. The remote authorizes independently of layouts; existing request cancellation, tracing, error boundaries, and non-locking read semantics apply.
+`MemberSummary { userId: UserId, name: string, email: string, role: OrganizationRole }` stays beside the core port: an application read projection composed from domain values. PostgreSQL selects only those fields, ordered by name then user ID. The directory requires a principal and preserves existing non-locking read semantics; layout checks do not authorize remote requests.
 
-Add `/org/[organizationId]/team` and Team below Inbox in the sidebar. Use a compact semantic list: name and email grouped together, role alongside, “You” derived from `viewer.userId`. Long text wraps on mobile. Reuse the existing gutter, serif heading, tokens, awaited-query behavior, active navigation, and mobile dismissal. Visibility/data follow the approved scope in #10.
+`/org/[organizationId]/team` uses a compact semantic list with name/email grouped together and role alongside. Derive “You” from `viewer.userId`; wrap long text on mobile. Reuse the page gutter, serif heading, tokens, awaited-query behavior, and sidebar active/mobile-dismissal behavior. Visibility follows #10.
 
-Render an empty result as “No members to show.” A failed read uses the authenticated error boundary, never an empty roster; a stale link after removal rechecks access. Estimate 150–250 handwritten lines plus focused proof, under 400 or revisit the split.
+An empty result renders “No members to show.” Failures use the authenticated error boundary. The read-path choice does not decide ownership of later mutations.
 
-## PR 1 files
+## Proof
 
-```text
-packages/core/src/access/
-  organization-membership-store.ts         MemberSummary schema + listMembers
-  organization-access.ts                   roster-read permission
-adapters/database-postgres/src/access/
-  organization-membership-store-postgres.ts       member/user join
-  organization-membership-store-postgres.test.ts  adapter proof
-apps/web/src/lib/features/organizations/
-  organizations.remote.ts                  guarded roster query
-  OrganizationSidebar.svelte               Team navigation
-apps/web/src/routes/(authenticated)/org/[organizationId]/team/
-  +page.svelte                             roster rendering
-```
+| Protects                            | Level                                                                                                                                 | Fails if                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Authorized roster operation         | Core policy tests with the real OrganizationAccess Layer                                                                              | Allowed roles fail or unverified/outsider/wrong-org/failed-lookup calls return a roster |
+| Scoped projection and role decoding | PGlite adapter tests                                                                                                                  | Join/filter/order/projection is wrong or unknown stored roles are accepted              |
+| Entry-point wiring                  | Built page/direct-remote HTTP: identity/access cases, stale access, outage, forged caller pathname                                    | Transport bypasses the operation or failures look empty                                 |
+| Navigation and display              | Browser: org switch, Back/Refresh, keyboard, mobile dismissal, one/many members, duplicate names, long text; 375px/1280px, light/dark | Data or active state belongs to another org, or content becomes inaccessible            |
 
-Update existing store test implementations where the expanded interface requires it. Reuse existing tables, services, and runtime wiring.
+Run `bun run check`, `bun run build`, and PostgreSQL integration checks when runtime composition changes. Use Svelte autofixer with `--async` and browser proof when UI changes; retain the existing manual HTTP/browser approach.
 
-## PR 1 proof
+## Sources and precedents
 
-| Protects                                        | Level                                                                                                        | Fails if                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| Scoped roster, join, projected fields, ordering | Adapter test through listMembers, using the PGlite fixture pattern                                           | Organization filter/join/projection or ordering is wrong                 |
-| Persisted role decoding                         | Corrupt-role case in the same adapter test file                                                              | Unknown stored roles become valid members                                |
-| Entry-point access                              | Built page/direct-remote HTTP: anonymous, unverified, outsider, allowed roles, stale access, database outage | Layout-only checks permit access, tenants leak, or failures look empty   |
-| Navigation and roster                           | Browser: Inbox ↔ Team, org switch, Back/Refresh, one/many members, duplicate names, long text                | Active state/data belongs to another org or content becomes inaccessible |
-| Responsive/keyboard behavior                    | Browser: 375px/1280px, light/dark, keyboard, mobile menu                                                     | Content overflows or navigation/focus breaks                             |
-
-No existing test owns this SQL projection, justifying adapter coverage. Prove authorization at the real entrypoint without a test-only exported wrapper or new browser harness. Run Svelte autofixer with `--async`, `bun run check`, `bun run build`, and the above manual checks; add relevant PostgreSQL integration checks if provider/runtime behavior changes.
-
-## Sources and precedents opened
-
-- `adapters/database-postgres/src/access/organization-membership-store-postgres.ts`: list projection, decoding, failure mapping.
-- `apps/web/src/routes/(authenticated)/+layout.server.ts`: verified identity then membership-store read through locals.run.
-- `apps/web/src/lib/features/human-tasks/human-tasks.remote.ts`: schema-validated query, authorization, exhaustive HTTP mapping, encoding.
-- `apps/web/src/routes/(authenticated)/org/[organizationId]/+page.svelte` and `apps/web/src/lib/features/organizations/OrganizationSidebar.svelte`: awaited query and org-relative navigation.
-- `adapters/database-postgres/src/test/persistence-pglite.ts`: database fixture; `apps/web/docs/authentication.md`: access/read semantics; `DESIGN.md`: scanning lists and tokens.
-- Installed Better Auth 1.7.4 `dist/plugins/organization/routes/crud-members.mjs`: listMembers. Installed Effect 4.0.0-rc.112 schema guidance. SvelteKit 3.0.0-next.30: existing remote-query usage.
+- `packages/core/src/human-task/human-task-directory.ts`: operation-owned authorization; `apps/web/src/lib/features/human-tasks/human-tasks.remote.ts`: request/response boundary.
+- `adapters/database-postgres/src/access/organization-membership-store-postgres.ts`: projection, decoding, failure mapping; `src/test/persistence-pglite.ts` in that adapter: fixture.
+- The organization inbox route and `OrganizationSidebar.svelte`: awaited queries and navigation; `apps/web/docs/authentication.md` and `DESIGN.md`: access and presentation rules.
+- Installed Better Auth 1.7.4 `listMembers`, Effect 4.0.0-rc.112 schema guidance, and SvelteKit 3.0.0-next.30 remote-query usage.

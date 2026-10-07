@@ -1,6 +1,7 @@
 import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { HumanTaskDirectory } from "@moku/core/human-task-directory";
 import { OrganizationAccess } from "@moku/core/organization-access";
+import { OrganizationDirectory } from "@moku/core/organization-directory";
 import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { EmailCloudflare } from "@moku/email-cloudflare";
@@ -37,10 +38,11 @@ const postgres = (url: Redacted.Redacted) =>
     maxConnections: 10,
   });
 
-const application = Layer.merge(HumanTaskDirectory.layer, OrganizationAccess.layer).pipe(
-  Layer.provideMerge(PersistencePostgres.layer),
-  Layer.provide(NodeCrypto.layer),
-);
+const application = Layer.mergeAll(
+  HumanTaskDirectory.layer,
+  OrganizationDirectory.layer,
+  OrganizationAccess.layer,
+).pipe(Layer.provideMerge(PersistencePostgres.layer), Layer.provide(NodeCrypto.layer));
 
 export const layer = (url: Redacted.Redacted) => application.pipe(Layer.provide(postgres(url)));
 
