@@ -10,7 +10,6 @@
     "./organizations": "./src/organization/organizations.ts",
     "./organization-creation": "./src/organization/organization-creation.ts",
     "./organization-membership-store": "./src/organization/organization-membership-store.ts",
-    "./transaction": "./src/transaction/transaction.ts",
     "./human-tasks": "./src/human-task/human-tasks.ts",
     "./human-task-store": "./src/human-task/human-task-store.ts",
     "./test/crypto-deterministic": "./src/test/crypto-deterministic.ts",

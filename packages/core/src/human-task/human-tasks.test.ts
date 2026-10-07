@@ -5,7 +5,6 @@ import { OrganizationId, type OrganizationRole } from "@moku/domain/organization
 import { DateTime, Effect, Layer, Option, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
 import { OrganizationMembershipStore } from "../organization/organization-membership-store.ts";
-import { Transaction } from "../transaction/transaction.ts";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
 import { HumanTasks } from "./human-tasks.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
@@ -34,23 +33,15 @@ const membership = (role: OrganizationRole) =>
 const unavailable = new OrganizationMembershipStore.Unavailable({ cause: "offline" });
 
 // Policy tests deliberately do not simulate database transactions; PostgreSQL owns that proof.
-const transaction = Layer.succeed(Transaction.Service, {
-  run: (effect) => effect.pipe(Effect.provideService(Transaction.Active, {})),
-});
 const memberships = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
   Layer.succeed(OrganizationMembershipStore.Service, {
     find: () => lookup,
-    findForWrite: () => lookup,
+    withLock: (_userId, _organizationId, use) => lookup.pipe(Effect.flatMap(use)),
     listOrganizationsForUser: () => Effect.succeed([]),
     listMembers: () => Effect.succeed([]),
   });
 const dependencies = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
-  Layer.mergeAll(
-    HumanTaskStoreMemory.layer,
-    CryptoDeterministic.layer,
-    transaction,
-    memberships(lookup),
-  );
+  Layer.mergeAll(HumanTaskStoreMemory.layer, CryptoDeterministic.layer, memberships(lookup));
 const testLayer = HumanTasks.layer.pipe(
   Layer.provideMerge(dependencies(Effect.succeed(membership("member")))),
 );
@@ -201,7 +192,6 @@ it.effect("preserves storage failures rather than reporting a successful operati
           Layer.mergeAll(
             store,
             CryptoDeterministic.layer,
-            transaction,
             memberships(Effect.succeed(membership("member"))),
           ),
         ),
@@ -234,7 +224,6 @@ it.effect.each([
           Layer.mergeAll(
             HumanTaskStoreMemory.layer,
             CryptoDeterministic.randomUUIDLayer(uuid),
-            transaction,
             memberships(Effect.succeed(membership("member"))),
           ),
         ),

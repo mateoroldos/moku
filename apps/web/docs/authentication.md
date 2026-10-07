@@ -27,12 +27,12 @@ caller-supplied input. `OrganizationCreation.createWithOwner` atomically creates
 the organization and owner membership through the shared Better Auth instance.
 Provider transactions are independent of Effect SQL's task-write transactions.
 
-Write authorization must use uncached membership on the task write's Effect SQL
-transaction. Lock membership before task rows and keep external calls outside the
-transaction. Locked reads require `Transaction.Active`, supplied by `Transaction.run`;
-the adapter also checks the active SQL transaction. A write that locks membership
-first may finish before removal or demotion; if the membership change commits
-first, the write must observe it.
+`OrganizationAccess.withWriteAccess` verifies the principal and checks allowed roles
+before running the supplied write. `OrganizationMembershipStore.withLock` owns the
+Effect SQL transaction, reading uncached membership and locking it before task rows.
+Keep task writes inside the callback and external calls outside it. A write that
+locks membership first may finish before removal or demotion; if the membership
+change commits first, the write must observe it.
 Reads check membership without holding it stable through the task lookup.
 
 The [auth route](../src/routes/api/auth/[...path]/+server.ts) restricts the exposed

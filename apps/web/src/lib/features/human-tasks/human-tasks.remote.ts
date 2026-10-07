@@ -108,8 +108,6 @@ export const respondToHumanTask = form(
               error(403, "Your role allows viewing tasks, but not answering them."),
             "OrganizationMembershipStore.Unavailable": () =>
               error(503, "We couldn’t verify your access. Try again."),
-            "Transaction.Unavailable": () =>
-              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
             "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
             "HumanTaskStore.PersistenceError": () =>

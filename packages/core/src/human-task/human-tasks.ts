@@ -11,7 +11,6 @@ import type { OrganizationId } from "@moku/domain/organization";
 import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 import type { Access } from "../access/access.ts";
 import { OrganizationAccess } from "../organization/organization-access.ts";
-import { Transaction } from "../transaction/transaction.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 
 export const CreateInput = Schema.Struct({
@@ -36,10 +35,7 @@ export interface Interface {
     input: CreateInput,
   ) => Effect.Effect<
     PendingHumanTask,
-    | OrganizationAccess.Failure
-    | HumanTaskStore.PersistenceError
-    | Transaction.Unavailable
-    | IdGenerationError
+    OrganizationAccess.Failure | HumanTaskStore.PersistenceError | IdGenerationError
   >;
   readonly respond: (
     principal: Principal,
@@ -49,7 +45,6 @@ export interface Interface {
     CompletedHumanTask,
     | OrganizationAccess.Failure
     | HumanTaskStore.PersistenceError
-    | Transaction.Unavailable
     | HumanTaskStore.NotFound
     | HumanTaskStore.AlreadyCompleted
   >;
@@ -81,7 +76,6 @@ export const layer = Layer.effect(
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
     const access = yield* OrganizationAccess.Service;
-    const transaction = yield* Transaction.Service;
     const crypto = yield* Crypto.Crypto;
 
     const create = Effect.fn("HumanTasks.create")(function* (
@@ -89,10 +83,8 @@ export const layer = Layer.effect(
       organizationId: OrganizationId,
       { subject, ...input }: CreateInput,
     ) {
-      return yield* transaction.run(
+      return yield* access.withWriteAccess(principal, organizationId, allowedRoles.create, () =>
         Effect.gen(function* () {
-          yield* access.requireForWrite(principal, organizationId, allowedRoles.create);
-
           const id = yield* crypto.randomUUIDv4.pipe(
             Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
             Effect.mapError((cause) => new IdGenerationError({ cause })),
@@ -117,21 +109,19 @@ export const layer = Layer.effect(
       ref: TaskRef,
       result: ApprovalResult,
     ) {
-      return yield* transaction.run(
-        Effect.gen(function* () {
-          const membership = yield* access.requireForWrite(
-            principal,
-            ref.organizationId,
-            allowedRoles.respond,
-          );
+      return yield* access.withWriteAccess(
+        principal,
+        ref.organizationId,
+        allowedRoles.respond,
+        (membership) =>
+          Effect.gen(function* () {
+            const completedAt = yield* DateTime.now;
 
-          const completedAt = yield* DateTime.now;
-
-          return yield* store.complete(ref, result, completedAt, {
-            userId: membership.userId,
-            role: membership.role,
-          });
-        }),
+            return yield* store.complete(ref, result, completedAt, {
+              userId: membership.userId,
+              role: membership.role,
+            });
+          }),
       );
     });
 

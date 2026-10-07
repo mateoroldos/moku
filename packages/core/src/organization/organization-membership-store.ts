@@ -1,7 +1,6 @@
 import { UserId } from "@moku/domain/identity";
 import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { Context, Effect, Option, Schema } from "effect";
-import type { Transaction } from "../transaction/transaction.ts";
 
 export const Membership = Schema.Struct({
   userId: UserId,
@@ -30,11 +29,13 @@ export interface Interface {
     userId: UserId,
     organizationId: OrganizationId,
   ) => Effect.Effect<Option.Option<Membership>, Unavailable>;
-  /** Requires Transaction.run; hold membership stable until the write commits. */
-  readonly findForWrite: (
+  /** Run use in a transaction, holding existing membership stable until commit.
+   * The callback's writes on the shared persistence connection roll back on failure. */
+  readonly withLock: <A, E, R>(
     userId: UserId,
     organizationId: OrganizationId,
-  ) => Effect.Effect<Option.Option<Membership>, Unavailable, Transaction.Active>;
+    use: (membership: Option.Option<Membership>) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | Unavailable, R>;
   readonly listOrganizationsForUser: (
     userId: UserId,
   ) => Effect.Effect<ReadonlyArray<Organization>, Unavailable>;

@@ -27,7 +27,7 @@ const memberships = (role: OrganizationRole): OrganizationMembershipStore.Interf
 
   return {
     find,
-    findForWrite: find,
+    withLock: (userId, id, use) => find(userId, id).pipe(Effect.flatMap(use)),
     listOrganizationsForUser: () => Effect.succeed([]),
     listMembers: (id) => Effect.succeed(id === organizationId ? roster : []),
   };

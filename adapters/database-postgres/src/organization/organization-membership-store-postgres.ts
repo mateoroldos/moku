@@ -1,10 +1,9 @@
 import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
-import { Transaction } from "@moku/core/transaction";
 import type { UserId } from "@moku/domain/identity";
 import { Organization, type OrganizationId } from "@moku/domain/organization";
 import { and, asc, eq } from "drizzle-orm";
 import { Effect, Layer, Option, Schema } from "effect";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient, SqlError } from "effect/unstable/sql";
 import { member, organization, user } from "../auth/schema.ts";
 import { Database } from "../internal/database.ts";
 
@@ -38,20 +37,26 @@ export const layer = Layer.effect(
         lookup(userId, organizationId).pipe(Effect.flatMap(decode), Effect.mapError(unavailable)),
     );
 
-    const findForWrite = Effect.fn("OrganizationMembershipStorePostgres.findForWrite")(function* (
+    const withLock = Effect.fn("OrganizationMembershipStorePostgres.withLock")(function* <A, E, R>(
       userId: UserId,
       organizationId: OrganizationId,
+      use: (
+        membership: Option.Option<OrganizationMembershipStore.Membership>,
+      ) => Effect.Effect<A, E, R>,
     ) {
-      yield* Transaction.Active;
+      return yield* sql
+        .withTransaction(
+          Effect.gen(function* () {
+            const membership = yield* lookup(userId, organizationId)
+              .for("share")
+              .pipe(Effect.flatMap(decode), Effect.mapError(unavailable));
 
-      if (Option.isNone(yield* Effect.serviceOption(sql.transactionService))) {
-        return yield* Effect.die(
-          new Error("OrganizationMembershipStore.findForWrite requires Transaction.run"),
+            return yield* use(membership);
+          }),
+        )
+        .pipe(
+          Effect.mapError((cause) => (SqlError.isSqlError(cause) ? unavailable(cause) : cause)),
         );
-      }
-      return yield* lookup(userId, organizationId)
-        .for("share")
-        .pipe(Effect.flatMap(decode), Effect.mapError(unavailable));
     });
 
     const listOrganizationsForUser = Effect.fn(
@@ -87,7 +92,7 @@ export const layer = Layer.effect(
 
     return OrganizationMembershipStore.Service.of({
       find,
-      findForWrite,
+      withLock,
       listOrganizationsForUser,
       listMembers,
     });
