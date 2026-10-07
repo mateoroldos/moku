@@ -4,7 +4,7 @@ Issue: [#8](https://github.com/mateoroldos/moku/issues/8) · Appetite: ~8 PRs
 
 ## ⚠️ Needs you
 
-- Before PR 8: confirm the Cloudflare sender, Node hosting, and trusted proxy.
+- Before deployment verification: confirm the Cloudflare sender, Node hosting, and trusted proxy. Railway is tentative; hosting does not block adapter implementation.
 
 ## Trunk path
 
@@ -19,8 +19,8 @@ No PR removes the working inbox. Drafts ship before organization switching so un
 | 5   | Organization chooser and sidebar switcher | Switch seeded organizations     | known                   | ✅ #21  |
 | 5a  | Official generated UI source              | Existing organization sidebar   | known · review complete | ✅ main |
 | 6   | Organization creation                     | Create org → inbox              | approved · implemented  | ✅ #22  |
-| 7   | Signup, email links, console email        | Verify email → app → create org | revised · implemented   | #23     |
-| 8   | Cloudflare email; plan deleted; #8 closed | Links arrive in a real inbox    | deployment verification |         |
+| 7   | Signup, email links, console email        | Verify email → app → create org | revised · implemented   | ✅ #23  |
+| 8   | Cloudflare email; plan deleted; #8 closed | Links arrive in a real inbox    | implemented             |         |
 
 ## Design: PR 7 onboarding and email (approved)
 
@@ -42,9 +42,32 @@ Use Show/Hide instead of a repeat-password field to reduce typing. Email verific
 
 Use synchronous delivery with explicit resend rather than automatic retries or an outbox. Accept request latency, account-existence timing differences, and possible crash loss. PR 8 replaces [pre-release console delivery](../README.md#develop) with Cloudflare.
 
-PR 8 uses [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Confirm sender onboarding, account access, and live delivery then.
-
 Sources: [Better Auth email and password](https://www.better-auth.com/docs/authentication/email-password) and [Cloudflare limits](https://developers.cloudflare.com/email-service/platform/limits/).
+
+## Design: PR 8 Cloudflare email (approved)
+
+Follow precedent `adapters/database-postgres` for the workspace boundary. Core owns the email contract; the Cloudflare adapter implements it; web selects the implementation.
+
+```text
+packages/core/src/email.ts
+  Email.Service, Message, Unavailable moved from web
+adapters/email-cloudflare/
+  Cloudflare HTTP transport, response decoding, failure translation
+apps/web/src/lib/server/auth-provider.ts
+  Verification and password-reset email copy
+apps/web/src/lib/server/runtime.ts
+  Email Layer selection and configuration
+```
+
+The adapter depends on core, never web. Provider credentials and response types stay inside the adapter. Register `@moku/email-cloudflare` and its allowed dependencies in `tools/architecture/workspaces.ts`, add the web dependency, and update the architecture table with the implementation.
+
+Use [Cloudflare REST](https://developers.cloudflare.com/email-service/api/send-emails/rest-api/) from Node through Effect HttpClient. Require the recipient in `delivered` or `queued`, not just HTTP 200; other outcomes become `Email.Unavailable`. Preserve synchronous delivery and explicit resend.
+
+Cloudflare REST documentation and installed Effect 4.0.0-rc.112 APIs establish the implementation contract. Confirm the Cloudflare sender, account access, Node host, and trusted proxy during deployment verification.
+
+Cloudflare is the default delivery implementation. Explicit `EMAIL_DELIVERY=console` preserves local development without provider credentials; `.env.example` opts into it. Provider configuration is required only when Cloudflare is selected.
+
+Proof: retain existing authentication integration coverage, exercise provider acceptance and failure translation at the adapter boundary, run workspace/type checks and the production build, then verify real verification/reset links through deployed HTTPS and the trusted proxy. Delete this plan and close #8 only after the deployment proof is complete.
 
 ## Decided
 

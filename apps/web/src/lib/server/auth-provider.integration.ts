@@ -7,7 +7,7 @@ import { PostgresConnection } from "@moku/database-postgres/postgres-connection"
 import { hashPassword } from "better-auth/crypto";
 import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
-import { Email } from "./email.ts";
+import { Email } from "@moku/core/email";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };

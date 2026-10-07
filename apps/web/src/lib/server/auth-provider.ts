@@ -6,7 +6,7 @@ import { Organization } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
-import { Email } from "./email.ts";
+import { Email } from "@moku/core/email";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
