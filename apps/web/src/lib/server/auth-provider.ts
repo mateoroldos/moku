@@ -234,8 +234,9 @@ export const layer = Layer.effectContext(
         case "MEMBER_NOT_FOUND":
           return new Access.NotFound({});
         case "YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION":
-        case "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE":
           return new Access.Denied({});
+        case "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE":
+          return new Organizations.RoleNotAllowed({});
         case "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION":
           return new Organizations.AlreadyMember({});
         case "INVITATION_LIMIT_REACHED":

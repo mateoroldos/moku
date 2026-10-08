@@ -61,6 +61,12 @@ export class InvitationLimit extends Schema.TaggedError<InvitationLimit>()(
   {},
 ) {}
 
+/** The caller may invite, but not with the requested role. */
+export class RoleNotAllowed extends Schema.TaggedError<RoleNotAllowed>()(
+  "Organizations.RoleNotAllowed",
+  {},
+) {}
+
 export class AlreadyMember extends Schema.TaggedError<AlreadyMember>()(
   "Organizations.AlreadyMember",
   {},
@@ -90,7 +96,7 @@ export interface Interface {
     input: InviteInput,
   ) => Effect.Effect<
     void,
-    Access.NotFound | Access.Denied | AlreadyMember | InvitationLimit | Unavailable
+    Access.NotFound | Access.Denied | RoleNotAllowed | AlreadyMember | InvitationLimit | Unavailable
   >;
   /** Pending, unexpired invitations, by email; members see them, anyone else gets `Access.NotFound`. */
   readonly listInvitations: (

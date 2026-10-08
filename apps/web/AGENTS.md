@@ -35,7 +35,11 @@ Effect Schema.
 - Inline exhaustive failure mapping and operation-specific messages in each remote
   after `locals.run`. Delegate auth failures to `AuthGuard.reject`; recover expected
   operation outcomes inside the Effect.
-- Keep validation inline and preserve form input on submission failure.
+- Keep validation inline and preserve form input on submission failure. Map
+  expected, correctable form failures to `invalid(issue.<field>(…))` or `invalid(…)`
+  so they render beside the form, with or without JavaScript. In `enhance`, show
+  5xx and network failures beside the form as unconfirmed, and rethrow 4xx HTTP
+  errors to the route boundary. Global actions, such as sign-out, use Sonner.
   Report locally caught unexpected errors; they bypass Kit's error hooks.
   Route error boundaries own failures that replace the page.
 - Publish authoritative mutation results to detail queries. Secondary refresh

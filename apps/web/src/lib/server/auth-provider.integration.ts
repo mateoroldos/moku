@@ -443,7 +443,10 @@ it.live("lets owners and admins invite and rejects everyone else", () =>
     yield* asRole("member");
     assert.deepStrictEqual(yield* invite(shared, "new@moku.test", "member"), new Access.Denied({}));
     yield* asRole("admin");
-    assert.deepStrictEqual(yield* invite(shared, "new@moku.test", "owner"), new Access.Denied({}));
+    assert.deepStrictEqual(
+      yield* invite(shared, "new@moku.test", "owner"),
+      new Organizations.RoleNotAllowed({}),
+    );
     assert.deepStrictEqual(
       yield* invite(shared, "peer@moku.test", "member"),
       new Organizations.AlreadyMember({}),

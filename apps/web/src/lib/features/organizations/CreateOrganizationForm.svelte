@@ -14,7 +14,7 @@
   try {
     if (await submission.submit()) createOrganization.fields.set({ name: '' });
   } catch (failure) {
-    if (isHttpError(failure, 403)) throw failure;
+    if (isHttpError(failure) && failure.status < 500) throw failure;
     if (!isHttpError(failure)) console.error('Organization creation request failed');
     submissionFailed = true;
   }
