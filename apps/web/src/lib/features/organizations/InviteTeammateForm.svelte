@@ -8,33 +8,19 @@
 
   let { organizationId }: { organizationId: OrganizationId } = $props();
 
-  let notice = $state<{ role: 'status' | 'alert'; text: string } | null>(null);
+  let failure = $state<string | null>(null);
 </script>
 
 <section aria-labelledby="invite-heading">
   <h2 id="invite-heading" class="text-lg font-medium">Invite a teammate</h2>
   <form class="mt-4" aria-busy={inviteTeammate.pending > 0} {...inviteTeammate.enhance(async (submission) => {
-    const email = submission.fields.email.value();
-    notice = null;
+    failure = null;
 
     try {
-      if (!(await submission.submit())) return;
-
-      if (inviteTeammate.result === 'invited') {
-        notice = { role: 'status', text: `Invitation sent to ${email}.` };
-        inviteTeammate.fields.email.set('');
-      } else if (inviteTeammate.result === 'already-member') {
-        notice = { role: 'alert', text: `${email} is already a member.` };
-      } else if (inviteTeammate.result === 'limit-reached') {
-        notice = { role: 'alert', text: 'This organization has too many pending invitations. Cancel some before inviting more.' };
-      }
-    } catch (failure) {
-      if (isHttpError(failure, 403)) {
-        notice = { role: 'alert', text: failure.body.message };
-        return;
-      }
-      if (!isHttpError(failure)) console.error('Invitation request failed');
-      notice = { role: 'alert', text: 'We couldn’t confirm the invitation. Check pending invitations before trying again.' };
+      if (await submission.submit() && inviteTeammate.result?.outcome === 'invited') inviteTeammate.fields.email.set('');
+    } catch (error) {
+      if (!isHttpError(error)) console.error('Invitation request failed');
+      failure = isHttpError(error, 403) ? error.body.message : 'We couldn’t confirm the invitation. Check pending invitations before trying again.';
     }
   })}>
     <input {...inviteTeammate.fields.organizationId.as('hidden', organizationId)} />
@@ -58,10 +44,14 @@
           </select>
         </Field.Field>
       </div>
-      {#if notice?.role === 'alert'}
-        <Field.Error role="alert">{notice.text}</Field.Error>
-      {:else if notice}
-        <p role="status" class="text-sm text-muted-foreground">{notice.text}</p>
+      {#if failure}
+        <Field.Error role="alert">{failure}</Field.Error>
+      {:else if inviteTeammate.result?.outcome === 'invited'}
+        <p role="status" class="text-sm text-muted-foreground">Invitation sent to {inviteTeammate.result.email}.</p>
+      {:else if inviteTeammate.result?.outcome === 'already-member'}
+        <Field.Error role="alert">{inviteTeammate.result.email} is already a member.</Field.Error>
+      {:else if inviteTeammate.result?.outcome === 'limit-reached'}
+        <Field.Error role="alert">This organization has too many pending invitations. Cancel some before inviting more.</Field.Error>
       {/if}
       <Field.Field orientation="horizontal">
         <Button type="submit" disabled={inviteTeammate.pending > 0}>{inviteTeammate.pending > 0 ? 'Sending…' : 'Send invitation'}</Button>

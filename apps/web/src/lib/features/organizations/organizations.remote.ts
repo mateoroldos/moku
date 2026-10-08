@@ -122,6 +122,8 @@ export const inviteTeammate = form(
               "Organizations.AlreadyMember": () => Effect.succeed("already-member" as const),
               "Organizations.InvitationLimit": () => Effect.succeed("limit-reached" as const),
             }),
+            // Native submissions render the outcome from the form result.
+            Effect.map((outcome) => ({ outcome, email: input.email })),
           );
         }),
       )
