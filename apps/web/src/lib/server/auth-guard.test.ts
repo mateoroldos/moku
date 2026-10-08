@@ -26,6 +26,8 @@ const dependencies = (
       invite: () => Effect.die("unused"),
       getInvitation: () => Effect.die("unused"),
       acceptInvitation: () => Effect.die("unused"),
+      listInvitations: () => Effect.die("unused"),
+      cancelInvitation: () => Effect.die("unused"),
     }),
   );
 

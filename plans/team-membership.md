@@ -11,37 +11,39 @@ Verified membership scopes every task operation. Better Auth implements organiza
 | 1   | Read-only Team page listing members and roles                                         | design           | ✅ #25 |
 | 2   | Better Auth manages organizations; core takes a resolved `Membership`                 | design           | ✅ #27 |
 | 3   | `Organizations.invite` under Better Auth's invitation policy and email; no caller yet | design           | ✅ #28 |
-| 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design below     |        |
-| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design when next |        |
+| 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design           | ✅ #29 |
+| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design below     |        |
 | 6   | Role changes and removal with controls and failure feedback; retire this plan         | design when next |        |
 
-## Design: PR 4 — accept an invitation
+## Design: PR 5 — manage invitations on Team
 
-Alternatives: a generic `?next=<path>` return needs open-redirect validation. Listing pending invitations on `/` misses single-org users, whom `/` redirects. Accepting on page load joins without consent and puts a write on a GET. Chosen: a confirmation page, and login and signup carry only `?invitation=<id>`.
+Alternatives: a Moku rate limiter needs storage and a window policy for a form only owners and admins reach. Copying Better Auth's role rules into the UI duplicates its policy. Chosen: Better Auth's best-effort pending-invitation cap (100 per organization) is the invite limit, and the layout asks Better Auth's role objects what the caller may do.
 
 ```text
-/invitations/[id] (public layout) → getInvitation(id) query
-  → locals.auth.principal                          signed out → 303 /login?invitation=<id>, as acceptInvitation does
-  → Organizations.getInvitation(headers, id)       → Pending { email, organizationName, inviterEmail, role }
-      expired, cancelled, accepted, unknown, or    → InvitationInvalid → Unavailable view: Open Moku, or
-      sent to another email                           sign out, then /login?invitation=<id>
-acceptInvitation form(id)
-  → Organizations.acceptInvitation(headers, id) → auth.api.acceptInvitation → 303 /org/<organizationId>
-      same failures                                → same views
-/login?invitation=<id>    after sign-in, or when already signed in → /invitations/<id>
-/signup?invitation=<id>   verification callbackURL /invitations/<id>; Better Auth signs in after verifying
+org layout → canManageInvitations = organizationRoles[role].authorize({ invitation: ["create", "cancel"] }).success
+Team (owners and admins also see Invite and Pending)
+inviteTeammate form({ organizationId, email, role })
+  → locals.auth.principal → Organizations.invite → Kit refreshes the page’s queries
+      AlreadyMember → "Already a member" · admin inviting an owner → Denied 403 "Only owners can invite owners"
+      100 pending → InvitationLimit → "Cancel pending invitations first"
+listInvitations query(organizationId)
+  → Organizations.listInvitations(headers, organizationId) → pending, unexpired, by email
+      outsider → Access.NotFound 404
+cancelInvitation.for(invitationId) form({ id })
+  → Organizations.cancelInvitation(headers, invitationId) → Kit refreshes the page’s queries
+      member or viewer → Denied 403 · unknown → InvitationInvalid 404
 ```
 
-The view is a tagged union: `Pending | Unavailable`, the states Better Auth's own invitation pages show; login says why the visitor is there. Requesting another verification link returns to `/login`; the emailed invitation link still works.
+`organizationRoles` moves to an export of `better-auth-options.ts`, the object the plugin already receives. Resending is not throttled; owners and admins are trusted.
 
-| Test                                                              | Level                  | Fails if                                                |
-| ----------------------------------------------------------------- | ---------------------- | ------------------------------------------------------- |
-| Recipient sees and accepts once; the member gets the invited role | PostgreSQL integration | Wrong role or organization, or a second accept succeeds |
-| Another recipient and an expired invitation are rejected          | PostgreSQL integration | Someone else joins, or a failure maps to the wrong view |
+| Test                                                                                 | Level                  | Fails if                                    |
+| ------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------- |
+| Pending list hides accepted, cancelled, and expired; owner cancels; member is denied | PostgreSQL integration | Stale invitations show, or a member cancels |
+| The 101st pending invitation fails with `InvitationLimit`                            | PostgreSQL integration | The cap stops applying or maps to an outage |
 
-Browser: an invitation row from SQL, then sign up → verify → accept → inbox; sign in → accept; signed in as another email; invalid link. Run `bun run check`, `bun run build`, `bun run test:postgres`.
+Browser: owner invites → Pending → cancel; admin invites an owner; existing member; a member sees no Invite. Run `bun run check`, `bun run build`, `bun run test:postgres`.
 
-Sources: `apps/web/src/lib/server/auth-provider.ts` (`invite`), Better Auth 1.7.4 `routes/crud-invites.mjs` (`getInvitation`, `acceptInvitation`), `routes/(public)/login`, `SignupForm.svelte`.
+Sources: `routes/(authenticated)/org/[organizationId]/+layout.server.ts` (`canRespondToHumanTasks`), Better Auth 1.7.4 `routes/crud-invites.mjs` (`listInvitations`, `cancelInvitation`, `invitationLimit`).
 
 ## Decided
 
@@ -51,7 +53,13 @@ Sources: `apps/web/src/lib/server/auth-provider.ts` (`invite`), Better Auth 1.7.
 - Better Auth knows owner, admin, member, and viewer; viewers get member permissions. Owners and admins invite; admins cannot invite owners.
 - Inviting a pending address resends its invitation. Better Auth swallows invitation email failures; they are logged.
 - `InviteInput` uses Better Auth's email pattern, so a typo is a form error, not an outage.
-- Server-side `auth.api` calls skip Better Auth's rate limiter; PR 5 adds an invite limit.
+- Login and signup return only to `/invitations/<id>`, from `?invitation=<id>`; no caller-chosen path is followed.
+- Signed-out visitors see the invite screen even for an invalid invitation; Better Auth reveals invitation state only to a session. Accepted.
+- Joining a full organization (100 members) shows a retryable 503. Accepted with the member cap.
+- Better Auth lists every invitation an organization ever had, capped at 100 rows; past that, new pending invitations drop off Team. Accepted for now.
+- Any member can read pending invitations through the remote, as Better Auth allows; Team shows them only to owners and admins.
+- Better Auth's 100-pending invitation cap is best-effort: expired invitations stay pending, and past 100 of them the cap stops counting. Accepted; owners and admins are trusted.
+- Server-side `auth.api` calls skip Better Auth's rate limiter.
 - Better Auth returns at most 100 organizations or members per list; its default membership limit also caps members at 100. Accepted.
 - A session revoked between identity lookup and a Better Auth read surfaces as 503, not a login redirect; accepted.
 - Task writes are not ordered against membership changes; a removed member's in-flight request may finish.

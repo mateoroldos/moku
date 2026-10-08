@@ -6,7 +6,7 @@ import { Principal, UserId } from "@moku/domain/identity";
 import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
-import { Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
+import { Clock, Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
 import { betterAuthOptions, organizationPlugin } from "./better-auth-options.ts";
 import { Organizations } from "./organizations.ts";
 
@@ -37,6 +37,14 @@ const ProviderMembers = Schema.Struct({
     }),
   ),
 });
+
+const ProviderInvitations = Schema.Array(
+  Schema.Struct({
+    ...Organizations.PendingInvitation.fields,
+    status: Schema.String,
+    expiresAt: Schema.Date,
+  }),
+);
 
 const ProviderAcceptance = Schema.Struct({
   member: Schema.Struct({ organizationId: OrganizationId }),
@@ -230,6 +238,8 @@ export const layer = Layer.effectContext(
           return new Access.Denied({});
         case "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION":
           return new Organizations.AlreadyMember({});
+        case "INVITATION_LIMIT_REACHED":
+          return new Organizations.InvitationLimit({});
         default:
           return organizationsUnavailable(cause);
       }
@@ -288,6 +298,50 @@ export const layer = Layer.effectContext(
       return member.organizationId;
     });
 
+    const listInvitations = Effect.fn("Organizations.listInvitations")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.listInvitations({ headers, query: { organizationId } }),
+        // Better Auth rejects outsiders with a bare 403.
+        catch: (cause) =>
+          isAPIError(cause) && cause.status === "FORBIDDEN"
+            ? new Access.NotFound({})
+            : organizationsUnavailable(cause),
+      });
+      const invitations = yield* Schema.decodeUnknownEffect(ProviderInvitations)(result).pipe(
+        Effect.mapError(organizationsUnavailable),
+      );
+      const now = yield* Clock.currentTimeMillis;
+
+      return invitations
+        .filter(({ status, expiresAt }) => status === "pending" && expiresAt.getTime() > now)
+        .map(({ id, email, role }) => ({ id, email, role }))
+        .sort((a, b) => Order.String(a.email, b.email));
+    });
+
+    const cancelInvitation = Effect.fn("Organizations.cancelInvitation")(function* (
+      headers: Headers,
+      invitationId: string,
+    ) {
+      yield* Effect.tryPromise({
+        try: () => auth.api.cancelInvitation({ headers, body: { invitationId } }),
+        catch: (cause) => {
+          switch (isAPIError(cause) ? cause.body?.code : undefined) {
+            case "INVITATION_NOT_FOUND":
+              return new Organizations.InvitationInvalid({});
+            case "MEMBER_NOT_FOUND":
+              return new Access.NotFound({});
+            case "YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION":
+              return new Access.Denied({});
+            default:
+              return organizationsUnavailable(cause);
+          }
+        },
+      });
+    });
+
     return Context.make(Service, { authenticate, handle }).pipe(
       Context.add(Organizations.Service, {
         role,
@@ -297,6 +351,8 @@ export const layer = Layer.effectContext(
         invite,
         getInvitation,
         acceptInvitation,
+        listInvitations,
+        cancelInvitation,
       }),
     );
   }),

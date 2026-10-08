@@ -4,6 +4,7 @@ import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
+import { organizationRoles } from "#lib/server/better-auth-options.ts";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = (event) => {
@@ -19,6 +20,9 @@ export const load: LayoutServerLoad = (event) => {
         return {
           organizationId,
           canRespondToHumanTasks: Access.allows(HumanTasks.allowedRoles.respond, membership.role),
+          canManageInvitations: organizationRoles[membership.role].authorize({
+            invitation: ["create", "cancel"],
+          }).success,
         };
       }),
     )

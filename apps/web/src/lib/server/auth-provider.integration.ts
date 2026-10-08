@@ -527,3 +527,66 @@ it.live("rejects another recipient's and expired invitations", () =>
     );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
+
+it.live("lists pending invitations and lets owners, not members, cancel them", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.70");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-manage-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const own = yield* organizations.create(headers, { name: "auth-manage-own" });
+    yield* organizations.invite(headers, own.id, { email: "b@moku.test", role: "member" });
+    yield* organizations.invite(headers, own.id, { email: "a@moku.test", role: "viewer" });
+    yield* peerInvitation("auth-manage-expired", own.id, "c@moku.test", true);
+    yield* peerInvitation("auth-manage-accepted", own.id, "d@moku.test");
+    yield* sql`UPDATE invitation SET status = 'accepted' WHERE id = 'auth-manage-accepted'`;
+
+    const pending = yield* organizations.listInvitations(headers, own.id);
+    assert.deepStrictEqual(
+      pending.map(({ email, role }) => [email, role]),
+      [
+        ["a@moku.test", "viewer"],
+        ["b@moku.test", "member"],
+      ],
+    );
+    yield* organizations.cancelInvitation(headers, pending[0]?.id ?? "");
+    assert.deepStrictEqual(
+      (yield* organizations.listInvitations(headers, own.id)).map(({ email }) => email),
+      ["b@moku.test"],
+    );
+
+    const shared = yield* peerOrganization("auth-manage-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-manage-member', ${shared}, 'authentication-test', 'member', now())`;
+    const theirs = yield* peerInvitation("auth-manage-theirs", shared, "e@moku.test");
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.cancelInvitation(headers, theirs)),
+      new Access.Denied({}),
+    );
+    const foreign = yield* peerOrganization("auth-manage-foreign");
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.listInvitations(headers, foreign)),
+      new Access.NotFound({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("stops inviting at Better Auth's pending-invitation limit", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.71");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-limit-own'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    const own = yield* organizations.create(headers, { name: "auth-limit-own" });
+    yield* sql`INSERT INTO invitation (id, organization_id, email, role, status, expires_at, inviter_id)
+      SELECT 'auth-limit-' || n, ${own.id}, 'limit-' || n || '@moku.test', 'member', 'pending',
+        now() + interval '1 day', 'authentication-test'
+      FROM generate_series(1, 100) AS n`;
+
+    assert.deepStrictEqual(
+      yield* Effect.flip(
+        organizations.invite(headers, own.id, { email: "one-more@moku.test", role: "member" }),
+      ),
+      new Organizations.InvitationLimit({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);

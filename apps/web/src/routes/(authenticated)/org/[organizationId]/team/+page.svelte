@@ -1,5 +1,7 @@
 <script lang="ts">
   import { listOrganizationMembers } from '#lib/features/organizations/organizations.remote.ts';
+  import InviteTeammateForm from '#lib/features/organizations/InviteTeammateForm.svelte';
+  import PendingInvitations from '#lib/features/organizations/PendingInvitations.svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
@@ -29,4 +31,9 @@
       <li class="py-8 text-sm text-muted-foreground">No members to show.</li>
     {/each}
   </ul>
+
+  {#if data.canManageInvitations}
+    <InviteTeammateForm organizationId={data.organizationId} />
+    <PendingInvitations organizationId={data.organizationId} />
+  {/if}
 </div>
