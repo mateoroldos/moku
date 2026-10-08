@@ -4,14 +4,16 @@ import { organization, type OrganizationOptions } from "better-auth/plugins/orga
 import { defaultRoles, memberAc } from "better-auth/plugins/organization/access";
 import { customAlphabet } from "nanoid";
 
+// Better Auth rejects unknown roles; viewers manage nothing, like members.
+export const organizationRoles = { ...defaultRoles, viewer: memberAc };
+
 const organizationId = customAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 12);
 
 export const organizationPlugin = (
   options: Pick<OrganizationOptions, "sendInvitationEmail"> = {},
 ) => {
   const plugin = organization({
-    // Better Auth rejects unknown roles; viewers manage nothing, like members.
-    roles: { ...defaultRoles, viewer: memberAc },
+    roles: organizationRoles,
     requireEmailVerificationOnInvitation: true,
     ...options,
   });

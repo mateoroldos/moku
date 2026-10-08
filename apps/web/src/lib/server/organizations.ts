@@ -42,9 +42,22 @@ export const Invitation = Schema.Struct({
 });
 export interface Invitation extends Schema.Schema.Type<typeof Invitation> {}
 
+export const PendingInvitation = Schema.Struct({
+  id: Schema.String,
+  email: Schema.String,
+  role: OrganizationRole,
+});
+export interface PendingInvitation extends Schema.Schema.Type<typeof PendingInvitation> {}
+
 /** Expired, cancelled, already accepted, unknown, or sent to another email. */
 export class InvitationInvalid extends Schema.TaggedError<InvitationInvalid>()(
   "Organizations.InvitationInvalid",
+  {},
+) {}
+
+/** Better Auth's cap on pending invitations per organization. */
+export class InvitationLimit extends Schema.TaggedError<InvitationLimit>()(
+  "Organizations.InvitationLimit",
   {},
 ) {}
 
@@ -75,7 +88,20 @@ export interface Interface {
     headers: Headers,
     organizationId: OrganizationId,
     input: InviteInput,
-  ) => Effect.Effect<void, Access.NotFound | Access.Denied | AlreadyMember | Unavailable>;
+  ) => Effect.Effect<
+    void,
+    Access.NotFound | Access.Denied | AlreadyMember | InvitationLimit | Unavailable
+  >;
+  /** Pending, unexpired invitations, by email; members see them, anyone else gets `Access.NotFound`. */
+  readonly listInvitations: (
+    headers: Headers,
+    organizationId: OrganizationId,
+  ) => Effect.Effect<ReadonlyArray<PendingInvitation>, Access.NotFound | Unavailable>;
+  /** Owners and admins cancel. */
+  readonly cancelInvitation: (
+    headers: Headers,
+    invitationId: string,
+  ) => Effect.Effect<void, Access.NotFound | Access.Denied | InvitationInvalid | Unavailable>;
   /** The session owner's pending invitation. */
   readonly getInvitation: (
     headers: Headers,
