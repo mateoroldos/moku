@@ -13,7 +13,26 @@ Verified membership scopes every task operation. Better Auth implements organiza
 | 3   | `Organizations.invite` under Better Auth's invitation policy and email; no caller yet | design           | ✅ #28 |
 | 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design           | ✅ #29 |
 | 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design           | ✅ #30 |
-| 6   | Role changes and removal with controls and failure feedback; retire this plan         | design when next |        |
+| 6   | Owners and admins change members' roles on Team                                       | design           |        |
+| 7   | Owners and admins remove members on Team; retire this plan                            | design when next |        |
+
+## Design: PR 6
+
+```text
+Team row (canManageMembers = organizationRoles[role].authorize({ member: ["update"] }))
+  changeMemberRole.for(member.id): RoleSelect + Save        works without JS
+  → Organizations.changeRole(headers, orgId, memberId, role)  auth.api.updateMemberRole
+      MEMBER_NOT_FOUND                                    → MemberNotFound → settled: Kit refreshes the page
+      YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER           → RoleNotAllowed → invalid(issue.role(…))
+      YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER  → LastOwner      → invalid(issue.role(…))
+      other                                               → Unavailable    → 503: the row shows "couldn’t confirm" + refresh
+  → success: "Role updated."; Kit refreshes the page, so a self-demotion drops the controls
+```
+
+- `Member` gains `id`, Better Auth's member row id; `updateMemberRole` takes it, not the user id.
+- `MEMBER_NOT_FOUND` also answers a caller who is no longer a member; the refreshed page then shows 404.
+- Better Auth uses one code for "your role can't update members" and "only owners change owners"; both render beside the row, so the UI does not restate the owner rule.
+- `RoleSelect` owns the role options and select styling for the invite and role forms. shadcn-svelte's native select fixes its height below the 44px touch target.
 
 ## Decided
 
@@ -35,4 +54,5 @@ Verified membership scopes every task operation. Better Auth implements organiza
 - A session revoked between identity lookup and a Better Auth read surfaces as 503, not a login redirect; accepted.
 - Task writes are not ordered against membership changes; a removed member's in-flight request may finish.
 - Last-owner protection is Better Auth's check; concurrent races are accepted.
+- Removing a member asks for confirmation in an Alert Dialog.
 - Invitation links carry the invitation ID; acceptance requires the signed-in, verified recipient email.
