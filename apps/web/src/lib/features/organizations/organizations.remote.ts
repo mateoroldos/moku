@@ -14,7 +14,7 @@ export const listOrganizationMembers = query(
       .run(
         "Remote.listOrganizationMembers",
         Effect.gen(function* () {
-          yield* AuthGuard.requireVerifiedPrincipal(event.locals.authenticate);
+          yield* event.locals.auth.requireVerifiedPrincipal;
           const organizations = yield* Organizations.Service;
 
           return yield* organizations.listMembers(event.request.headers, organizationId);
@@ -46,7 +46,7 @@ export const createOrganization = form(
       .run(
         "Remote.createOrganization",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requireVerifiedPrincipal(event.locals.authenticate);
+          const principal = yield* event.locals.auth.requireVerifiedPrincipal;
           const organizations = yield* Organizations.Service;
 
           return yield* organizations.createWithOwner(principal.userId, { name });

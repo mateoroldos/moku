@@ -15,11 +15,7 @@ export const getHumanTask = query(
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          const membership = yield* AuthGuard.requireMembership(
-            event.locals.authenticate,
-            event.request.headers,
-            ref.organizationId,
-          );
+          const membership = yield* event.locals.auth.requireMembership(ref.organizationId);
           const humanTasks = yield* HumanTasks.Service;
 
           return yield* humanTasks.get(membership, ref.taskId);
@@ -51,11 +47,7 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        const membership = yield* AuthGuard.requireMembership(
-          event.locals.authenticate,
-          event.request.headers,
-          organizationId,
-        );
+        const membership = yield* event.locals.auth.requireMembership(organizationId);
         const humanTasks = yield* HumanTasks.Service;
 
         return yield* humanTasks.list(membership);
@@ -93,11 +85,7 @@ export const respondToHumanTask = form(
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          const membership = yield* AuthGuard.requireMembership(
-            event.locals.authenticate,
-            event.request.headers,
-            organizationId,
-          );
+          const membership = yield* event.locals.auth.requireMembership(organizationId);
           const humanTasks = yield* HumanTasks.Service;
 
           return yield* humanTasks.respond(membership, id, answer).pipe(

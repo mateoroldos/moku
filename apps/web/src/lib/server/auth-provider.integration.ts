@@ -8,7 +8,7 @@ import { UserId } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
-import { Config, Effect, Layer, Logger, Redacted } from "effect";
+import { Cause, Config, Effect, Exit, Fiber, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
 import { Organizations } from "./organizations.ts";
 
@@ -32,6 +32,7 @@ const postgres = Layer.unwrap(
 const fixture = Effect.fnUntraced(function* (
   clientAddress: string,
   delivery: Email.Interface = { send: () => Effect.void },
+  beforeMemberLookup?: () => Promise<void>,
 ) {
   const sql = yield* PgClient.PgClient;
   const storage = yield* AuthStorage.Service;
@@ -40,8 +41,13 @@ const fixture = Effect.fnUntraced(function* (
     const adapter = storage(options);
     return {
       ...adapter,
-      findOne: (input) =>
-        unavailable ? Promise.reject(new Error("private storage failure")) : adapter.findOne(input),
+      findOne: (input) => {
+        if (unavailable) return Promise.reject(new Error("private storage failure"));
+
+        return input.model === "member" && beforeMemberLookup !== undefined
+          ? beforeMemberLookup().then(() => adapter.findOne(input))
+          : adapter.findOne(input);
+      },
     };
   });
   const { auth, organizations } = yield* Effect.gen(function* () {
@@ -375,7 +381,7 @@ it.live("lists only the caller's organizations", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("resolves membership and the roster for members and hides both from outsiders", () =>
+it.live("scopes membership and rosters to members and rejects unsupported roles", () =>
   Effect.gen(function* () {
     const { organizations, sql, headers } = yield* fixture("192.0.2.41");
     const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-roster-%'`;
@@ -409,5 +415,44 @@ it.live("resolves membership and the roster for members and hides both from outs
       yield* Effect.flip(organizations.role(headers, foreign.id)),
       new Access.NotFound({}),
     );
+
+    yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'auth-roster-viewer'`;
+
+    assert.instanceOf(
+      yield* Effect.flip(organizations.role(headers, shared.id)),
+      Organizations.Unavailable,
+    );
+    assert.instanceOf(
+      yield* Effect.flip(organizations.listMembers(headers, shared.id)),
+      Organizations.Unavailable,
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("interrupts a membership read without waiting for the provider to settle", () =>
+  Effect.gen(function* () {
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const { organizations, sql, headers } = yield* fixture("192.0.2.42", undefined, () => {
+      entered.resolve();
+
+      return release.promise;
+    });
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-cancellation-test'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    const organization = yield* organizations.createWithOwner(UserId.make("authentication-test"), {
+      name: "auth-cancellation-test",
+    });
+    const reader = yield* organizations.role(headers, organization.id).pipe(Effect.forkChild);
+
+    yield* Effect.promise(() => entered.promise);
+    yield* Fiber.interrupt(reader).pipe(
+      Effect.timeout("1 second"),
+      Effect.ensuring(Effect.sync(() => release.resolve())),
+    );
+
+    const exit = yield* Fiber.await(reader);
+    assert(Exit.isFailure(exit));
+    assert.isTrue(Cause.hasInterruptsOnly(exit.cause));
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );

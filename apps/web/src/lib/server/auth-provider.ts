@@ -39,7 +39,6 @@ const ProviderMembers = Schema.Struct({
   ),
 });
 
-// Locale-aware, as the roster's database ordering was.
 const rosterOrder = (a: Organizations.MemberSummary, b: Organizations.MemberSummary) =>
   a.name.localeCompare(b.name) || Order.String(a.userId, b.userId);
 
@@ -163,7 +162,7 @@ export const layer = Layer.effectContext(
       );
 
       return provided.role;
-    }, Effect.uninterruptible);
+    });
 
     const list = Effect.fn("Organizations.list")(function* (headers: Headers) {
       const result: unknown = yield* Effect.tryPromise({
@@ -177,7 +176,7 @@ export const layer = Layer.effectContext(
       return [...organizations].sort(
         Order.mapInput(Order.String, (organization: Organization) => organization.id),
       );
-    }, Effect.uninterruptible);
+    });
 
     const listMembers = Effect.fn("Organizations.listMembers")(function* (
       headers: Headers,
@@ -192,7 +191,7 @@ export const layer = Layer.effectContext(
       );
 
       return members.map(({ userId, role, user }) => ({ userId, role, ...user })).sort(rosterOrder);
-    }, Effect.uninterruptible);
+    });
 
     const createWithOwner = Effect.fn("Organizations.createWithOwner")(function* (
       ownerUserId: UserId,

@@ -23,10 +23,10 @@ authorize, scoped to a resolved `Membership` they receive. Web resolves identity
 and membership and translates operation results to HTTP; it must not assemble an
 operation's authorization and persistence sequence.
 
-Better Auth owns accounts, sessions, organizations, and memberships, including the
-policy that manages them. Web reaches it on the server through services that
+Better Auth implements account, session, organization, and membership management
+under Moku's configured policies. Web reaches it on the server through services that
 `AuthProvider` builds from its Better Auth instance; remote functions call them.
-Only account flows that set cookies before a session exists use the browser client.
+Cookie-handling account flows, including signout, use the browser client.
 Core never calls Better Auth.
 
 As the [review model](../../../../VISION.md#scope) is implemented, domain owns

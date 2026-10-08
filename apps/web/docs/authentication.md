@@ -2,14 +2,14 @@
 
 For account seeding and server configuration, see [setup](../../../README.md#develop).
 
-The hook allocates a lazy `locals.authenticate` Effect for each request. Its first
-consumer resolves a domain `Principal`, absence, or an unavailable error; concurrent
-and later consumers share that result. Requests that never consume identity skip
+The hook binds `locals.auth` to a snapshot of the request's headers. The first consumer
+of its lazy `authenticate` Effect resolves a domain `Principal`, absence, or an unavailable
+error; concurrent and later consumers share that result. Requests that never consume identity skip
 the lookup. Better Auth also skips session storage without a valid session cookie.
 Login/signout changes are reflected on the next request.
 
-Protected entrypoints call `AuthGuard.requireVerifiedPrincipal(locals.authenticate)`;
-those inside an organization call `AuthGuard.requireMembership`, which also resolves
+Protected entrypoints use `locals.auth.requireVerifiedPrincipal`;
+those inside an organization call `locals.auth.requireMembership`, which also resolves
 the caller's role from Better Auth. A principal identifies
 the caller; it does not prove verification or grant task permissions. Layout loads
 can be reused during client navigation, so each protected remote needs its own guard.
@@ -32,6 +32,9 @@ the organization and owner membership through the shared Better Auth instance.
 
 Membership is resolved once per operation and not held during task writes: a member
 removed or demoted mid-request can finish that request.
+
+Organization reads allow request cancellation to stop waiting for Better Auth.
+The provider's underlying database work may continue until it settles.
 
 The [auth route](../src/routes/api/auth/[...path]/+server.ts) restricts the exposed
 provider endpoints. Better Auth owns CSRF checks against the configured origin,

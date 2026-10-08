@@ -14,11 +14,7 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.organization",
       Effect.gen(function* () {
-        const membership = yield* AuthGuard.requireMembership(
-          event.locals.authenticate,
-          event.request.headers,
-          organizationId,
-        );
+        const membership = yield* event.locals.auth.requireMembership(organizationId);
         yield* Access.requireRole(HumanTasks.allowedRoles.list, membership.role);
         return {
           organizationId,
