@@ -1,6 +1,6 @@
 import { form, getRequestEvent, query } from "$app/server";
 import { OrganizationId } from "@moku/domain/organization";
-import { error, redirect } from "@sveltejs/kit";
+import { error, invalid, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
 import { Organizations } from "#lib/server/organizations.ts";
@@ -106,7 +106,7 @@ export const inviteTeammate = form(
     Schema.Struct({ organizationId: OrganizationId, ...Organizations.InviteInput.fields }),
     { parseOptions: { onExcessProperty: "error" } },
   ),
-  ({ organizationId, ...input }) => {
+  ({ organizationId, ...input }, issue) => {
     const event = getRequestEvent();
 
     return event.locals
@@ -116,15 +116,7 @@ export const inviteTeammate = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.invite(event.request.headers, organizationId, input).pipe(
-            Effect.as("invited" as const),
-            Effect.catchTags({
-              "Organizations.AlreadyMember": () => Effect.succeed("already-member" as const),
-              "Organizations.InvitationLimit": () => Effect.succeed("limit-reached" as const),
-            }),
-            // Native submissions render the outcome from the form result.
-            Effect.map((outcome) => ({ outcome, email: input.email })),
-          );
+          return yield* organizations.invite(event.request.headers, organizationId, input);
         }),
       )
       .then(
@@ -134,12 +126,17 @@ export const inviteTeammate = form(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Your role can’t send this invitation."),
+            "Access.Denied": () => invalid(issue.role("You can’t invite someone with this role.")),
+            "Organizations.AlreadyMember": () =>
+              invalid(issue.email(`${input.email} is already a member.`)),
+            "Organizations.InvitationLimit": () =>
+              invalid("This organization has too many pending invitations. Cancel some first."),
             "Organizations.Unavailable": () =>
               error(503, "We couldn’t confirm the invitation. Check pending invitations first."),
           }),
         ),
-      );
+      )
+      .then(() => ({ invited: input.email }));
   },
 );
 
@@ -159,7 +156,10 @@ export const cancelInvitation = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.cancelInvitation(event.request.headers, id);
+          return yield* organizations.cancelInvitation(event.request.headers, id).pipe(
+            // Already accepted or cancelled elsewhere: the refreshed list shows the outcome.
+            Effect.catchTag("Organizations.InvitationInvalid", () => Effect.void),
+          );
         }),
       )
       .then(
@@ -169,9 +169,7 @@ export const cancelInvitation = form(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Only owners and admins can cancel invitations."),
-            "Organizations.InvitationInvalid": () =>
-              error(404, "This invitation could not be found."),
+            "Access.Denied": () => invalid("Your role can’t cancel invitations."),
             "Organizations.Unavailable": () =>
               error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
           }),

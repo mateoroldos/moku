@@ -23,7 +23,8 @@
     try {
       const { error } = await authClient.signUp.email({ name, email, password, callbackURL });
       if (error) {
-        message = 'We couldn’t create your account. Check your details and try again.';
+        message = error.status === 429 ? 'Too many attempts. Wait a few seconds and try again.'
+          : 'We couldn’t create your account. Check your details and try again.';
         return;
       }
     } catch {

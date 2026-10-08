@@ -61,15 +61,14 @@
       try {
         await submission.submit();
       } catch (failure) {
+        if (isHttpError(failure) && failure.status < 500) throw failure;
         if (!isHttpError(failure)) console.error('Invitation acceptance request failed');
         acceptFailed = true;
-        // An invitation that became unavailable switches to its own view.
-        if (isHttpError(failure, 404)) await getInvitation(params.id).refresh().catch(() => console.error('Invitation refresh failed'));
       }
     })}>
       <Field.Group>
         <input {...acceptInvitation.fields.id.as('hidden', params.id)} />
-        {#if acceptFailed}<Field.Error role="alert">We couldn’t accept this invitation. Try again.</Field.Error>{/if}
+        {#if acceptFailed}<Field.Error role="alert">We couldn’t confirm that you joined. Try again.</Field.Error>{/if}
         <Button type="submit" disabled={acceptInvitation.pending > 0}>{acceptInvitation.pending > 0 ? 'Joining…' : 'Join organization'}</Button>
       </Field.Group>
     </form>

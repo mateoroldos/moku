@@ -28,7 +28,9 @@
         if (error.code === 'EMAIL_NOT_VERIFIED') {
           requiresConfirmation = true;
         } else {
-          message = error.code === 'INVALID_EMAIL_OR_PASSWORD' ? 'The email or password is incorrect.' : 'We couldn’t sign you in. Try again.';
+          message = error.code === 'INVALID_EMAIL_OR_PASSWORD' ? 'The email or password is incorrect.'
+            : error.status === 429 ? 'Too many attempts. Wait a few seconds and try again.'
+            : 'We couldn’t sign you in. Try again.';
           return;
         }
       }
