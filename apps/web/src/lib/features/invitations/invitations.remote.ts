@@ -12,28 +12,22 @@ export const getInvitation = query(Schema.toStandardSchemaV1(Schema.NonEmptyStri
     .run(
       "Remote.getInvitation",
       Effect.gen(function* () {
+        const { userId } = yield* event.locals.auth.principal;
         const organizations = yield* Organizations.Service;
-        const signedOut = () => Effect.succeed({ _tag: "SignedOut" } as const);
 
-        return yield* event.locals.auth.principal.pipe(
-          Effect.flatMap(({ userId }) =>
-            organizations.getInvitation(event.request.headers, id).pipe(
-              Effect.map((invitation) => ({ _tag: "Pending", invitation }) as const),
-              Effect.catchTag("Organizations.InvitationInvalid", () =>
-                Effect.succeed({ _tag: "Unavailable", userId } as const),
-              ),
-            ),
+        return yield* organizations.getInvitation(event.request.headers, id).pipe(
+          Effect.map((invitation) => ({ _tag: "Pending", invitation }) as const),
+          Effect.catchTag("Organizations.InvitationInvalid", () =>
+            Effect.succeed({ _tag: "Unavailable", userId } as const),
           ),
-          Effect.catchTags({
-            "AuthGuard.Required": signedOut,
-            "Access.UnverifiedEmail": signedOut,
-          }),
         );
       }),
     )
     .then(
       Result.getOrElse((failure) =>
         Match.valueTags(failure, {
+          "AuthGuard.Required": () => redirect(303, withInvitation("/login", id)),
+          "Access.UnverifiedEmail": AuthGuard.reject,
           "AuthProvider.Unavailable": AuthGuard.reject,
           "Organizations.Unavailable": () =>
             error(503, "We couldn’t load this invitation. Try again."),

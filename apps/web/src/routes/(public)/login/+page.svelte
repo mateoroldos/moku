@@ -42,6 +42,8 @@
       <p role="status" class="mt-3 text-sm text-muted-foreground">Email verified. Sign in to continue.</p>
     {:else if page.url.searchParams.get('reset') === 'true'}
       <p role="status" class="mt-3 text-sm text-muted-foreground">Your password has been reset. Sign in with your new password.</p>
+    {:else if page.url.searchParams.has('invitation')}
+      <p class="mt-3 text-sm text-muted-foreground">Sign in or create an account with the invited email to accept your invitation.</p>
     {/if}
     <LoginForm onsignedin={signedIn} onconfirmationrequired={confirmationRequired} />
     <p class="mt-6 text-sm"><a href="/forgot-password" class="text-primary underline underline-offset-4">Forgot password?</a></p>

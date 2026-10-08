@@ -68,13 +68,6 @@
         <Button type="submit" disabled={acceptInvitation.pending > 0}>{acceptInvitation.pending > 0 ? 'Joining…' : 'Join organization'}</Button>
       </Field.Group>
     </form>
-  {:else if view._tag === 'SignedOut'}
-    <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">You’re invited to Moku</h1>
-    <p class="mt-3 text-sm text-muted-foreground">Sign in or create an account with the email this invitation was sent to.</p>
-    <div class="mt-8 flex flex-col gap-3">
-      <Button href={withInvitation('/login', params.id)}>Sign in</Button>
-      <Button href={withInvitation('/signup', params.id)} variant="outline">Create account</Button>
-    </div>
   {:else}
     <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">This invitation isn’t available</h1>
     <p class="mt-3 text-sm text-muted-foreground">It expired, was cancelled or accepted, or was sent to another email. Sign in with the invited email, or ask for a new invitation.</p>
