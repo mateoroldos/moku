@@ -7,7 +7,7 @@ import { Organization, type OrganizationId, OrganizationRole } from "@moku/domai
 import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
-import { betterAuthOptions } from "./better-auth-options.ts";
+import { betterAuthOptions, organizationPlugin } from "./better-auth-options.ts";
 import { Organizations } from "./organizations.ts";
 
 const ProviderSession = Schema.NullOr(
@@ -72,6 +72,16 @@ export const layer = Layer.effectContext(
 
     const auth = betterAuth({
       ...betterAuthOptions,
+      plugins: [
+        organizationPlugin({
+          sendInvitationEmail: ({ id, role, email, organization, inviter }) =>
+            send(
+              email,
+              `Join ${organization.name} on Moku`,
+              `${new URL(`/invitations/${encodeURIComponent(id)}`, origin).href}\n\n${inviter.user.name} invited you to join ${organization.name} on Moku as ${role}.`,
+            ),
+        }),
+      ],
       emailVerification: {
         sendOnSignUp: true,
         sendOnSignIn: false,
@@ -207,8 +217,37 @@ export const layer = Layer.effectContext(
       );
     });
 
+    const inviteFailure = (cause: unknown) => {
+      switch (isAPIError(cause) ? cause.body?.code : undefined) {
+        case "MEMBER_NOT_FOUND":
+          return new Access.NotFound({});
+        case "YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION":
+        case "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE":
+          return new Access.Denied({});
+        case "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION":
+          return new Organizations.AlreadyMember({});
+        default:
+          return organizationsUnavailable(cause);
+      }
+    };
+
+    const invite = Effect.fn("Organizations.invite")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+      { email, role }: Organizations.InviteInput,
+    ) {
+      yield* Effect.tryPromise({
+        try: () =>
+          auth.api.createInvitation({
+            headers,
+            body: { organizationId, email, role, resend: true },
+          }),
+        catch: inviteFailure,
+      });
+    });
+
     return Context.make(Service, { authenticate, handle }).pipe(
-      Context.add(Organizations.Service, { role, list, listMembers, create }),
+      Context.add(Organizations.Service, { role, list, listMembers, create, invite }),
     );
   }),
 );

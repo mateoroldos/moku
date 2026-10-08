@@ -385,3 +385,69 @@ it.live("scopes membership and member lists to members and rejects unsupported r
     );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
+
+it.live("invites by email and resends a pending invitation", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { organizations, sql, headers } = yield* fixture("192.0.2.50", {
+      send: (message) =>
+        Effect.sync(() => {
+          messages.push(message);
+        }),
+    });
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-invite-own'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    const organization = yield* organizations.create(headers, { name: "auth-invite-own" });
+    const input = { email: "invitee@moku.test", role: "viewer" } as const;
+
+    yield* organizations.invite(headers, organization.id, input);
+    yield* organizations.invite(headers, organization.id, input);
+
+    const invitations = yield* sql<{ id: string }>`
+      SELECT id FROM invitation
+      WHERE organization_id = ${organization.id} AND email = 'invitee@moku.test'
+        AND role = 'viewer' AND status = 'pending'
+    `;
+    assert.strictEqual(invitations.length, 1);
+    const link = `${origin}/invitations/${invitations[0]?.id}`;
+    assert.deepStrictEqual(
+      messages.map((message) => [message.to, Redacted.value(message.text).split("\n")[0]]),
+      [
+        ["invitee@moku.test", link],
+        ["invitee@moku.test", link],
+      ],
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("lets owners and admins invite and rejects everyone else", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.51");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-invite-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const foreign = yield* peerOrganization("auth-invite-foreign");
+    const shared = yield* peerOrganization("auth-invite-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-invite-caller', ${shared}, 'authentication-test', 'viewer', now())`;
+    const asRole = (role: string) =>
+      sql`UPDATE member SET role = ${role} WHERE id = 'auth-invite-caller'`;
+    const invite = (organizationId: OrganizationId, email: string, role: "owner" | "member") =>
+      Effect.flip(organizations.invite(headers, organizationId, { email, role }));
+
+    assert.deepStrictEqual(
+      yield* invite(foreign, "new@moku.test", "member"),
+      new Access.NotFound({}),
+    );
+    assert.deepStrictEqual(yield* invite(shared, "new@moku.test", "member"), new Access.Denied({}));
+    yield* asRole("member");
+    assert.deepStrictEqual(yield* invite(shared, "new@moku.test", "member"), new Access.Denied({}));
+    yield* asRole("admin");
+    assert.deepStrictEqual(yield* invite(shared, "new@moku.test", "owner"), new Access.Denied({}));
+    assert.deepStrictEqual(
+      yield* invite(shared, "peer@moku.test", "member"),
+      new Organizations.AlreadyMember({}),
+    );
+    yield* organizations.invite(headers, shared, { email: "new@moku.test", role: "member" });
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);

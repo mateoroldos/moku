@@ -28,6 +28,9 @@ Auth with the request's headers; its membership check becomes `Access.NotFound` 
 `Organizations.create` makes the session owner the owner of a new organization. It is not
 atomic: a failed owner write can leave an organization without members.
 
+Better Auth swallows invitation email failures, so they are only logged; inviting the
+address again resends its invitation.
+
 Membership is resolved once per operation and not held during task writes: a member
 removed or demoted mid-request can finish that request.
 
