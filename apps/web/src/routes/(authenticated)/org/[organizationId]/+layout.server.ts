@@ -1,6 +1,5 @@
 import { Access } from "@moku/core/access";
 import { HumanTasks } from "@moku/core/human-tasks";
-import { OrganizationAccess } from "@moku/core/organization-access";
 import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
@@ -15,13 +14,12 @@ export const load: LayoutServerLoad = (event) => {
     .run(
       "Load.organization",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
-        const access = yield* OrganizationAccess.Service;
-        const membership = yield* access.require(
-          principal,
+        const membership = yield* AuthGuard.requireMembership(
+          event.locals.authenticate,
+          event.request.headers,
           organizationId,
-          HumanTasks.allowedRoles.list,
         );
+        yield* Access.requireRole(HumanTasks.allowedRoles.list, membership.role);
         return {
           organizationId,
           canRespondToHumanTasks: Access.allows(HumanTasks.allowedRoles.respond, membership.role),
@@ -36,7 +34,7 @@ export const load: LayoutServerLoad = (event) => {
           "AuthProvider.Unavailable": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
-          "OrganizationMembershipStore.Unavailable": () =>
+          "Organizations.Unavailable": () =>
             error(503, "We couldn’t verify your access. Try again."),
         }),
       ),

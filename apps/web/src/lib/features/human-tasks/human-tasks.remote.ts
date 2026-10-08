@@ -15,10 +15,14 @@ export const getHumanTask = query(
       .run(
         "Remote.getHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          const membership = yield* AuthGuard.requireMembership(
+            event.locals.authenticate,
+            event.request.headers,
+            ref.organizationId,
+          );
           const humanTasks = yield* HumanTasks.Service;
 
-          return yield* humanTasks.get(principal, ref);
+          return yield* humanTasks.get(membership, ref.taskId);
         }),
       )
       .then(
@@ -28,7 +32,7 @@ export const getHumanTask = query(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This task could not be found."),
             "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
-            "OrganizationMembershipStore.Unavailable": () =>
+            "Organizations.Unavailable": () =>
               error(503, "We couldn’t verify your access. Try again."),
             "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
@@ -47,10 +51,14 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
     .run(
       "Remote.listHumanTasks",
       Effect.gen(function* () {
-        const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+        const membership = yield* AuthGuard.requireMembership(
+          event.locals.authenticate,
+          event.request.headers,
+          organizationId,
+        );
         const humanTasks = yield* HumanTasks.Service;
 
-        return yield* humanTasks.list(principal, organizationId);
+        return yield* humanTasks.list(membership);
       }),
     )
     .then(
@@ -60,7 +68,7 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
           "Access.UnverifiedEmail": AuthGuard.reject,
           "Access.NotFound": () => error(404, "This organization could not be found."),
           "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
-          "OrganizationMembershipStore.Unavailable": () =>
+          "Organizations.Unavailable": () =>
             error(503, "We couldn’t verify your access. Try again."),
           "AuthProvider.Unavailable": AuthGuard.reject,
           "HumanTaskStore.PersistenceError": () =>
@@ -85,14 +93,18 @@ export const respondToHumanTask = form(
       .run(
         "Remote.respondToHumanTask",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          const membership = yield* AuthGuard.requireMembership(
+            event.locals.authenticate,
+            event.request.headers,
+            organizationId,
+          );
           const humanTasks = yield* HumanTasks.Service;
 
-          return yield* humanTasks.respond(principal, ref, answer).pipe(
+          return yield* humanTasks.respond(membership, id, answer).pipe(
             Effect.map((task) => ({ outcome: "recorded" as const, task })),
             Effect.catchTag("HumanTaskStore.AlreadyCompleted", () =>
               humanTasks
-                .get(principal, ref)
+                .get(membership, id)
                 .pipe(Effect.map((task) => ({ outcome: "already-completed" as const, task }))),
             ),
           );
@@ -106,7 +118,7 @@ export const respondToHumanTask = form(
             "Access.NotFound": () => error(404, "This task could not be found."),
             "Access.Denied": () =>
               error(403, "Your role allows viewing tasks, but not answering them."),
-            "OrganizationMembershipStore.Unavailable": () =>
+            "Organizations.Unavailable": () =>
               error(503, "We couldn’t verify your access. Try again."),
             "AuthProvider.Unavailable": AuthGuard.reject,
             "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),

@@ -2,17 +2,15 @@ import { assert, it } from "@effect/vitest";
 import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
 import { Membership, OrganizationId, type OrganizationRole } from "@moku/domain/organization";
-import { DateTime, Effect, Layer, Option, PlatformError } from "effect";
+import { DateTime, Effect, Layer, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
-import { OrganizationMembershipStore } from "../organization/organization-membership-store.ts";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
 import { HumanTasks } from "./human-tasks.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
 
 const organizationId = OrganizationId.make("organization");
-const principal = { userId: UserId.make("reviewer"), emailVerified: true };
-const ref = { organizationId, taskId: HumanTaskId.make("00000000-0000-4000-8000-000000000009") };
+const taskId = HumanTaskId.make("00000000-0000-4000-8000-000000000009");
 const input = HumanTasks.CreateInput.make({
   intent: "authorize",
   subject: { title: HumanTaskTitle.make("Publish the report"), description: "Weekly summary" },
@@ -21,36 +19,26 @@ const input = HumanTasks.CreateInput.make({
 });
 const pending = PendingHumanTask.make({
   ...input,
-  id: ref.taskId,
+  id: taskId,
   organizationId,
   status: "pending",
   createdAt: DateTime.makeUnsafe(0),
 });
-const membership = (role: OrganizationRole) =>
-  Option.some(Membership.make({ userId: principal.userId, organizationId, role }));
-const unavailable = new OrganizationMembershipStore.Unavailable({ cause: "offline" });
+const membership = (role: OrganizationRole, organization = organizationId) =>
+  Membership.make({ userId: UserId.make("reviewer"), organizationId: organization, role });
+const member = membership("member");
 
-// Policy tests deliberately do not simulate database transactions; PostgreSQL owns that proof.
-const memberships = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
-  Layer.succeed(OrganizationMembershipStore.Service, {
-    find: () => lookup,
-    withLock: (_userId, _organizationId, use) => lookup.pipe(Effect.flatMap(use)),
-    listOrganizationsForUser: () => Effect.succeed([]),
-    listMembers: () => Effect.succeed([]),
-  });
-const dependencies = (lookup: ReturnType<OrganizationMembershipStore.Interface["find"]>) =>
-  Layer.mergeAll(HumanTaskStoreMemory.layer, CryptoDeterministic.layer, memberships(lookup));
 const testLayer = HumanTasks.layer.pipe(
-  Layer.provideMerge(dependencies(Effect.succeed(membership("member")))),
+  Layer.provideMerge(Layer.merge(HumanTaskStoreMemory.layer, CryptoDeterministic.layer)),
 );
 
 it.effect("creates distinct pending tasks with server-owned IDs, times, and request data", () =>
   Effect.gen(function* () {
     const humanTasks = yield* HumanTasks.Service;
     yield* TestClock.setTime(1_000);
-    const first = yield* humanTasks.create(principal, organizationId, input);
+    const first = yield* humanTasks.create(member, input);
     yield* TestClock.setTime(2_000);
-    const second = yield* humanTasks.create(principal, organizationId, input);
+    const second = yield* humanTasks.create(member, input);
     assert.deepStrictEqual(first, {
       ...input,
       organizationId,
@@ -70,13 +58,9 @@ it.effect.each(["owner", "admin", "member", "viewer"] as const)(
       const store = yield* HumanTaskStore.Service;
       const humanTasks = yield* HumanTasks.Service;
       yield* store.create(pending);
-      assert.deepStrictEqual(yield* humanTasks.get(principal, ref), pending);
-      assert.deepStrictEqual(yield* humanTasks.list(principal, organizationId), [pending]);
-    }).pipe(
-      Effect.provide(
-        HumanTasks.layer.pipe(Layer.provideMerge(dependencies(Effect.succeed(membership(role))))),
-      ),
-    ),
+      assert.deepStrictEqual(yield* humanTasks.get(membership(role), taskId), pending);
+      assert.deepStrictEqual(yield* humanTasks.list(membership(role)), [pending]);
+    }).pipe(Effect.provide(testLayer)),
 );
 
 it.effect.each(["owner", "admin", "member"] as const)(
@@ -84,14 +68,10 @@ it.effect.each(["owner", "admin", "member"] as const)(
   (role) =>
     Effect.gen(function* () {
       const humanTasks = yield* HumanTasks.Service;
-      const task = yield* humanTasks.create(principal, organizationId, input);
+      const task = yield* humanTasks.create(membership(role), input);
       const result = { decision: "approved", feedback: "Reviewed" } as const;
       yield* TestClock.setTime(2_000);
-      const completed = yield* humanTasks.respond(
-        principal,
-        { organizationId, taskId: task.id },
-        result,
-      );
+      const completed = yield* humanTasks.respond(membership(role), task.id, result);
       const { status: _, ...request } = task;
       assert.deepStrictEqual(completed, {
         ...request,
@@ -100,67 +80,45 @@ it.effect.each(["owner", "admin", "member"] as const)(
         completedAt: DateTime.makeUnsafe(2_000),
         attribution: { userId: UserId.make("reviewer"), role },
       });
-    }).pipe(
-      Effect.provide(
-        HumanTasks.layer.pipe(Layer.provideMerge(dependencies(Effect.succeed(membership(role))))),
-      ),
-    ),
+    }).pipe(Effect.provide(testLayer)),
 );
 
-const denied = [
-  {
-    name: "unverified",
-    actor: { ...principal, emailVerified: false },
-    lookup: Effect.succeed(membership("owner")),
-    tag: "Access.UnverifiedEmail",
-  },
-  {
-    name: "non-member",
-    actor: principal,
-    lookup: Effect.succeed(Option.none()),
-    tag: "Access.NotFound",
-  },
-  {
-    name: "membership outage",
-    actor: principal,
-    lookup: Effect.fail(unavailable),
-    tag: "OrganizationMembershipStore.Unavailable",
-  },
-];
-
-it.effect.each(denied)("denies reads on $name", ({ actor, lookup, tag }) =>
+it.effect("denies viewer creates and answers without changing tasks", () =>
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
     const humanTasks = yield* HumanTasks.Service;
-    yield* store.create(pending);
-    assert.strictEqual((yield* Effect.flip(humanTasks.get(actor, ref)))._tag, tag);
-    assert.strictEqual((yield* Effect.flip(humanTasks.list(actor, organizationId)))._tag, tag);
-  }).pipe(Effect.provide(HumanTasks.layer.pipe(Layer.provideMerge(dependencies(lookup))))),
-);
-
-it.effect.each([
-  ...denied,
-  {
-    name: "viewer",
-    actor: principal,
-    lookup: Effect.succeed(membership("viewer")),
-    tag: "Access.Denied",
-  },
-])("denies creates and answers on $name without changing tasks", ({ actor, lookup, tag }) =>
-  Effect.gen(function* () {
-    const store = yield* HumanTaskStore.Service;
-    const humanTasks = yield* HumanTasks.Service;
+    const viewer = membership("viewer");
     yield* store.create(pending);
     assert.strictEqual(
-      (yield* Effect.flip(humanTasks.create(actor, organizationId, input)))._tag,
-      tag,
+      (yield* Effect.flip(humanTasks.create(viewer, input)))._tag,
+      "Access.Denied",
     );
     assert.strictEqual(
-      (yield* Effect.flip(humanTasks.respond(actor, ref, { decision: "approved" })))._tag,
-      tag,
+      (yield* Effect.flip(humanTasks.respond(viewer, taskId, { decision: "approved" })))._tag,
+      "Access.Denied",
     );
     assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
-  }).pipe(Effect.provide(HumanTasks.layer.pipe(Layer.provideMerge(dependencies(lookup))))),
+  }).pipe(Effect.provide(testLayer)),
+);
+
+it.effect("scopes every operation to the membership's organization", () =>
+  Effect.gen(function* () {
+    const store = yield* HumanTaskStore.Service;
+    const humanTasks = yield* HumanTasks.Service;
+    const outsider = membership("owner", OrganizationId.make("other"));
+    yield* store.create(pending);
+    assert.strictEqual(
+      (yield* Effect.flip(humanTasks.get(outsider, taskId)))._tag,
+      "HumanTaskStore.NotFound",
+    );
+    assert.strictEqual(
+      (yield* Effect.flip(humanTasks.respond(outsider, taskId, { decision: "approved" })))._tag,
+      "HumanTaskStore.NotFound",
+    );
+    assert.deepStrictEqual(yield* humanTasks.list(outsider), []);
+    assert.strictEqual((yield* humanTasks.create(outsider, input)).organizationId, "other");
+    assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
+  }).pipe(Effect.provide(testLayer)),
 );
 
 it.effect("preserves storage failures rather than reporting a successful operation", () => {
@@ -173,27 +131,16 @@ it.effect("preserves storage failures rather than reporting a successful operati
   });
   return Effect.gen(function* () {
     const humanTasks = yield* HumanTasks.Service;
+    assert.strictEqual(yield* Effect.flip(humanTasks.create(member, input)), failure);
     assert.strictEqual(
-      yield* Effect.flip(humanTasks.create(principal, organizationId, input)),
+      yield* Effect.flip(humanTasks.respond(member, taskId, { decision: "approved" })),
       failure,
     );
-    assert.strictEqual(
-      yield* Effect.flip(humanTasks.respond(principal, ref, { decision: "approved" })),
-      failure,
-    );
-    assert.strictEqual(yield* Effect.flip(humanTasks.get(principal, ref)), failure);
-    assert.strictEqual(yield* Effect.flip(humanTasks.list(principal, organizationId)), failure);
+    assert.strictEqual(yield* Effect.flip(humanTasks.get(member, taskId)), failure);
+    assert.strictEqual(yield* Effect.flip(humanTasks.list(member)), failure);
   }).pipe(
     Effect.provide(
-      HumanTasks.layer.pipe(
-        Layer.provide(
-          Layer.mergeAll(
-            store,
-            CryptoDeterministic.layer,
-            memberships(Effect.succeed(membership("member"))),
-          ),
-        ),
-      ),
+      HumanTasks.layer.pipe(Layer.provide(Layer.merge(store, CryptoDeterministic.layer))),
     ),
   );
 });
@@ -211,7 +158,7 @@ it.effect.each([
     const humanTasks = yield* HumanTasks.Service;
     const store = yield* HumanTaskStore.Service;
     assert.instanceOf(
-      yield* Effect.flip(humanTasks.create(principal, organizationId, input)),
+      yield* Effect.flip(humanTasks.create(member, input)),
       HumanTasks.IdGenerationError,
     );
     assert.deepStrictEqual(yield* store.list(organizationId), []);
@@ -219,11 +166,7 @@ it.effect.each([
     Effect.provide(
       HumanTasks.layer.pipe(
         Layer.provideMerge(
-          Layer.mergeAll(
-            HumanTaskStoreMemory.layer,
-            CryptoDeterministic.randomUUIDLayer(uuid),
-            memberships(Effect.succeed(membership("member"))),
-          ),
+          Layer.merge(HumanTaskStoreMemory.layer, CryptoDeterministic.randomUUIDLayer(uuid)),
         ),
       ),
     ),

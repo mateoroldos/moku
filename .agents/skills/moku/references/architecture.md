@@ -18,9 +18,16 @@ of a particular operation. Keep operation-specific read projections in core besi
 their ports. Choose ownership by meaning and reason to change, not by where data is
 loaded or whether it uses Schema.
 
-Core application operations own their permission checks and the reads or writes
-they authorize. Web resolves request identity and translates operation results
-to HTTP; it must not assemble an operation's authorization and persistence sequence.
+Core application operations own their role policy and the reads or writes they
+authorize, scoped to a resolved `Membership` they receive. Web resolves identity
+and membership and translates operation results to HTTP; it must not assemble an
+operation's authorization and persistence sequence.
+
+Better Auth owns accounts, sessions, organizations, and memberships, including the
+policy that manages them. Web reaches it on the server through services that
+`AuthProvider` builds from its Better Auth instance; remote functions call them.
+Only account flows that set cookies before a session exists use the browser client.
+Core never calls Better Auth.
 
 As the [review model](../../../../VISION.md#scope) is implemented, domain owns
 semantic task and response contracts; core owns response validation policy and

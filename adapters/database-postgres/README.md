@@ -1,18 +1,12 @@
 # PostgreSQL persistence
 
-Implements `HumanTaskStore` and `OrganizationMembershipStore` with Drizzle
-and Effect SQL. Supply the PostgreSQL
+Implements `HumanTaskStore` with Drizzle and Effect SQL. Supply the PostgreSQL
 client with `PersistencePostgres.typeParsers` for Drizzle's temporal codecs.
 
 The web runtime uses `PostgresConnection.layer` to supply Effect SQL and
 `AuthStorage.Service` from one scoped pool. Auth storage is a Better Auth database
 factory; it does not expose the raw pool or Drizzle clients. Sharing a pool does
-not share transactions: task permissions and writes must use the same Effect SQL
-transaction, rather than mixing in Better Auth writes.
-
-`OrganizationMembershipStore.withLock` owns the transaction that holds membership
-stable while its callback runs. Task-store writes in that callback use the same
-Effect SQL client and roll back if the callback fails or is interrupted.
+not share transactions between Effect SQL and Better Auth.
 
 ## Develop
 

@@ -1,10 +1,9 @@
 import { form, getRequestEvent, query } from "$app/server";
-import { Organizations } from "@moku/core/organizations";
-import { OrganizationMembershipStore } from "@moku/core/organization-membership-store";
 import { OrganizationId } from "@moku/domain/organization";
 import { error, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
+import { Organizations } from "#lib/server/organizations.ts";
 
 export const listOrganizationMembers = query(
   Schema.toStandardSchemaV1(OrganizationId),
@@ -15,10 +14,10 @@ export const listOrganizationMembers = query(
       .run(
         "Remote.listOrganizationMembers",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          yield* AuthGuard.requireVerifiedPrincipal(event.locals.authenticate);
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.listMembers(principal, organizationId);
+          return yield* organizations.listMembers(event.request.headers, organizationId);
         }),
       )
       .then(
@@ -28,13 +27,11 @@ export const listOrganizationMembers = query(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Your role does not allow viewing the team."),
-            "OrganizationMembershipStore.Unavailable": () =>
-              error(503, "We couldn’t load your team. Try again."),
+            "Organizations.Unavailable": () => error(503, "We couldn’t load your team. Try again."),
           }),
         ),
       )
-      .then(Schema.encodeSync(Schema.Array(OrganizationMembershipStore.MemberSummary)));
+      .then(Schema.encodeSync(Schema.Array(Organizations.MemberSummary)));
   },
 );
 
@@ -49,10 +46,10 @@ export const createOrganization = form(
       .run(
         "Remote.createOrganization",
         Effect.gen(function* () {
-          const principal = yield* AuthGuard.requirePrincipal(event.locals.authenticate);
+          const principal = yield* AuthGuard.requireVerifiedPrincipal(event.locals.authenticate);
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.create(principal, { name });
+          return yield* organizations.createWithOwner(principal.userId, { name });
         }),
       )
       .then(
@@ -61,7 +58,7 @@ export const createOrganization = form(
             "AuthGuard.Required": AuthGuard.reject,
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
-            "OrganizationCreation.Unavailable": () =>
+            "Organizations.Unavailable": () =>
               error(
                 503,
                 "We couldn’t confirm creation. Check your organizations before trying again.",

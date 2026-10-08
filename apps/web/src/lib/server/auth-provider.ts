@@ -1,13 +1,15 @@
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { runWithTransaction } from "@better-auth/core/context";
 import { generateId } from "@better-auth/core/utils/id";
+import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
-import { OrganizationCreation } from "@moku/core/organization-creation";
 import { Principal, UserId } from "@moku/domain/identity";
-import { Organization } from "@moku/domain/organization";
+import { Organization, type OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
-import { Config, Context, Effect, Layer, Redacted, Schema } from "effect";
+import { Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "./better-auth-options.ts";
+import { Organizations } from "./organizations.ts";
 
 const ProviderSession = Schema.NullOr(
   Schema.Struct({
@@ -24,6 +26,22 @@ const Origin = Schema.URLFromString.check(
       : "Expected an HTTPS origin or local HTTP origin",
   ),
 );
+
+const ProviderRole = Schema.Struct({ role: OrganizationRole });
+
+const ProviderMembers = Schema.Struct({
+  members: Schema.Array(
+    Schema.Struct({
+      userId: UserId,
+      role: OrganizationRole,
+      user: Schema.Struct({ name: Schema.String, email: Schema.String }),
+    }),
+  ),
+});
+
+// Locale-aware, as the roster's database ordering was.
+const rosterOrder = (a: Organizations.MemberSummary, b: Organizations.MemberSummary) =>
+  a.name.localeCompare(b.name) || Order.String(a.userId, b.userId);
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
@@ -124,11 +142,61 @@ export const layer = Layer.effectContext(
       return response;
     }, Effect.uninterruptible);
 
-    const creationUnavailable = (cause: unknown) =>
-      new OrganizationCreation.Unavailable({ cause: Redacted.make(cause) });
-    const createWithOwner = Effect.fn("OrganizationCreationBetterAuth.createWithOwner")(function* (
+    const organizationsUnavailable = (cause: unknown) =>
+      new Organizations.Unavailable({ cause: Redacted.make(cause) });
+
+    const outsiderOrUnavailable = (cause: unknown) =>
+      isAPIError(cause) && cause.body?.code === "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION"
+        ? new Access.NotFound({})
+        : organizationsUnavailable(cause);
+
+    const role = Effect.fn("Organizations.role")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.getActiveMemberRole({ headers, query: { organizationId } }),
+        catch: outsiderOrUnavailable,
+      });
+      const provided = yield* Schema.decodeUnknownEffect(ProviderRole)(result).pipe(
+        Effect.mapError(organizationsUnavailable),
+      );
+
+      return provided.role;
+    }, Effect.uninterruptible);
+
+    const list = Effect.fn("Organizations.list")(function* (headers: Headers) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.listOrganizations({ headers }),
+        catch: organizationsUnavailable,
+      });
+      const organizations = yield* Schema.decodeUnknownEffect(Schema.Array(Organization))(
+        result,
+      ).pipe(Effect.mapError(organizationsUnavailable));
+
+      return [...organizations].sort(
+        Order.mapInput(Order.String, (organization: Organization) => organization.id),
+      );
+    }, Effect.uninterruptible);
+
+    const listMembers = Effect.fn("Organizations.listMembers")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.listMembers({ headers, query: { organizationId } }),
+        catch: outsiderOrUnavailable,
+      });
+      const { members } = yield* Schema.decodeUnknownEffect(ProviderMembers)(result).pipe(
+        Effect.mapError(organizationsUnavailable),
+      );
+
+      return members.map(({ userId, role, user }) => ({ userId, role, ...user })).sort(rosterOrder);
+    }, Effect.uninterruptible);
+
+    const createWithOwner = Effect.fn("Organizations.createWithOwner")(function* (
       ownerUserId: UserId,
-      { name }: OrganizationCreation.Input,
+      { name }: Organizations.CreateInput,
     ) {
       const result: unknown = yield* Effect.tryPromise({
         // Flatten Better Auth's declared Promise<Promise<...>> at the Promise boundary.
@@ -146,16 +214,16 @@ export const layer = Layer.effectContext(
               }),
             ),
           ),
-        catch: creationUnavailable,
+        catch: organizationsUnavailable,
       });
 
       return yield* Schema.decodeUnknownEffect(Organization)(result).pipe(
-        Effect.mapError(creationUnavailable),
+        Effect.mapError(organizationsUnavailable),
       );
     }, Effect.uninterruptible);
 
     return Context.make(Service, { authenticate, handle }).pipe(
-      Context.add(OrganizationCreation.Service, { createWithOwner }),
+      Context.add(Organizations.Service, { role, list, listMembers, createWithOwner }),
     );
   }),
 );

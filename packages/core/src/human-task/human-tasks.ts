@@ -4,13 +4,10 @@ import {
   type HumanTask,
   HumanTaskId,
   PendingHumanTask,
-  type TaskRef,
 } from "@moku/domain/human-task";
-import type { Principal } from "@moku/domain/identity";
-import type { OrganizationId } from "@moku/domain/organization";
+import type { Membership } from "@moku/domain/organization";
 import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
-import type { Access } from "../access/access.ts";
-import { OrganizationAccess } from "../organization/organization-access.ts";
+import { Access } from "../access/access.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 
 export const CreateInput = Schema.Struct({
@@ -28,40 +25,36 @@ export const allowedRoles = {
   respond: ["owner", "admin", "member"],
 } as const satisfies Record<"get" | "list" | "create" | "respond", Access.AllowedRoles>;
 
+/** Operations act inside the membership's organization; callers resolve the membership. */
 export interface Interface {
   readonly create: (
-    principal: Principal,
-    organizationId: OrganizationId,
+    membership: Membership,
     input: CreateInput,
   ) => Effect.Effect<
     PendingHumanTask,
-    OrganizationAccess.Failure | HumanTaskStore.PersistenceError | IdGenerationError
+    Access.Denied | HumanTaskStore.PersistenceError | IdGenerationError
   >;
   readonly respond: (
-    principal: Principal,
-    ref: TaskRef,
+    membership: Membership,
+    taskId: HumanTaskId,
     result: ApprovalResult,
   ) => Effect.Effect<
     CompletedHumanTask,
-    | OrganizationAccess.Failure
+    | Access.Denied
     | HumanTaskStore.PersistenceError
     | HumanTaskStore.NotFound
     | HumanTaskStore.AlreadyCompleted
   >;
   readonly get: (
-    principal: Principal,
-    ref: TaskRef,
+    membership: Membership,
+    taskId: HumanTaskId,
   ) => Effect.Effect<
     HumanTask,
-    OrganizationAccess.Failure | HumanTaskStore.PersistenceError | HumanTaskStore.NotFound
+    Access.Denied | HumanTaskStore.PersistenceError | HumanTaskStore.NotFound
   >;
   readonly list: (
-    principal: Principal,
-    organizationId: OrganizationId,
-  ) => Effect.Effect<
-    ReadonlyArray<HumanTask>,
-    OrganizationAccess.Failure | HumanTaskStore.PersistenceError
-  >;
+    membership: Membership,
+  ) => Effect.Effect<ReadonlyArray<HumanTask>, Access.Denied | HumanTaskStore.PersistenceError>;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@moku/core/HumanTasks") {}
@@ -75,73 +68,64 @@ export const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
-    const access = yield* OrganizationAccess.Service;
     const crypto = yield* Crypto.Crypto;
 
     const create = Effect.fn("HumanTasks.create")(function* (
-      principal: Principal,
-      organizationId: OrganizationId,
+      membership: Membership,
       { subject, ...input }: CreateInput,
     ) {
-      return yield* access.withWriteAccess(principal, organizationId, allowedRoles.create, () =>
-        Effect.gen(function* () {
-          const id = yield* crypto.randomUUIDv4.pipe(
-            Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
-            Effect.mapError((cause) => new IdGenerationError({ cause })),
-          );
-          const createdAt = yield* DateTime.now;
-          return yield* store.create(
-            PendingHumanTask.make({
-              ...input,
-              subject,
-              id,
-              organizationId,
-              createdAt,
-              status: "pending",
-            }),
-          );
+      yield* Access.requireRole(allowedRoles.create, membership.role);
+
+      const id = yield* crypto.randomUUIDv4.pipe(
+        Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
+        Effect.mapError((cause) => new IdGenerationError({ cause })),
+      );
+      const createdAt = yield* DateTime.now;
+      return yield* store.create(
+        PendingHumanTask.make({
+          ...input,
+          subject,
+          id,
+          organizationId: membership.organizationId,
+          createdAt,
+          status: "pending",
         }),
       );
     });
 
     const respond = Effect.fn("HumanTasks.respond")(function* (
-      principal: Principal,
-      ref: TaskRef,
+      membership: Membership,
+      taskId: HumanTaskId,
       result: ApprovalResult,
     ) {
-      return yield* access.withWriteAccess(
-        principal,
-        ref.organizationId,
-        allowedRoles.respond,
-        (membership) =>
-          Effect.gen(function* () {
-            const completedAt = yield* DateTime.now;
+      yield* Access.requireRole(allowedRoles.respond, membership.role);
 
-            return yield* store.complete(ref, result, completedAt, {
-              userId: membership.userId,
-              role: membership.role,
-            });
-          }),
+      const completedAt = yield* DateTime.now;
+      return yield* store.complete(
+        { organizationId: membership.organizationId, taskId },
+        result,
+        completedAt,
+        { userId: membership.userId, role: membership.role },
       );
     });
 
-    const get = Effect.fn("HumanTasks.get")(function* (principal: Principal, ref: TaskRef) {
-      yield* access.require(principal, ref.organizationId, allowedRoles.get);
+    const get = Effect.fn("HumanTasks.get")(function* (
+      membership: Membership,
+      taskId: HumanTaskId,
+    ) {
+      yield* Access.requireRole(allowedRoles.get, membership.role);
 
-      return yield* store.get(ref);
+      return yield* store.get({ organizationId: membership.organizationId, taskId });
     });
 
-    const list = Effect.fn("HumanTasks.list")(function* (
-      principal: Principal,
-      organizationId: OrganizationId,
-    ) {
-      yield* access.require(principal, organizationId, allowedRoles.list);
+    const list = Effect.fn("HumanTasks.list")(function* (membership: Membership) {
+      yield* Access.requireRole(allowedRoles.list, membership.role);
 
-      return yield* store.list(organizationId);
+      return yield* store.list(membership.organizationId);
     });
 
     return Service.of({ create, respond, get, list });
   }),
-).pipe(Layer.provide(OrganizationAccess.layer));
+);
 
 export * as HumanTasks from "./human-tasks.ts";
