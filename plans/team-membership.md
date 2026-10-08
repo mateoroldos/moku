@@ -32,6 +32,7 @@ Team row (canManageMembers = organizationRoles[role].authorize({ member: ["updat
 - `Member` gains `id`, Better Auth's member row id; `updateMemberRole` takes it, not the user id.
 - `MEMBER_NOT_FOUND` also answers a caller who is no longer a member; the refreshed page then shows 404.
 - Better Auth uses one code for "your role can't update members" and "only owners change owners"; both render beside the row, so the UI does not restate the owner rule.
+- Changing your own role asks for confirmation in an Alert Dialog; ownership transfer is promoting another owner, then demoting yourself. Without JavaScript the change submits unconfirmed.
 - `RoleSelect` owns the role options and select styling for the invite and role forms. shadcn-svelte's native select fixes its height below the 44px touch target.
 
 ## Decided
@@ -54,5 +55,5 @@ Team row (canManageMembers = organizationRoles[role].authorize({ member: ["updat
 - A session revoked between identity lookup and a Better Auth read surfaces as 503, not a login redirect; accepted.
 - Task writes are not ordered against membership changes; a removed member's in-flight request may finish.
 - Last-owner protection is Better Auth's check; concurrent races are accepted.
-- Removing a member asks for confirmation in an Alert Dialog.
+- Removing a member, or changing your own role, asks for confirmation in an Alert Dialog.
 - Invitation links carry the invitation ID; acceptance requires the signed-in, verified recipient email.
