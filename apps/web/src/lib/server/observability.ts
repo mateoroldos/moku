@@ -1,4 +1,5 @@
 import { Cause, Clock, Effect, Exit, Layer, Logger, Schema, type Tracer } from "effect";
+import type { CaughtError } from "@sveltejs/kit/hooks";
 import { FetchHttpClient } from "effect/unstable/http";
 import { OtlpLogger, OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 
@@ -75,9 +76,7 @@ export const operation =
                     : "typed",
               );
             }
-            yield* (outcome === "failure" ? Effect.logError : Effect.logInfo)(
-              "application.operation.completed",
-            ).pipe(
+            yield* Effect.logInfo("application.operation.completed").pipe(
               Effect.annotateLogs({
                 ...Object.fromEntries(span.attributes),
                 operation: name,
@@ -93,6 +92,54 @@ export const operation =
         Effect.withParentSpan(span),
       ),
     );
+
+export type ServerError = Exclude<CaughtError, { kind: "validation" }>;
+export type Reporter = (failure: ServerError) => Promise<void>;
+
+export const reportError = (span: Tracer.Span, failure: ServerError) =>
+  Effect.logError(failure.error).pipe(
+    Effect.withParentSpan(span),
+    Effect.annotateLogs({
+      ...Object.fromEntries(span.attributes),
+      "error.kind": failure.kind,
+      "error.status": failure.kind === "unknown" ? 500 : failure.error.status,
+      trace_id: span.traceId,
+      span_id: span.spanId,
+    }),
+  );
+
+// oxlint-disable-next-line effecttsgo/async-function -- Kit's error hook awaits a request-bound reporter outside the Effect workflow.
+export const handleError = async (failure: CaughtError, signal: AbortSignal, report?: Reporter) => {
+  if (failure.kind === "validation") return;
+  if (failure.kind !== "unknown" && failure.error.status < 500) return;
+
+  const cancelled =
+    failure.kind === "unknown" &&
+    signal.aborted &&
+    failure.error instanceof Error &&
+    Cause.isCause(failure.error.cause) &&
+    Cause.hasInterruptsOnly(failure.error.cause);
+
+  if (!cancelled) {
+    const fallback = () => {
+      // oxlint-disable-next-line effecttsgo/global-console -- Report failures when the application runtime or its logger is unavailable.
+      console.error(failure.error);
+    };
+
+    if (report === undefined) fallback();
+    else {
+      try {
+        await report(failure);
+      } catch {
+        fallback();
+      }
+    }
+  }
+
+  return failure.kind === "unknown"
+    ? { message: "Something went wrong. Refresh before trying again." }
+    : undefined;
+};
 
 export interface Settings {
   readonly endpoint?: string;
