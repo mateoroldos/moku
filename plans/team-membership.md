@@ -17,7 +17,7 @@ Verified membership scopes every task operation. Better Auth implements organiza
 
 ## Design: PR 5 — manage invitations on Team
 
-Alternatives: a Moku rate limiter needs storage and a window policy for a form only owners and admins reach. Copying Better Auth's role rules into the UI duplicates its policy. Chosen: Better Auth's pending-invitation cap (100 per organization) is the invite limit, and the layout asks Better Auth's role objects what the caller may do.
+Alternatives: a Moku rate limiter needs storage and a window policy for a form only owners and admins reach. Copying Better Auth's role rules into the UI duplicates its policy. Chosen: Better Auth's best-effort pending-invitation cap (100 per organization) is the invite limit, and the layout asks Better Auth's role objects what the caller may do.
 
 ```text
 org layout → canManageInvitations = organizationRoles[role].authorize({ invitation: ["create", "cancel"] }).success
@@ -58,6 +58,7 @@ Sources: `routes/(authenticated)/org/[organizationId]/+layout.server.ts` (`canRe
 - Joining a full organization (100 members) shows a retryable 503. Accepted with the member cap.
 - Better Auth lists every invitation an organization ever had, capped at 100 rows; past that, new pending invitations drop off Team. Accepted for now.
 - Any member can read pending invitations through the remote, as Better Auth allows; Team shows them only to owners and admins.
+- Better Auth's 100-pending invitation cap is best-effort: expired invitations stay pending, and past 100 of them the cap stops counting. Accepted; owners and admins are trusted.
 - Server-side `auth.api` calls skip Better Auth's rate limiter.
 - Better Auth returns at most 100 organizations or members per list; its default membership limit also caps members at 100. Accepted.
 - A session revoked between identity lookup and a Better Auth read surfaces as 503, not a login redirect; accepted.

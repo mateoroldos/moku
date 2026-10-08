@@ -32,6 +32,9 @@ Login and signup return only to `/invitations/<id>`, from `?invitation=<id>`; ne
 redirect to a caller-supplied path. The invitation page checks the recipient through
 Better Auth; a wrong account sees the unavailable state, with a way to switch accounts.
 
+Better Auth's 100-pending invitation cap is best-effort: expired invitations stay pending and,
+past 100 of them, stop the cap counting.
+
 Team shows invitation controls when `organizationRoles` (Better Auth's role objects)
 grant the caller's role invitation rights; do not restate that policy in the UI.
 
