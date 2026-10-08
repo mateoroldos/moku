@@ -27,7 +27,7 @@
           <p class="wrap-anywhere text-sm text-muted-foreground">{member.email}</p>
         </div>
         {#if data.canManageMembers}
-          <MemberRoleForm organizationId={data.organizationId} {member} />
+          <MemberRoleForm organizationId={data.organizationId} {member} self={member.userId === data.viewer.userId} />
         {:else}
           <p class="shrink-0 text-sm capitalize text-muted-foreground">{member.role}</p>
         {/if}
