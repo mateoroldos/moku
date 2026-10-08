@@ -1,23 +1,40 @@
 import { error, redirect } from "@sveltejs/kit";
-import type { Access } from "@moku/core/access";
+import { Access } from "@moku/core/access";
+import { Membership, type OrganizationId } from "@moku/domain/organization";
 import { Effect, Match, Schema } from "effect";
-import type { AuthProvider } from "./auth-provider.ts";
+import { AuthProvider } from "./auth-provider.ts";
+import { Organizations } from "./organizations.ts";
 
 export class Required extends Schema.TaggedError<Required>()("AuthGuard.Required", {}) {}
 
-export const requirePrincipal = Effect.fn("AuthGuard.requirePrincipal")(function* <R>(
-  authenticate: AuthProvider.IdentityLookup<R>,
-) {
-  const principal = yield* authenticate;
-  if (principal === null) return yield* new Required({});
+export const make = Effect.fn("AuthGuard.make")(function* (headers: Headers) {
+  const authenticate = yield* Effect.cached(
+    AuthProvider.Service.use((auth) => auth.authenticate(headers)),
+  );
+  /** The signed-in principal with a verified email; anyone else fails. */
+  const principal = Effect.gen(function* () {
+    const found = yield* authenticate;
+    if (found === null) return yield* new Required({});
 
-  return principal;
+    return yield* Access.requireVerifiedEmail(found);
+  }).pipe(Effect.withSpan("AuthGuard.principal"));
+  const membership = Effect.fn("AuthGuard.membership")(function* (organizationId: OrganizationId) {
+    const { userId } = yield* principal;
+    const organizations = yield* Organizations.Service;
+    const role = yield* organizations.role(headers, organizationId);
+
+    return Membership.make({ userId, organizationId, role });
+  });
+
+  return { authenticate, principal, membership };
 });
 
-export type Failure = Effect.Error<ReturnType<typeof requirePrincipal>>;
+export type RequestAuth = Effect.Success<ReturnType<typeof make>>;
 
 /** Translate to Kit control flow only after the request runner. */
-export const reject = (failure: Failure | Access.UnverifiedEmail): never =>
+export const reject = (
+  failure: Required | AuthProvider.Unavailable | Access.UnverifiedEmail,
+): never =>
   Match.valueTags(failure, {
     "AuthGuard.Required": () => redirect(303, "/login"),
     "Access.UnverifiedEmail": () => error(403, "Verify your email to continue."),

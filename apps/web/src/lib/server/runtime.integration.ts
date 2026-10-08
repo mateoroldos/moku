@@ -2,15 +2,19 @@ import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
 import { HumanTasks } from "@moku/core/human-tasks";
 import { UserId } from "@moku/domain/identity";
-import { OrganizationId } from "@moku/domain/organization";
+import { Membership, OrganizationId } from "@moku/domain/organization";
 import { Config, Effect, Layer, Schedule, Schema } from "effect";
 import { WebRuntime } from "./runtime.ts";
 
 const observer = Layer.unwrap(
   Config.redacted("TEST_DATABASE_URL").pipe(Effect.map((url) => PgClient.layer({ url }))),
 );
-const principal = { userId: UserId.make("runtime-user"), emailVerified: true };
 const organizationId = OrganizationId.make("runtime-org");
+const membership = Membership.make({
+  userId: UserId.make("runtime-user"),
+  organizationId,
+  role: "owner",
+});
 
 it.live("persists across server runtimes and releases their PostgreSQL connections", () =>
   Effect.gen(function* () {
@@ -50,9 +54,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
         const runtime = yield* acquire;
         return yield* Effect.promise(() =>
           runtime.runPromise(
-            HumanTasks.Service.use((humanTasks) =>
-              humanTasks.create(principal, organizationId, input),
-            ),
+            HumanTasks.Service.use((humanTasks) => humanTasks.create(membership, input)),
           ),
         );
       }),
@@ -68,18 +70,11 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
             runtime.runPromise(
               Effect.gen(function* () {
                 const humanTasks = yield* HumanTasks.Service;
-                assert.deepStrictEqual(
-                  yield* humanTasks.get(principal, { organizationId, taskId: pending.id }),
-                  pending,
-                );
-                return yield* humanTasks.respond(
-                  principal,
-                  { organizationId, taskId: pending.id },
-                  {
-                    decision: "approved",
-                    feedback: "Reviewed",
-                  },
-                );
+                assert.deepStrictEqual(yield* humanTasks.get(membership, pending.id), pending);
+                return yield* humanTasks.respond(membership, pending.id, {
+                  decision: "approved",
+                  feedback: "Reviewed",
+                });
               }),
             ),
           );
@@ -91,9 +86,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
           const runtime = yield* acquire;
           const saved = yield* Effect.promise(() =>
             runtime.runPromise(
-              HumanTasks.Service.use((humanTasks) =>
-                humanTasks.get(principal, { organizationId, taskId: pending.id }),
-              ),
+              HumanTasks.Service.use((humanTasks) => humanTasks.get(membership, pending.id)),
             ),
           );
           assert.deepStrictEqual(saved, completed);

@@ -6,7 +6,7 @@ import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { ApprovalResult } from "@moku/domain/human-task";
 import { Principal } from "@moku/domain/identity";
-import { OrganizationId } from "@moku/domain/organization";
+import { Membership, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Console, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "#lib/server/better-auth-options.ts";
@@ -93,14 +93,21 @@ const provisionAccount = Effect.fn("provisionAccount")(function* () {
       ],
     }),
   );
-  if (members.length === 0)
+  const [stored] = yield* Schema.decodeUnknownEffect(
+    Schema.Array(Schema.Struct({ role: OrganizationRole })),
+  )(members);
+  if (stored === undefined)
     yield* provider(() =>
       auth.api.addMember({
         body: { organizationId, userId: principal.userId, role: "owner" },
       }),
     );
 
-  return { principal, organizationId };
+  return Membership.make({
+    userId: principal.userId,
+    organizationId,
+    role: stored?.role ?? "owner",
+  });
 }, Effect.uninterruptible);
 
 const examples = Schema.decodeSync(
@@ -170,9 +177,9 @@ NodeRuntime.runMain(
           Config.withDefault(new URL("http://localhost:5173")),
         );
 
-    const { principal, organizationId } = yield* provisionAccount();
+    const membership = yield* provisionAccount();
     yield* Console.log(
-      `Verified login account ready.\nUser: ${principal.userId}\nOrganization: ${organizationId}`,
+      `Verified login account ready.\nUser: ${membership.userId}\nOrganization: ${membership.organizationId}`,
     );
 
     if (baseUrl === undefined) return;
@@ -180,14 +187,12 @@ NodeRuntime.runMain(
     const humanTasks = yield* HumanTasks.Service;
 
     for (const { request, result } of examples) {
-      const pending = yield* humanTasks.create(principal, organizationId, request);
+      const pending = yield* humanTasks.create(membership, request);
       const task =
-        result === undefined
-          ? pending
-          : yield* humanTasks.respond(principal, { organizationId, taskId: pending.id }, result);
+        result === undefined ? pending : yield* humanTasks.respond(membership, pending.id, result);
 
       yield* Console.log(
-        `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(organizationId)}/tasks/${task.id}`, baseUrl).href}`,
+        `${task.status === "pending" ? "pending" : task.result.decision} · ${task.subject.title}\n${new URL(`/org/${encodeURIComponent(membership.organizationId)}/tasks/${task.id}`, baseUrl).href}`,
       );
     }
 

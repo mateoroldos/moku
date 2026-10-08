@@ -17,4 +17,7 @@ export type AllowedRoles = ReadonlyArray<OrganizationRole>;
 export const allows = (allowedRoles: AllowedRoles, role: OrganizationRole) =>
   allowedRoles.includes(role);
 
+export const requireRole = (allowedRoles: AllowedRoles, role: OrganizationRole) =>
+  allows(allowedRoles, role) ? Effect.void : Effect.fail(new Denied({}));
+
 export * as Access from "./access.ts";

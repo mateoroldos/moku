@@ -28,12 +28,9 @@ Define the smallest domain-shaped port the workflow needs. A port exposes neithe
 driver clients nor provider errors. Do not add ports for anticipated integrations.
 
 When correctness depends on holding a resource while work runs, prefer a capability
-that owns that lifetime over marker services that callers must supply. For organization
-writes, `OrganizationAccess.withWriteAccess` owns authorization and the membership
-store's `withLock` owns the transaction and lock; ordinary reads use `require`.
-Use direct checks for prerequisites and callbacks for resource lifetimes. Prefer
-named capabilities over a generic authorization wrapper with transaction flags:
-a transaction alone does not establish stable membership authorization.
+that owns that lifetime over marker services that callers must supply. Use direct
+checks for prerequisites and callbacks for resource lifetimes. Pass request context,
+such as a resolved `Membership`, as an argument rather than a per-request service.
 
 ## Failures
 

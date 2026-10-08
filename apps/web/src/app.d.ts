@@ -1,11 +1,11 @@
 import type { WebRuntime } from "#lib/server/runtime.ts";
-import type { AuthProvider } from "#lib/server/auth-provider.ts";
+import type { AuthGuard } from "#lib/server/auth-guard.ts";
 
 declare global {
   namespace App {
     interface Locals {
       run: WebRuntime.Run;
-      authenticate: AuthProvider.IdentityLookup<AuthProvider.Service>;
+      auth: AuthGuard.RequestAuth;
     }
   }
 }

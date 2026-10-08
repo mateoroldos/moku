@@ -1,14 +1,16 @@
 /* oxlint-disable effecttsgo/prefer-schema-over-json -- Exercise raw provider HTTP inputs. */
 import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
+import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
-import { OrganizationCreation } from "@moku/core/organization-creation";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
+import { OrganizationId } from "@moku/domain/organization";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
 import { Config, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
+import { Organizations } from "./organizations.ts";
 
 const origin = "http://localhost:3000";
 const credentials = { email: "authentication@moku.test", password: "integration-password" };
@@ -42,11 +44,11 @@ const fixture = Effect.fnUntraced(function* (
         unavailable ? Promise.reject(new Error("private storage failure")) : adapter.findOne(input),
     };
   });
-  const { auth, creation } = yield* Effect.gen(function* () {
+  const { auth, organizations } = yield* Effect.gen(function* () {
     const auth = yield* AuthProvider.Service;
-    const creation = yield* OrganizationCreation.Service;
+    const organizations = yield* Organizations.Service;
 
-    return { auth, creation };
+    return { auth, organizations };
   }).pipe(
     Effect.provide(
       AuthProvider.layer.pipe(
@@ -81,7 +83,7 @@ const fixture = Effect.fnUntraced(function* (
   });
   return {
     auth,
-    creation,
+    organizations,
     sql,
     headers,
     setUnavailable: (value: boolean) => {
@@ -272,15 +274,13 @@ it.live("uses the supplied transport address instead of caller IP headers for th
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("creates a short-ID organization with the caller as its owner", () =>
+it.live("creates a short-ID organization with the session owner as its owner", () =>
   Effect.gen(function* () {
-    const { creation, sql } = yield* fixture("192.0.2.7");
+    const { organizations, sql, headers } = yield* fixture("192.0.2.7");
     const cleanup = sql`DELETE FROM organization WHERE name = 'auth-creation-test'`;
     yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
 
-    const organization = yield* creation.createWithOwner(UserId.make("authentication-test"), {
-      name: "auth-creation-test",
-    });
+    const organization = yield* organizations.create(headers, { name: "auth-creation-test" });
 
     assert.match(organization.id, /^[0-9A-HJKMNP-TV-Z]{12}$/);
     assert.deepStrictEqual(
@@ -304,43 +304,84 @@ it.live("creates a short-ID organization with the caller as its owner", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("rolls back organization creation when its owner cannot be stored", () =>
+const peer = Effect.fnUntraced(function* () {
+  const sql = yield* PgClient.PgClient;
+  const cleanup = sql`DELETE FROM "user" WHERE id = 'organization-peer'`;
+  yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+  yield* sql`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
+    VALUES ('organization-peer', 'alex', 'peer@moku.test', true, now(), now())`;
+
+  return UserId.make("organization-peer");
+});
+
+const peerOrganization = Effect.fnUntraced(function* (name: string) {
+  const sql = yield* PgClient.PgClient;
+  yield* sql`INSERT INTO organization (id, name, slug, created_at)
+    VALUES (${name}, ${name}, ${name}, now())`;
+  yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+    VALUES (${name}, ${name}, 'organization-peer', 'owner', now())`;
+
+  return OrganizationId.make(name);
+});
+
+it.live("lists only the caller's organizations", () =>
   Effect.gen(function* () {
-    const { creation, sql } = yield* fixture("192.0.2.8");
-    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-rollback-test'`;
+    const { organizations, sql, headers } = yield* fixture("192.0.2.40");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-list-%'`;
     yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
-    yield* Effect.acquireRelease(
-      sql`CREATE FUNCTION pg_temp.reject_auth_test_owner() RETURNS trigger LANGUAGE plpgsql AS $$
-        BEGIN
-          IF NEW.user_id = 'authentication-test' THEN
-            RAISE EXCEPTION 'organization-owner-write-probe';
-          END IF;
-          RETURN NEW;
-        END $$`.pipe(
-        Effect.andThen(sql`
-          CREATE TRIGGER reject_auth_test_owner BEFORE INSERT ON member
-          FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_auth_test_owner()
-        `),
-      ),
-      () => sql`DROP TRIGGER IF EXISTS reject_auth_test_owner ON member`.pipe(Effect.orDie),
-    );
+    yield* peer();
 
-    const failure = yield* Effect.flip(
-      creation.createWithOwner(UserId.make("authentication-test"), { name: "auth-rollback-test" }),
-    );
+    const own = yield* organizations.create(headers, { name: "auth-list-own" });
+    yield* peerOrganization("auth-list-other");
 
-    assert.nestedPropertyVal(
-      Redacted.value(failure.cause),
-      "cause.message",
-      "organization-owner-write-probe",
+    assert.deepStrictEqual(yield* organizations.list(headers), [own]);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("scopes membership and rosters to members and rejects unsupported roles", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.41");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-roster-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    const other = yield* peer();
+
+    const shared = yield* peerOrganization("auth-roster-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-roster-viewer', ${shared}, 'authentication-test', 'viewer', now())`;
+    const foreign = yield* peerOrganization("auth-roster-foreign");
+
+    assert.deepStrictEqual(yield* organizations.listMembers(headers, shared), [
+      { userId: other, name: "alex", email: "peer@moku.test", role: "owner" },
+      {
+        userId: UserId.make("authentication-test"),
+        name: "Reviewer",
+        email: credentials.email,
+        role: "viewer",
+      },
+    ]);
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.listMembers(headers, foreign)),
+      new Access.NotFound({}),
     );
     assert.deepStrictEqual(
-      yield* sql`SELECT id FROM organization WHERE name = 'auth-rollback-test'`,
-      [],
+      yield* Effect.flip(organizations.listMembers(headers, OrganizationId.make("missing"))),
+      new Access.NotFound({}),
     );
+    assert.strictEqual(yield* organizations.role(headers, shared), "viewer");
     assert.deepStrictEqual(
-      yield* sql`SELECT id FROM member WHERE user_id = 'authentication-test'`,
-      [],
+      yield* Effect.flip(organizations.role(headers, foreign)),
+      new Access.NotFound({}),
+    );
+
+    yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'auth-roster-viewer'`;
+
+    assert.instanceOf(
+      yield* Effect.flip(organizations.role(headers, shared)),
+      Organizations.Unavailable,
+    );
+    assert.instanceOf(
+      yield* Effect.flip(organizations.listMembers(headers, shared)),
+      Organizations.Unavailable,
     );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
