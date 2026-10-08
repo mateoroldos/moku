@@ -12,38 +12,8 @@ Verified membership scopes every task operation. Better Auth implements organiza
 | 2   | Better Auth manages organizations; core takes a resolved `Membership`                 | design           | ✅ #27 |
 | 3   | `Organizations.invite` under Better Auth's invitation policy and email; no caller yet | design           | ✅ #28 |
 | 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design           | ✅ #29 |
-| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design below     |        |
+| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design           | ✅ #30 |
 | 6   | Role changes and removal with controls and failure feedback; retire this plan         | design when next |        |
-
-## Design: PR 5 — manage invitations on Team
-
-Alternatives: a Moku rate limiter needs storage and a window policy for a form only owners and admins reach. Copying Better Auth's role rules into the UI duplicates its policy. Chosen: Better Auth's best-effort pending-invitation cap (100 per organization) is the invite limit, and the layout asks Better Auth's role objects what the caller may do.
-
-```text
-org layout → canManageInvitations = organizationRoles[role].authorize({ invitation: ["create", "cancel"] }).success
-Team (owners and admins also see Invite and Pending)
-inviteTeammate form({ organizationId, email, role })
-  → locals.auth.principal → Organizations.invite → Kit refreshes the page’s queries
-      AlreadyMember → "Already a member" · admin inviting an owner → Denied 403 "Only owners can invite owners"
-      100 pending → InvitationLimit → "Cancel pending invitations first"
-listInvitations query(organizationId)
-  → Organizations.listInvitations(headers, organizationId) → pending, unexpired, by email
-      outsider → Access.NotFound 404
-cancelInvitation.for(invitationId) form({ id })
-  → Organizations.cancelInvitation(headers, invitationId) → Kit refreshes the page’s queries
-      member or viewer → Denied 403 · unknown → InvitationInvalid 404
-```
-
-`organizationRoles` moves to an export of `better-auth-options.ts`, the object the plugin already receives. Resending is not throttled; owners and admins are trusted.
-
-| Test                                                                                 | Level                  | Fails if                                    |
-| ------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------- |
-| Pending list hides accepted, cancelled, and expired; owner cancels; member is denied | PostgreSQL integration | Stale invitations show, or a member cancels |
-| The 101st pending invitation fails with `InvitationLimit`                            | PostgreSQL integration | The cap stops applying or maps to an outage |
-
-Browser: owner invites → Pending → cancel; admin invites an owner; existing member; a member sees no Invite. Run `bun run check`, `bun run build`, `bun run test:postgres`.
-
-Sources: `routes/(authenticated)/org/[organizationId]/+layout.server.ts` (`canRespondToHumanTasks`), Better Auth 1.7.4 `routes/crud-invites.mjs` (`listInvitations`, `cancelInvitation`, `invitationLimit`).
 
 ## Decided
 
@@ -58,6 +28,7 @@ Sources: `routes/(authenticated)/org/[organizationId]/+layout.server.ts` (`canRe
 - Joining a full organization (100 members) shows a retryable 503. Accepted with the member cap.
 - Better Auth lists every invitation an organization ever had, capped at 100 rows; past that, new pending invitations drop off Team. Accepted for now.
 - Any member can read pending invitations through the remote, as Better Auth allows; Team shows them only to owners and admins.
+- Team's invitation controls come from Better Auth's role objects (`organizationRoles`); the UI does not restate that policy. Better Auth's pending-invitation cap is the invite limit; there is no Moku rate limiter.
 - Better Auth's 100-pending invitation cap is best-effort: expired invitations stay pending, and past 100 of them the cap stops counting. Accepted; owners and admins are trusted.
 - Server-side `auth.api` calls skip Better Auth's rate limiter.
 - Better Auth returns at most 100 organizations or members per list; its default membership limit also caps members at 100. Accepted.
