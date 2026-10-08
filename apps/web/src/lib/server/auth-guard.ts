@@ -7,31 +7,29 @@ import { Organizations } from "./organizations.ts";
 
 export class Required extends Schema.TaggedError<Required>()("AuthGuard.Required", {}) {}
 
-export const make = Effect.fn("AuthGuard.make")(function* (requestHeaders: Headers) {
-  const headers = new Headers(requestHeaders);
+export const make = Effect.fn("AuthGuard.make")(function* (headers: Headers) {
   const authenticate = yield* Effect.cached(
     AuthProvider.Service.use((auth) => auth.authenticate(headers)),
   );
-  const requireVerifiedPrincipal = Effect.gen(function* () {
-    const principal = yield* authenticate;
-    if (principal === null) return yield* new Required({});
+  /** The signed-in principal with a verified email; anyone else fails. */
+  const principal = Effect.gen(function* () {
+    const found = yield* authenticate;
+    if (found === null) return yield* new Required({});
 
-    return yield* Access.requireVerifiedEmail(principal);
-  });
-  const requireMembership = Effect.fn("AuthGuard.requireMembership")(function* (
-    organizationId: OrganizationId,
-  ) {
-    const principal = yield* requireVerifiedPrincipal;
+    return yield* Access.requireVerifiedEmail(found);
+  }).pipe(Effect.withSpan("AuthGuard.principal"));
+  const membership = Effect.fn("AuthGuard.membership")(function* (organizationId: OrganizationId) {
+    const { userId } = yield* principal;
     const organizations = yield* Organizations.Service;
     const role = yield* organizations.role(headers, organizationId);
 
-    return Membership.make({ userId: principal.userId, organizationId, role });
+    return Membership.make({ userId, organizationId, role });
   });
 
-  return { authenticate, requireVerifiedPrincipal, requireMembership };
+  return { authenticate, principal, membership };
 });
 
-export type Request = Effect.Success<ReturnType<typeof make>>;
+export type RequestAuth = Effect.Success<ReturnType<typeof make>>;
 
 /** Translate to Kit control flow only after the request runner. */
 export const reject = (

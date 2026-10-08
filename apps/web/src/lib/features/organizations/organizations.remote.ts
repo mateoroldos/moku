@@ -14,7 +14,7 @@ export const listOrganizationMembers = query(
       .run(
         "Remote.listOrganizationMembers",
         Effect.gen(function* () {
-          yield* event.locals.auth.requireVerifiedPrincipal;
+          yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
           return yield* organizations.listMembers(event.request.headers, organizationId);
@@ -31,7 +31,7 @@ export const listOrganizationMembers = query(
           }),
         ),
       )
-      .then(Schema.encodeSync(Schema.Array(Organizations.MemberSummary)));
+      .then(Schema.encodeSync(Schema.Array(Organizations.Member)));
   },
 );
 
@@ -46,10 +46,10 @@ export const createOrganization = form(
       .run(
         "Remote.createOrganization",
         Effect.gen(function* () {
-          const principal = yield* event.locals.auth.requireVerifiedPrincipal;
+          yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.createWithOwner(principal.userId, { name });
+          return yield* organizations.create(event.request.headers, { name });
         }),
       )
       .then(

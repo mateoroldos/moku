@@ -8,8 +8,8 @@ error; concurrent and later consumers share that result. Requests that never con
 the lookup. Better Auth also skips session storage without a valid session cookie.
 Login/signout changes are reflected on the next request.
 
-Protected entrypoints use `locals.auth.requireVerifiedPrincipal`;
-those inside an organization call `locals.auth.requireMembership`, which also resolves
+Protected entrypoints use `locals.auth.principal`;
+those inside an organization call `locals.auth.membership`, which also resolves
 the caller's role from Better Auth. A principal identifies
 the caller; it does not prove verification or grant task permissions. Layout loads
 can be reused during client navigation, so each protected remote needs its own guard.
@@ -25,15 +25,13 @@ queries protect different boundaries; completion fallback reads need both too.
 
 `Organizations` resolves roles and lists organizations and rosters from Better
 Auth with the request's headers; its membership check becomes `Access.NotFound` for outsiders.
-Server-side organization creation bypasses Better Auth's browser creation restriction.
-The `createOrganization` remote derives the creator from verified request identity,
-never caller-supplied input. `Organizations.createWithOwner` atomically creates
-the organization and owner membership through the shared Better Auth instance.
+`Organizations.create` makes the session owner the owner of a new organization. It is not
+atomic: a failed owner write can leave an organization without members.
 
 Membership is resolved once per operation and not held during task writes: a member
 removed or demoted mid-request can finish that request.
 
-Organization reads allow request cancellation to stop waiting for Better Auth.
+Organization calls allow request cancellation to stop waiting for Better Auth.
 The provider's underlying database work may continue until it settles.
 
 The [auth route](../src/routes/api/auth/[...path]/+server.ts) restricts the exposed

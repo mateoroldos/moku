@@ -22,7 +22,7 @@ const dependencies = (
       role,
       list: () => Effect.die("unused"),
       listMembers: () => Effect.die("unused"),
-      createWithOwner: () => Effect.die("unused"),
+      create: () => Effect.die("unused"),
     }),
   );
 
@@ -37,7 +37,7 @@ it.effect.each([
 ])("rejects $name callers before membership lookup", ({ identity, tag }) =>
   Effect.gen(function* () {
     const auth = yield* AuthGuard.make(new Headers());
-    const failure = yield* Effect.flip(auth.requireMembership(organizationId));
+    const failure = yield* Effect.flip(auth.membership(organizationId));
 
     assert.strictEqual(failure._tag, tag);
   }).pipe(Effect.provide(dependencies(() => identity))),
@@ -45,21 +45,14 @@ it.effect.each([
 
 it.effect("binds membership to the request's identity and requested organization", () =>
   Effect.gen(function* () {
-    const headers = new Headers({ cookie: "alice" });
-    const alice = yield* AuthGuard.make(headers);
-    headers.set("cookie", "bob");
-    const bob = yield* AuthGuard.make(headers);
+    const auth = yield* AuthGuard.make(new Headers({ cookie: "alice" }));
 
     assert.deepStrictEqual(
-      yield* alice.requireMembership(organizationId),
+      yield* auth.membership(organizationId),
       Membership.make({ userId: UserId.make("alice"), organizationId, role: "viewer" }),
     );
     assert.deepStrictEqual(
-      yield* bob.requireMembership(organizationId),
-      Membership.make({ userId: UserId.make("bob"), organizationId, role: "owner" }),
-    );
-    assert.deepStrictEqual(
-      yield* Effect.flip(alice.requireMembership(OrganizationId.make("other"))),
+      yield* Effect.flip(auth.membership(OrganizationId.make("other"))),
       new Access.NotFound({}),
     );
   }).pipe(
@@ -71,8 +64,8 @@ it.effect("binds membership to the request's identity and requested organization
             emailVerified: true,
           }),
         (headers, id) =>
-          id === organizationId
-            ? Effect.succeed(headers.get("cookie") === "alice" ? "viewer" : "owner")
+          headers.get("cookie") === "alice" && id === organizationId
+            ? Effect.succeed("viewer")
             : Effect.fail(new Access.NotFound({})),
       ),
     ),

@@ -12,13 +12,13 @@ export const CreateInput = Schema.Struct({
 });
 export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 
-export const MemberSummary = Schema.Struct({
+export const Member = Schema.Struct({
   userId: UserId,
   name: Schema.String,
   email: Schema.String,
   role: OrganizationRole,
 });
-export interface MemberSummary extends Schema.Schema.Type<typeof MemberSummary> {}
+export interface Member extends Schema.Schema.Type<typeof Member> {}
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("Organizations.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
@@ -35,10 +35,10 @@ export interface Interface {
   readonly listMembers: (
     headers: Headers,
     organizationId: OrganizationId,
-  ) => Effect.Effect<ReadonlyArray<MemberSummary>, Access.NotFound | Unavailable>;
-  /** Atomically create the organization and its owner membership. */
-  readonly createWithOwner: (
-    ownerUserId: UserId,
+  ) => Effect.Effect<ReadonlyArray<Member>, Access.NotFound | Unavailable>;
+  /** Create an organization owned by the session owner. */
+  readonly create: (
+    headers: Headers,
     input: CreateInput,
   ) => Effect.Effect<Organization, Unavailable>;
 }

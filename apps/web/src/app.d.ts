@@ -5,7 +5,7 @@ declare global {
   namespace App {
     interface Locals {
       run: WebRuntime.Run;
-      auth: AuthGuard.Request;
+      auth: AuthGuard.RequestAuth;
     }
   }
 }

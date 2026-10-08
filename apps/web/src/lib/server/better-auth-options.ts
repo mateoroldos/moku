@@ -3,7 +3,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import { organization } from "better-auth/plugins/organization";
 import { customAlphabet } from "nanoid";
 
-const organizations = organization({ allowUserToCreateOrganization: false });
+const organizations = organization();
 const organizationId = customAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 12);
 
 export const betterAuthOptions = {
