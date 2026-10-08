@@ -5,6 +5,7 @@
   import { Input } from '@moku/ui/ui/input';
   import * as Field from '@moku/ui/ui/field';
   import { inviteTeammate } from './organizations.remote.ts';
+  import RoleSelect from './RoleSelect.svelte';
 
   let { organizationId }: { organizationId: OrganizationId } = $props();
 
@@ -37,14 +38,9 @@
         </Field.Field>
         <Field.Field class="sm:w-40" data-invalid={!!inviteTeammate.fields.role.issues()?.length}>
           <Field.Label for="invite-role">Role</Field.Label>
-          <select {...inviteTeammate.fields.role.as('select', 'member')} id="invite-role" disabled={inviteTeammate.pending > 0}
-            aria-describedby="invite-role-errors"
-            class="dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 disabled:bg-input/50 min-h-11 w-full rounded-lg border bg-transparent px-2.5 text-base outline-none focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm">
-            <option value="member">Member</option>
-            <option value="viewer">Viewer</option>
-            <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
-          </select>
+          <RoleSelect {...inviteTeammate.fields.role.as('select', 'member')} id="invite-role"
+            aria-invalid={!!inviteTeammate.fields.role.issues()?.length} aria-describedby="invite-role-errors"
+            disabled={inviteTeammate.pending > 0} />
           <Field.Error id="invite-role-errors" errors={inviteTeammate.fields.role.issues() ?? []} />
         </Field.Field>
       </div>

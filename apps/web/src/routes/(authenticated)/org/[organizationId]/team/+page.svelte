@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listOrganizationMembers } from '#lib/features/organizations/organizations.remote.ts';
+  import MemberRoleForm from '#lib/features/organizations/MemberRoleForm.svelte';
   import InviteTeammateForm from '#lib/features/organizations/InviteTeammateForm.svelte';
   import PendingInvitations from '#lib/features/organizations/PendingInvitations.svelte';
   import type { PageProps } from './$types';
@@ -17,7 +18,7 @@
   <h1 class="font-serif text-4xl tracking-tight sm:text-5xl">Team</h1>
 
   <ul aria-label="Team members" class="divide-y border-y">
-    {#each members as member (member.userId)}
+    {#each members as member (member.id)}
       <li class="flex flex-col gap-2 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div class="flex min-w-0 flex-col gap-1">
           <p class="wrap-anywhere text-sm font-medium">
@@ -25,7 +26,11 @@
           </p>
           <p class="wrap-anywhere text-sm text-muted-foreground">{member.email}</p>
         </div>
-        <p class="shrink-0 text-sm capitalize text-muted-foreground">{member.role}</p>
+        {#if data.canManageMembers}
+          <MemberRoleForm organizationId={data.organizationId} {member} />
+        {:else}
+          <p class="shrink-0 text-sm capitalize text-muted-foreground">{member.role}</p>
+        {/if}
       </li>
     {:else}
       <li class="py-8 text-sm text-muted-foreground">No members to show.</li>

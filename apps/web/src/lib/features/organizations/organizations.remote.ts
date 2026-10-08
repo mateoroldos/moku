@@ -1,5 +1,5 @@
 import { form, getRequestEvent, query } from "$app/server";
-import { OrganizationId } from "@moku/domain/organization";
+import { OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { error, invalid, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
@@ -188,6 +188,66 @@ export const cancelInvitation = form(
               error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
           }),
         ),
+      );
+  },
+);
+
+export const changeMemberRole = form(
+  Schema.toStandardSchemaV1(
+    // `changeMemberRole.for(memberId)` fills `id`.
+    Schema.Struct({
+      id: Schema.NonEmptyString,
+      organizationId: OrganizationId,
+      role: OrganizationRole,
+    }),
+    { parseOptions: { onExcessProperty: "error" } },
+  ),
+  ({ id, organizationId, role }, issue) => {
+    const event = getRequestEvent();
+
+    return event.locals
+      .run(
+        "Remote.changeMemberRole",
+        Effect.gen(function* () {
+          yield* event.locals.auth.principal;
+          const organizations = yield* Organizations.Service;
+
+          return yield* organizations
+            .changeRole(event.request.headers, organizationId, id, role)
+            .pipe(
+              Effect.as({ _tag: "Changed" } as const),
+              // Correctable rejections and a member already gone are handled outcomes.
+              Effect.catchTags({
+                "Organizations.MemberNotFound": (outcome) => Effect.succeed(outcome),
+                "Organizations.RoleNotAllowed": (rejection) => Effect.succeed(rejection),
+                "Organizations.LastOwner": (rejection) => Effect.succeed(rejection),
+              }),
+            );
+        }),
+      )
+      .then(
+        Result.getOrElse((failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
+            "AuthProvider.Unavailable": AuthGuard.reject,
+            "Organizations.Unavailable": () =>
+              error(
+                503,
+                "We couldn’t confirm the role change. Refresh the team before trying again.",
+              ),
+          }),
+        ),
+      )
+      .then((outcome) =>
+        Match.valueTags(outcome, {
+          Changed: () => ({ changed: role }),
+          // Kit refreshes the page: the row is gone, or the caller lost access.
+          "Organizations.MemberNotFound": () => undefined,
+          "Organizations.RoleNotAllowed": () =>
+            invalid(issue.role("You can’t change this member’s role.")),
+          "Organizations.LastOwner": () => invalid(issue.role("Make someone else an owner first.")),
+        }),
       );
   },
 );

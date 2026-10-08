@@ -23,6 +23,8 @@ export const InviteInput = Schema.Struct({
 export interface InviteInput extends Schema.Schema.Type<typeof InviteInput> {}
 
 export const Member = Schema.Struct({
+  /** Better Auth's member record; role changes address it. */
+  id: Schema.String,
   userId: UserId,
   name: Schema.String,
   email: Schema.String,
@@ -61,11 +63,20 @@ export class InvitationLimit extends Schema.TaggedError<InvitationLimit>()(
   {},
 ) {}
 
-/** The caller may invite, but not with the requested role. */
+/** The caller can't give this role, or can't change this member. */
 export class RoleNotAllowed extends Schema.TaggedError<RoleNotAllowed>()(
   "Organizations.RoleNotAllowed",
   {},
 ) {}
+
+/** Removed already, or the caller is no longer a member. */
+export class MemberNotFound extends Schema.TaggedError<MemberNotFound>()(
+  "Organizations.MemberNotFound",
+  {},
+) {}
+
+/** The change would leave the organization without an owner. */
+export class LastOwner extends Schema.TaggedError<LastOwner>()("Organizations.LastOwner", {}) {}
 
 export class AlreadyMember extends Schema.TaggedError<AlreadyMember>()(
   "Organizations.AlreadyMember",
@@ -98,6 +109,13 @@ export interface Interface {
     void,
     Access.NotFound | Access.Denied | RoleNotAllowed | AlreadyMember | InvitationLimit | Unavailable
   >;
+  /** Owners and admins change roles; only owners change owners, and an owner always remains. */
+  readonly changeRole: (
+    headers: Headers,
+    organizationId: OrganizationId,
+    memberId: string,
+    role: OrganizationRole,
+  ) => Effect.Effect<void, MemberNotFound | RoleNotAllowed | LastOwner | Unavailable>;
   /** Pending, unexpired invitations, by email; members see them, anyone else gets `Access.NotFound`. */
   readonly listInvitations: (
     headers: Headers,
