@@ -1,25 +1,36 @@
-import type { BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { generateId } from "@better-auth/core/utils/id";
-import { organization } from "better-auth/plugins/organization";
+import { organization, type OrganizationOptions } from "better-auth/plugins/organization";
+import { defaultRoles, memberAc } from "better-auth/plugins/organization/access";
 import { customAlphabet } from "nanoid";
 
-const organizations = organization();
 const organizationId = customAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 12);
 
-export const betterAuthOptions = {
-  plugins: [
-    {
-      ...organizations,
-      schema: {
-        ...organizations.schema,
-        member: {
-          ...organizations.schema.member,
-          // The plugin omits this constraint; schema generation must enforce one membership per pair.
-          indexes: [{ fields: ["organizationId", "userId"], unique: true }],
-        },
+export const organizationPlugin = (
+  options: Pick<OrganizationOptions, "sendInvitationEmail"> = {},
+) => {
+  const plugin = organization({
+    // Better Auth rejects unknown roles; viewers manage nothing, like members.
+    roles: { ...defaultRoles, viewer: memberAc },
+    requireEmailVerificationOnInvitation: true,
+    ...options,
+  });
+
+  return {
+    ...plugin,
+    schema: {
+      ...plugin.schema,
+      member: {
+        ...plugin.schema.member,
+        // The plugin omits this constraint; schema generation must enforce one membership per pair.
+        indexes: [{ fields: ["organizationId", "userId"], unique: true }],
       },
     },
-  ],
+  } satisfies BetterAuthPlugin;
+};
+
+export const betterAuthOptions = {
+  plugins: [organizationPlugin()],
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

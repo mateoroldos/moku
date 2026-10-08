@@ -23,6 +23,7 @@ const dependencies = (
       list: () => Effect.die("unused"),
       listMembers: () => Effect.die("unused"),
       create: () => Effect.die("unused"),
+      invite: () => Effect.die("unused"),
     }),
   );
 
