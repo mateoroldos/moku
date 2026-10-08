@@ -116,7 +116,15 @@ export const inviteTeammate = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.invite(event.request.headers, organizationId, input);
+          return yield* organizations.invite(event.request.headers, organizationId, input).pipe(
+            Effect.as({ _tag: "Invited" } as const),
+            // Correctable rejections are handled outcomes, not operation failures.
+            Effect.catchTags({
+              "Organizations.AlreadyMember": (rejection) => Effect.succeed(rejection),
+              "Organizations.RoleNotAllowed": (rejection) => Effect.succeed(rejection),
+              "Organizations.InvitationLimit": (rejection) => Effect.succeed(rejection),
+            }),
+          );
         }),
       )
       .then(
@@ -126,17 +134,23 @@ export const inviteTeammate = form(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => invalid(issue.role("You can’t invite someone with this role.")),
-            "Organizations.AlreadyMember": () =>
-              invalid(issue.email(`${input.email} is already a member.`)),
-            "Organizations.InvitationLimit": () =>
-              invalid("This organization has too many pending invitations. Cancel some first."),
+            "Access.Denied": () => error(403, "Your role can’t send invitations."),
             "Organizations.Unavailable": () =>
               error(503, "We couldn’t confirm the invitation. Check pending invitations first."),
           }),
         ),
       )
-      .then(() => ({ invited: input.email }));
+      .then((outcome) =>
+        Match.valueTags(outcome, {
+          Invited: () => ({ invited: input.email }),
+          "Organizations.AlreadyMember": () =>
+            invalid(issue.email(`${input.email} is already a member.`)),
+          "Organizations.RoleNotAllowed": () =>
+            invalid(issue.role(`You can’t invite someone as ${input.role}.`)),
+          "Organizations.InvitationLimit": () =>
+            invalid("This organization has too many pending invitations. Cancel some first."),
+        }),
+      );
   },
 );
 
@@ -169,7 +183,7 @@ export const cancelInvitation = form(
             "Access.UnverifiedEmail": AuthGuard.reject,
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => invalid("Your role can’t cancel invitations."),
+            "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
             "Organizations.Unavailable": () =>
               error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
           }),
