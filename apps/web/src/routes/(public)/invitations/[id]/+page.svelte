@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { isHttpError } from '@sveltejs/kit';
   import { toast } from 'svelte-sonner';
   import type { UserId } from '@moku/domain/identity';
@@ -56,10 +57,12 @@
       Sent to <span class="break-all text-foreground">{view.invitation.email}</span>.
     </p>
     <form class="mt-8" aria-busy={acceptInvitation.pending > 0} {...acceptInvitation.enhance(async (submission) => {
+      const { organizationName } = view.invitation;
       acceptFailed = false;
 
       try {
-        await submission.submit();
+        // An unavailable invitation stays on this page and renders its own state.
+        if (await submission.submit() && page.url.pathname.startsWith('/org/')) toast.success(`You joined ${organizationName}.`);
       } catch (failure) {
         if (isHttpError(failure) && failure.status < 500) throw failure;
         if (!isHttpError(failure)) console.error('Invitation acceptance request failed');
