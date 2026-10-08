@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { isHttpError } from '@sveltejs/kit';
+  import { toast } from 'svelte-sonner';
   import type { UserId } from '@moku/domain/identity';
   import { Button } from '@moku/ui/ui/button';
   import * as Field from '@moku/ui/ui/field';
@@ -15,18 +16,22 @@
   const view = $derived(await getInvitation(params.id));
   let acceptFailed = $state(false);
   let signingOut = $state(false);
-  let signOutFailed = $state(false);
 
   const switchAccount = async (userId: UserId) => {
     if (signingOut) return;
     signingOut = true;
-    signOutFailed = false;
+    toast.dismiss('sign-out');
 
     try {
       const { error } = await authClient.signOut();
       if (error) {
         console.error('Sign-out request rejected', { status: error.status, code: error.code });
-        signOutFailed = true;
+        toast.error(
+          error.code === 'INVALID_ORIGIN' || error.code === 'MISSING_OR_NULL_ORIGIN'
+            ? 'Sign-out was blocked by this site’s security settings. Contact your administrator.'
+            : 'We couldn’t sign you out. Try again.',
+          { id: 'sign-out' },
+        );
         return;
       }
       FeedbackDrafts.browser.clearUser(userId);
@@ -34,7 +39,7 @@
       await goto(withInvitation('/login', params.id), { refreshAll: true });
     } catch {
       console.error('Sign-out request failed');
-      signOutFailed = true;
+      toast.error('We couldn’t sign you out. Check your connection and try again.', { id: 'sign-out' });
     } finally {
       signingOut = false;
     }
@@ -71,7 +76,6 @@
   {:else}
     <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">This invitation isn’t available</h1>
     <p class="mt-3 text-sm text-muted-foreground">It expired, was cancelled or accepted, or was sent to another email. Sign in with the invited email, or ask for a new invitation.</p>
-    {#if signOutFailed}<p role="alert" class="mt-3 text-sm text-destructive">We couldn’t sign you out. Try again.</p>{/if}
     <div class="mt-8 flex flex-col gap-3">
       <Button href="/">Open Moku</Button>
       <Button variant="outline" disabled={signingOut} onclick={() => switchAccount(view.userId)}>{signingOut ? 'Signing out…' : 'Sign in with another account'}</Button>

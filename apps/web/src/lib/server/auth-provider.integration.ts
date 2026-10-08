@@ -456,11 +456,12 @@ const peerInvitation = Effect.fnUntraced(function* (
   id: string,
   organizationId: OrganizationId,
   email: string,
-  expiresAt = new Date(Date.now() + 86_400_000),
+  expired = false,
 ) {
   const sql = yield* PgClient.PgClient;
   yield* sql`INSERT INTO invitation (id, organization_id, email, role, status, expires_at, inviter_id)
-    VALUES (${id}, ${organizationId}, ${email}, 'admin', 'pending', ${expiresAt}, 'organization-peer')`;
+    VALUES (${id}, ${organizationId}, ${email}, 'admin', 'pending',
+      now() + ${expired ? "-1 day" : "1 day"}::interval, 'organization-peer')`;
 
   return id;
 });
@@ -501,7 +502,7 @@ it.live("rejects another recipient's and expired invitations", () =>
       "auth-reject-expired",
       organization,
       credentials.email,
-      new Date(Date.now() - 86_400_000),
+      true,
     );
 
     assert.deepStrictEqual(
@@ -514,6 +515,10 @@ it.live("rejects another recipient's and expired invitations", () =>
     );
     assert.deepStrictEqual(
       yield* Effect.flip(organizations.getInvitation(headers, expired)),
+      new Organizations.InvitationInvalid({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.acceptInvitation(headers, expired)),
       new Organizations.InvitationInvalid({}),
     );
     assert.deepStrictEqual(
