@@ -338,17 +338,17 @@ it.live("lists only the caller's organizations", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
-it.live("scopes membership and rosters to members and rejects unsupported roles", () =>
+it.live("scopes membership and member lists to members and rejects unsupported roles", () =>
   Effect.gen(function* () {
     const { organizations, sql, headers } = yield* fixture("192.0.2.41");
-    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-roster-%'`;
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-members-%'`;
     yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
     const other = yield* peer();
 
-    const shared = yield* peerOrganization("auth-roster-shared");
+    const shared = yield* peerOrganization("auth-members-shared");
     yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
-      VALUES ('auth-roster-viewer', ${shared}, 'authentication-test', 'viewer', now())`;
-    const foreign = yield* peerOrganization("auth-roster-foreign");
+      VALUES ('auth-members-viewer', ${shared}, 'authentication-test', 'viewer', now())`;
+    const foreign = yield* peerOrganization("auth-members-foreign");
 
     assert.deepStrictEqual(yield* organizations.listMembers(headers, shared), [
       { userId: other, name: "alex", email: "peer@moku.test", role: "owner" },
@@ -373,7 +373,7 @@ it.live("scopes membership and rosters to members and rejects unsupported roles"
       new Access.NotFound({}),
     );
 
-    yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'auth-roster-viewer'`;
+    yield* sql`UPDATE member SET role = 'owner,member' WHERE id = 'auth-members-viewer'`;
 
     assert.instanceOf(
       yield* Effect.flip(organizations.role(headers, shared)),

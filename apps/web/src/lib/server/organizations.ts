@@ -31,7 +31,7 @@ export interface Interface {
     organizationId: OrganizationId,
   ) => Effect.Effect<OrganizationRole, Access.NotFound | Unavailable>;
   readonly list: (headers: Headers) => Effect.Effect<ReadonlyArray<Organization>, Unavailable>;
-  /** Members see the roster; anyone else gets `Access.NotFound`. */
+  /** Members see the member list; anyone else gets `Access.NotFound`. */
   readonly listMembers: (
     headers: Headers,
     organizationId: OrganizationId,

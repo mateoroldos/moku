@@ -23,7 +23,7 @@ Derive UI capabilities from the [task role policy](../../../packages/core/src/hu
 rather than maintaining a separate role policy. Membership checks and scoped task
 queries protect different boundaries; completion fallback reads need both too.
 
-`Organizations` resolves roles and lists organizations and rosters from Better
+`Organizations` resolves roles and lists organizations and their members from Better
 Auth with the request's headers; its membership check becomes `Access.NotFound` for outsiders.
 `Organizations.create` makes the session owner the owner of a new organization. It is not
 atomic: a failed owner write can leave an organization without members.

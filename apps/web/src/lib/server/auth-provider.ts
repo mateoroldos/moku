@@ -38,7 +38,7 @@ const ProviderMembers = Schema.Struct({
   ),
 });
 
-const rosterOrder = (a: Organizations.Member, b: Organizations.Member) =>
+const memberOrder = (a: Organizations.Member, b: Organizations.Member) =>
   a.name.localeCompare(b.name) || Order.String(a.userId, b.userId);
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider.Unavailable", {
@@ -186,7 +186,7 @@ export const layer = Layer.effectContext(
         Effect.mapError(organizationsUnavailable),
       );
 
-      return members.map(({ userId, role, user }) => ({ userId, role, ...user })).sort(rosterOrder);
+      return members.map(({ userId, role, user }) => ({ userId, role, ...user })).sort(memberOrder);
     });
 
     const create = Effect.fn("Organizations.create")(function* (
