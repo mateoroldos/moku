@@ -475,6 +475,7 @@ it.live("shows and accepts the recipient's pending invitation once", () =>
     const invitation = yield* peerInvitation("auth-accept", organization, credentials.email);
 
     assert.deepStrictEqual(yield* organizations.getInvitation(headers, invitation), {
+      email: credentials.email,
       organizationName: "auth-accept-org",
       inviterEmail: "peer@moku.test",
       role: "admin",
@@ -505,11 +506,11 @@ it.live("rejects another recipient's and expired invitations", () =>
 
     assert.deepStrictEqual(
       yield* Effect.flip(organizations.getInvitation(headers, other)),
-      new Organizations.NotRecipient({}),
+      new Organizations.InvitationInvalid({}),
     );
     assert.deepStrictEqual(
       yield* Effect.flip(organizations.acceptInvitation(headers, other)),
-      new Organizations.NotRecipient({}),
+      new Organizations.InvitationInvalid({}),
     );
     assert.deepStrictEqual(
       yield* Effect.flip(organizations.getInvitation(headers, expired)),

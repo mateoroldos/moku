@@ -30,7 +30,7 @@ atomic: a failed owner write can leave an organization without members.
 
 Login and signup return only to `/invitations/<id>`, from `?invitation=<id>`; never
 redirect to a caller-supplied path. The invitation page checks the recipient through
-Better Auth, so it shows a wrong account its own state instead of a 403.
+Better Auth; a wrong account sees the unavailable state, with a way to switch accounts.
 
 Better Auth swallows invitation email failures, so they are only logged; inviting the
 address again resends its invitation.

@@ -48,6 +48,7 @@
     <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight wrap-anywhere">Join {view.invitation.organizationName}</h1>
     <p class="mt-3 text-sm text-muted-foreground">
       <span class="break-all text-foreground">{view.invitation.inviterEmail}</span> invited you to join as <span class="text-foreground">{view.invitation.role}</span>.
+      Sent to <span class="break-all text-foreground">{view.invitation.email}</span>.
     </p>
     <form class="mt-8" aria-busy={acceptInvitation.pending > 0} {...acceptInvitation.enhance(async (submission) => {
       acceptFailed = false;
@@ -57,8 +58,8 @@
       } catch (failure) {
         if (!isHttpError(failure)) console.error('Invitation acceptance request failed');
         acceptFailed = true;
-        // An invitation that became invalid or belongs to another account switches to its own view.
-        if (isHttpError(failure, 404) || isHttpError(failure, 403)) await getInvitation(params.id).refresh().catch(() => console.error('Invitation refresh failed'));
+        // An invitation that became unavailable switches to its own view.
+        if (isHttpError(failure, 404)) await getInvitation(params.id).refresh().catch(() => console.error('Invitation refresh failed'));
       }
     })}>
       <Field.Group>
@@ -74,14 +75,13 @@
       <Button href={withInvitation('/login', params.id)}>Sign in</Button>
       <Button href={withInvitation('/signup', params.id)} variant="outline">Create account</Button>
     </div>
-  {:else if view._tag === 'OtherAccount'}
-    <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">This invitation is for another email</h1>
-    <p class="mt-3 text-sm text-muted-foreground">Sign out, then sign in with the email this invitation was sent to.</p>
-    {#if signOutFailed}<p role="alert" class="mt-3 text-sm text-destructive">We couldn’t sign you out. Try again.</p>{/if}
-    <Button class="mt-8 w-full" disabled={signingOut} onclick={() => switchAccount(view.userId)}>{signingOut ? 'Signing out…' : 'Sign out'}</Button>
   {:else}
-    <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">This invitation is no longer valid</h1>
-    <p class="mt-3 text-sm text-muted-foreground">It expired, was cancelled, or was already accepted. Ask the person who invited you for a new invitation.</p>
-    <Button href="/" variant="outline" class="mt-8 w-full">Open Moku</Button>
+    <h1 id="invitation-heading" class="font-serif text-4xl tracking-tight">This invitation isn’t available</h1>
+    <p class="mt-3 text-sm text-muted-foreground">It expired, was cancelled or accepted, or was sent to another email. Sign in with the invited email, or ask for a new invitation.</p>
+    {#if signOutFailed}<p role="alert" class="mt-3 text-sm text-destructive">We couldn’t sign you out. Try again.</p>{/if}
+    <div class="mt-8 flex flex-col gap-3">
+      <Button href="/">Open Moku</Button>
+      <Button variant="outline" disabled={signingOut} onclick={() => switchAccount(view.userId)}>{signingOut ? 'Signing out…' : 'Sign in with another account'}</Button>
+    </div>
   {/if}
 </section>

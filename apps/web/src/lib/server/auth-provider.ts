@@ -252,10 +252,9 @@ export const layer = Layer.effectContext(
 
     const invitationFailure = (cause: unknown) => {
       if (!isAPIError(cause)) return organizationsUnavailable(cause);
-      if (cause.body?.code === "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION")
-        return new Organizations.NotRecipient({});
       // Better Auth answers every expired, cancelled, accepted, or unknown invitation with 400.
-      return cause.status === "BAD_REQUEST"
+      return cause.status === "BAD_REQUEST" ||
+        cause.body?.code === "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION"
         ? new Organizations.InvitationInvalid({})
         : organizationsUnavailable(cause);
     };

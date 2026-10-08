@@ -21,10 +21,10 @@ Alternatives: a generic `?next=<path>` return needs open-redirect validation. Li
 
 ```text
 /invitations/[id] (public layout) → getInvitation(id) query
-  → locals.auth.authenticate                       null → SignedOut: sign-in and sign-up links with ?invitation=<id>
-  → Organizations.getInvitation(headers, id)       → Pending { organizationName, inviterEmail, role }
-      expired, cancelled, accepted, unknown        → InvitationInvalid → Invalid view
-      signed in as another email                   → NotRecipient → OtherAccount view: sign out, then /login?invitation=<id>
+  → locals.auth.principal                          signed out or unverified → SignedOut: sign-in and sign-up links with ?invitation=<id>
+  → Organizations.getInvitation(headers, id)       → Pending { email, organizationName, inviterEmail, role }
+      expired, cancelled, accepted, unknown, or    → InvitationInvalid → Unavailable view: Open Moku, or
+      sent to another email                           sign out, then /login?invitation=<id>
 acceptInvitation form(id)
   → Organizations.acceptInvitation(headers, id) → auth.api.acceptInvitation → 303 /org/<organizationId>
       same failures                                → same views
@@ -32,7 +32,7 @@ acceptInvitation form(id)
 /signup?invitation=<id>   verification callbackURL /invitations/<id>; Better Auth signs in after verifying
 ```
 
-The view is a tagged union: `SignedOut | Pending | Invalid | OtherAccount`. Requesting another verification link returns to `/login`; the emailed invitation link still works.
+The view is a tagged union: `SignedOut | Pending | Unavailable`, the states Better Auth's own invitation pages show. Requesting another verification link returns to `/login`; the emailed invitation link still works.
 
 | Test                                                              | Level                  | Fails if                                                |
 | ----------------------------------------------------------------- | ---------------------- | ------------------------------------------------------- |
