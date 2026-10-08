@@ -34,6 +34,20 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()("Organization
   cause: Schema.Redacted(Schema.Unknown),
 }) {}
 
+export const Invitation = Schema.Struct({
+  email: Schema.String,
+  organizationName: Schema.String,
+  inviterEmail: Schema.String,
+  role: OrganizationRole,
+});
+export interface Invitation extends Schema.Schema.Type<typeof Invitation> {}
+
+/** Expired, cancelled, already accepted, unknown, or sent to another email. */
+export class InvitationInvalid extends Schema.TaggedError<InvitationInvalid>()(
+  "Organizations.InvitationInvalid",
+  {},
+) {}
+
 export class AlreadyMember extends Schema.TaggedError<AlreadyMember>()(
   "Organizations.AlreadyMember",
   {},
@@ -62,6 +76,16 @@ export interface Interface {
     organizationId: OrganizationId,
     input: InviteInput,
   ) => Effect.Effect<void, Access.NotFound | Access.Denied | AlreadyMember | Unavailable>;
+  /** The session owner's pending invitation. */
+  readonly getInvitation: (
+    headers: Headers,
+    invitationId: string,
+  ) => Effect.Effect<Invitation, InvitationInvalid | Unavailable>;
+  /** Join with the invited role; returns the organization joined. */
+  readonly acceptInvitation: (
+    headers: Headers,
+    invitationId: string,
+  ) => Effect.Effect<OrganizationId, InvitationInvalid | Unavailable>;
 }
 
 export class Service extends Context.Service<Service, Interface>()("@moku/web/Organizations") {}

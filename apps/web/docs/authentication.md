@@ -28,6 +28,10 @@ Auth with the request's headers; its membership check becomes `Access.NotFound` 
 `Organizations.create` makes the session owner the owner of a new organization. It is not
 atomic: a failed owner write can leave an organization without members.
 
+Login and signup return only to `/invitations/<id>`, from `?invitation=<id>`; never
+redirect to a caller-supplied path. The invitation page checks the recipient through
+Better Auth; a wrong account sees the unavailable state, with a way to switch accounts.
+
 Better Auth swallows invitation email failures, so they are only logged; inviting the
 address again resends its invitation.
 
