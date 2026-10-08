@@ -451,3 +451,73 @@ it.live("lets owners and admins invite and rejects everyone else", () =>
     yield* organizations.invite(headers, shared, { email: "new@moku.test", role: "member" });
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
+
+const peerInvitation = Effect.fnUntraced(function* (
+  id: string,
+  organizationId: OrganizationId,
+  email: string,
+  expiresAt = new Date(Date.now() + 86_400_000),
+) {
+  const sql = yield* PgClient.PgClient;
+  yield* sql`INSERT INTO invitation (id, organization_id, email, role, status, expires_at, inviter_id)
+    VALUES (${id}, ${organizationId}, ${email}, 'admin', 'pending', ${expiresAt}, 'organization-peer')`;
+
+  return id;
+});
+
+it.live("shows and accepts the recipient's pending invitation once", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.60");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-accept-org'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const organization = yield* peerOrganization("auth-accept-org");
+    const invitation = yield* peerInvitation("auth-accept", organization, credentials.email);
+
+    assert.deepStrictEqual(yield* organizations.getInvitation(headers, invitation), {
+      organizationName: "auth-accept-org",
+      inviterEmail: "peer@moku.test",
+      role: "admin",
+    });
+    assert.strictEqual(yield* organizations.acceptInvitation(headers, invitation), organization);
+    assert.strictEqual(yield* organizations.role(headers, organization), "admin");
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.acceptInvitation(headers, invitation)),
+      new Organizations.InvitationInvalid({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("rejects another recipient's and expired invitations", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.61");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-reject-org'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const organization = yield* peerOrganization("auth-reject-org");
+    const other = yield* peerInvitation("auth-reject-other", organization, "someone@moku.test");
+    const expired = yield* peerInvitation(
+      "auth-reject-expired",
+      organization,
+      credentials.email,
+      new Date(Date.now() - 86_400_000),
+    );
+
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.getInvitation(headers, other)),
+      new Organizations.NotRecipient({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.acceptInvitation(headers, other)),
+      new Organizations.NotRecipient({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.getInvitation(headers, expired)),
+      new Organizations.InvitationInvalid({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(organizations.role(headers, organization)),
+      new Access.NotFound({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);

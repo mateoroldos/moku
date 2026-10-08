@@ -3,7 +3,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
 import { Principal, UserId } from "@moku/domain/identity";
-import { Organization, type OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
@@ -36,6 +36,10 @@ const ProviderMembers = Schema.Struct({
       user: Schema.Struct({ name: Schema.String, email: Schema.String }),
     }),
   ),
+});
+
+const ProviderAcceptance = Schema.Struct({
+  member: Schema.Struct({ organizationId: OrganizationId }),
 });
 
 const memberOrder = (a: Organizations.Member, b: Organizations.Member) =>
@@ -246,8 +250,55 @@ export const layer = Layer.effectContext(
       });
     });
 
+    const invitationFailure = (cause: unknown) => {
+      if (!isAPIError(cause)) return organizationsUnavailable(cause);
+      if (cause.body?.code === "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION")
+        return new Organizations.NotRecipient({});
+      // Better Auth answers every expired, cancelled, accepted, or unknown invitation with 400.
+      return cause.status === "BAD_REQUEST"
+        ? new Organizations.InvitationInvalid({})
+        : organizationsUnavailable(cause);
+    };
+
+    const getInvitation = Effect.fn("Organizations.getInvitation")(function* (
+      headers: Headers,
+      invitationId: string,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.getInvitation({ headers, query: { id: invitationId } }),
+        catch: invitationFailure,
+      });
+
+      return yield* Schema.decodeUnknownEffect(Organizations.Invitation)(result).pipe(
+        Effect.mapError(organizationsUnavailable),
+      );
+    });
+
+    const acceptInvitation = Effect.fn("Organizations.acceptInvitation")(function* (
+      headers: Headers,
+      invitationId: string,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.acceptInvitation({ headers, body: { invitationId } }),
+        catch: invitationFailure,
+      });
+      const { member } = yield* Schema.decodeUnknownEffect(ProviderAcceptance)(result).pipe(
+        Effect.mapError(organizationsUnavailable),
+      );
+
+      return member.organizationId;
+    });
+
     return Context.make(Service, { authenticate, handle }).pipe(
-      Context.add(Organizations.Service, { role, list, listMembers, create, invite }),
+      Context.add(Organizations.Service, {
+        role,
+        list,
+        listMembers,
+        create,
+        invite,
+        getInvitation,
+        acceptInvitation,
+      }),
     );
   }),
 );
