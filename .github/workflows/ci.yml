@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `edited` re-checks a renamed title.
+    types: [opened, synchronize, reopened, edited]
 
 permissions: {}
 
@@ -32,12 +34,55 @@ jobs:
       group: check-${{ github.ref }}
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ./.github/actions/setup
+      - uses: $/.github/actions/setup
       - run: bun run check
       - run: bun run test:postgres
         env:
           TEST_DATABASE_URL: postgresql://moku:moku@127.0.0.1:5432/moku_test
       - run: bun run build
+      - run: bun audit --prod
+
+  conventions:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    timeout-minutes: 5
+    steps:
+      # Squash merges land the title; rebase merges land the commit subjects.
+      - name: Title and commit subjects follow Conventional Commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^()[:space:]]+\))?!?: [^[:space:]]'
+          subjects=$(
+            printf '%s\n' "$TITLE"
+            gh api --paginate "repos/$REPOSITORY/pulls/$PULL_REQUEST/commits" --jq '.[].commit.message | split("\n")[0] | if . == null or . == "" then error("Empty commit subject") else . end'
+          ) || exit 1
+          status=0
+          while IFS= read -r subject; do
+            if ! grep -Eq "$pattern" <<< "$subject"; then
+              echo "::error::Not a Conventional Commit: $subject"
+              status=1
+            fi
+          done <<< "$subjects"
+          exit "$status"
+
+  zizmor:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          advanced-security: false
