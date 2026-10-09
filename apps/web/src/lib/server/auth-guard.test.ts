@@ -15,6 +15,7 @@ const dependencies = (
 ) =>
   Layer.merge(
     Layer.succeed(AuthProvider.Service, {
+      signup: "invite-only",
       authenticate,
       handle: () => Effect.die("unused"),
     }),

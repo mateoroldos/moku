@@ -5,6 +5,9 @@
   import { Button } from '@moku/ui/ui/button';
   import LoginForm from '#lib/features/auth/LoginForm.svelte';
   import { invitationReturn, withInvitation } from '#lib/features/invitations/invitation-return.ts';
+  import type { PageProps } from './$types';
+
+  let { data }: PageProps = $props();
 
   const next = $derived(invitationReturn(page.url.searchParams) ?? '/');
   let navigationFailed = $state(false);
@@ -47,6 +50,8 @@
     {/if}
     <LoginForm onsignedin={signedIn} onconfirmationrequired={confirmationRequired} />
     <p class="mt-6 text-sm"><a href="/forgot-password" class="text-primary underline underline-offset-4">Forgot password?</a></p>
-    <p class="mt-6 text-sm text-muted-foreground">New to Moku? <a href={withInvitation('/signup', page.url.searchParams.get('invitation'))} class="text-primary underline underline-offset-4">Create an account</a></p>
+    {#if data.signup === 'public' || page.url.searchParams.has('invitation')}
+      <p class="mt-6 text-sm text-muted-foreground">New to Moku? <a href={withInvitation('/signup', page.url.searchParams.get('invitation'))} class="text-primary underline underline-offset-4">Create an account</a></p>
+    {/if}
   {/if}
 </section>
