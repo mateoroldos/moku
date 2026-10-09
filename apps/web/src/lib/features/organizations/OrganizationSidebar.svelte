@@ -16,6 +16,7 @@
   import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import CircleHalfIcon from 'phosphor-svelte/lib/CircleHalfIcon';
   import SignOutIcon from 'phosphor-svelte/lib/SignOutIcon';
+  import UserCircleIcon from 'phosphor-svelte/lib/UserCircleIcon';
   import { authClient } from '#lib/features/auth/client.ts';
   import { FeedbackDrafts } from '#lib/features/human-tasks/feedback-drafts.ts';
 
@@ -164,6 +165,15 @@
   </Sidebar.Content>
   <Sidebar.Footer>
     <Sidebar.Menu>
+      <Sidebar.MenuItem>
+        <Sidebar.MenuButton isActive={page.url.pathname === '/account'} tooltipContent="Account">
+          {#snippet child({ props })}
+            <a {...props} href="/account" aria-current={page.url.pathname === '/account' ? 'page' : undefined}>
+              <UserCircleIcon aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">Account</span>
+            </a>
+          {/snippet}
+        </Sidebar.MenuButton>
+      </Sidebar.MenuItem>
       <Sidebar.MenuItem>
         <Sidebar.MenuButton onclick={toggleMode} tooltipContent="Toggle color theme" aria-label="Toggle color theme">
           <CircleHalfIcon aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">Toggle color theme</span>

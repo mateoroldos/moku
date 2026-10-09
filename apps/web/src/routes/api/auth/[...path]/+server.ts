@@ -13,6 +13,7 @@ export const fallback: RequestHandler = ({ locals, request, getClientAddress }) 
       "POST /api/auth/request-password-reset",
       "POST /api/auth/reset-password",
       "POST /api/auth/sign-out",
+      "POST /api/auth/delete-user",
       "GET /api/auth/get-session",
     ].includes(operation) &&
     !(
