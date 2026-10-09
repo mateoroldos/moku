@@ -3,6 +3,9 @@
   import { page } from '$app/state';
   import { invitationReturn, withInvitation } from '#lib/features/invitations/invitation-return.ts';
   import SignupForm from '#lib/features/auth/SignupForm.svelte';
+  import type { PageProps } from './$types';
+
+  let { data }: PageProps = $props();
 
   let email = $state<string | null>(null);
   let heading: HTMLHeadingElement;
@@ -24,9 +27,12 @@
 <section class="mx-auto max-w-sm py-12 sm:py-20" aria-labelledby="auth-heading">
   <h1 id="auth-heading" bind:this={heading} tabindex="-1" class="font-serif text-4xl tracking-tight">{email ? 'Check your email' : 'Create your account'}</h1>
   {#if email}
-    <p class="mt-3 text-sm text-muted-foreground">Check <span class="break-all text-foreground">{email}</span> for a verification link. If you already have an account, sign in or reset your password.</p>
+    <p class="mt-3 text-sm text-muted-foreground">Check <span class="break-all text-foreground">{email}</span> for a verification link. If you already have an account, sign in or reset your password.{#if data.signup === 'invite-only'} If you were invited, use the invited address.{/if}</p>
     <p class="mt-6 text-sm"><a href="/verify-email" class="text-primary underline underline-offset-4">Request another link</a></p>
   {:else}
+    {#if data.signup === 'invite-only' && !page.url.searchParams.has('invitation')}
+      <p class="mt-3 text-sm text-muted-foreground">Moku is invite-only. Use the email you were invited with.</p>
+    {/if}
     <SignupForm callbackURL={invitationReturn(page.url.searchParams) ?? '/login?verified=true'} oncreated={created} />
   {/if}
   <p class="mt-6 text-sm text-muted-foreground">Already have an account? <a href={withInvitation('/login', page.url.searchParams.get('invitation'))} class="text-primary underline underline-offset-4">Sign in</a></p>

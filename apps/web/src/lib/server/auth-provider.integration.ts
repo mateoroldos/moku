@@ -8,7 +8,7 @@ import { UserId } from "@moku/domain/identity";
 import { OrganizationId } from "@moku/domain/organization";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
-import { Config, Effect, Layer, Logger, Redacted } from "effect";
+import { Config, ConfigProvider, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
 import { Organizations } from "./organizations.ts";
 
@@ -32,6 +32,7 @@ const postgres = Layer.unwrap(
 const fixture = Effect.fnUntraced(function* (
   clientAddress: string,
   delivery: Email.Interface = { send: () => Effect.void },
+  config: Record<string, string> = {},
 ) {
   const sql = yield* PgClient.PgClient;
   const storage = yield* AuthStorage.Service;
@@ -54,6 +55,9 @@ const fixture = Effect.fnUntraced(function* (
       AuthProvider.layer.pipe(
         Layer.provide(database),
         Layer.provide(Layer.succeed(Email.Service, delivery)),
+        Layer.provide(
+          ConfigProvider.layerAdd(ConfigProvider.fromUnknown(config), { asPrimary: true }),
+        ),
       ),
     ),
   );
@@ -102,12 +106,16 @@ const signup = {
 it.live("blocks unverified sign-in and establishes a session through the emailed link", () =>
   Effect.gen(function* () {
     const messages: Email.Message[] = [];
-    const { auth } = yield* fixture("192.0.2.20", {
-      send: (message) =>
-        Effect.sync(() => {
-          messages.push(message);
-        }),
-    });
+    const { auth } = yield* fixture(
+      "192.0.2.20",
+      {
+        send: (message) =>
+          Effect.sync(() => {
+            messages.push(message);
+          }),
+      },
+      { SIGNUP_MODE: "public" },
+    );
     const post = (path: string, body: Record<string, string>) =>
       auth.handle(request(path, new Headers(), JSON.stringify(body)), "192.0.2.20");
 
@@ -634,6 +642,60 @@ it.live("shows and accepts the recipient's pending invitation once", () =>
       yield* Effect.flip(organizations.acceptInvitation(headers, invitation)),
       new Organizations.InvitationInvalid({}),
     );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("creates accounts while invite-only only for invited or allowed emails", () =>
+  Effect.gen(function* () {
+    const messages: Email.Message[] = [];
+    const { auth, sql } = yield* fixture(
+      "192.0.2.62",
+      {
+        send: (message) =>
+          Effect.sync(() => {
+            messages.push(message);
+          }),
+      },
+      { SIGNUP_MODE: "invite-only", SIGNUP_EMAILS: "someone@moku.test, Signup-Allowed@moku.test" },
+    );
+    const accounts = sql`SELECT id FROM "user" WHERE email LIKE 'signup-%'`;
+    const cleanup = sql`DELETE FROM verification WHERE value IN (${accounts})`.pipe(
+      Effect.andThen(sql`DELETE FROM "user" WHERE email LIKE 'signup-%'`),
+      Effect.andThen(sql`DELETE FROM organization WHERE name = 'auth-signup-org'`),
+    );
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const organization = yield* peerOrganization("auth-signup-org");
+    yield* peerInvitation("auth-signup-invited", organization, "signup-invited@moku.test");
+    yield* peerInvitation("auth-signup-expired", organization, "signup-expired@moku.test", true);
+    const signUp = ([email, clientAddress]: readonly [string, string]) =>
+      auth
+        .handle(
+          request("sign-up/email", new Headers(), JSON.stringify({ ...signup, email })),
+          clientAddress,
+        )
+        .pipe(Effect.map(({ status }) => status));
+
+    assert.deepStrictEqual(
+      yield* Effect.forEach(
+        [
+          ["signup-uninvited@moku.test", "192.0.2.63"],
+          ["signup-expired@moku.test", "192.0.2.64"],
+          ["signup-invited@moku.test", "192.0.2.65"],
+          ["signup-allowed@moku.test", "192.0.2.66"],
+        ] as const,
+        signUp,
+      ),
+      [200, 200, 200, 200],
+    );
+    assert.deepStrictEqual(
+      yield* sql`SELECT email FROM "user" WHERE email LIKE 'signup-%' ORDER BY email`,
+      [{ email: "signup-allowed@moku.test" }, { email: "signup-invited@moku.test" }],
+    );
+    assert.deepStrictEqual(messages.map(({ to }) => to).sort(), [
+      "signup-allowed@moku.test",
+      "signup-invited@moku.test",
+    ]);
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 

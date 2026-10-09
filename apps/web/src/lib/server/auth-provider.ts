@@ -59,6 +59,9 @@ const ProviderAcceptance = Schema.Struct({
 const memberOrder = (a: Organizations.Member, b: Organizations.Member) =>
   a.name.localeCompare(b.name) || Order.String(a.userId, b.userId);
 
+export const SignupMode = Schema.Literals(["invite-only", "public"]);
+export type SignupMode = typeof SignupMode.Type;
+
 export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
 }) {}
@@ -69,6 +72,7 @@ class OwnerRequired extends Schema.TaggedError<OwnerRequired>()("AuthProvider.Ow
 }) {}
 
 export interface Interface {
+  readonly signup: SignupMode;
   readonly authenticate: (headers: Headers) => Effect.Effect<Principal | null, Unavailable>;
   readonly handle: (
     request: Request,
@@ -83,10 +87,18 @@ export const layer = Layer.effectContext(
     const database = yield* AuthStorage.Service;
     const origin = yield* Config.schema(Origin, "ORIGIN");
     const secret = yield* Config.redacted("BETTER_AUTH_SECRET");
+    const signup = yield* Config.schema(SignupMode, "SIGNUP_MODE").pipe(
+      Config.withDefault("invite-only"),
+    );
+    const allowedEmails = new Set(
+      (yield* Config.schema(Config.Array(Schema.String), "SIGNUP_EMAILS").pipe(
+        Config.withDefault([]),
+      )).map((address) => address.trim().toLowerCase()),
+    );
     const email = yield* Email.Service;
-    const runEmail = Effect.runPromiseWith(yield* Effect.context<never>());
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const send = (to: string, subject: string, text: string) =>
-      runEmail(
+      runPromise(
         email.send({ to, subject, text: Redacted.make(text) }).pipe(
           // Better Auth catches some send failures; its disabled logger cannot report them.
           Effect.tapCause(() => Effect.logError("email.send.failed")),
@@ -124,6 +136,37 @@ export const layer = Layer.effectContext(
             "Reset your Moku password",
             `${url}\n\nChoose a new password. If you did not request this, ignore this email.`,
           ),
+      },
+      databaseHooks: {
+        user: {
+          create: {
+            before: ({ email }): Promise<void> =>
+              signup === "public" || allowedEmails.has(email)
+                ? Promise.resolve()
+                : runPromise(
+                    Effect.result(
+                      invited(email).pipe(
+                        Effect.tapCause(() => Effect.logError("signup.invitations.failed")),
+                      ),
+                    ),
+                  ).then(
+                    Result.match({
+                      onSuccess: (invited) => {
+                        // Sign-up answers a 403 like a taken email, so no one learns who is invited.
+                        if (!invited)
+                          throw APIError.from("FORBIDDEN", {
+                            code: "INVITATION_REQUIRED",
+                            message: "Only invited emails can sign up.",
+                          });
+                      },
+                      // Sign-up turns other errors into a 422 that blames the input.
+                      onFailure: () => {
+                        throw APIError.fromStatus("INTERNAL_SERVER_ERROR");
+                      },
+                    }),
+                  ),
+          },
+        },
       },
       user: {
         deleteUser: {
@@ -398,6 +441,20 @@ export const layer = Layer.effectContext(
       });
     });
 
+    /** Better Auth lists only pending invitations, but keeps expired ones pending. */
+    const invited = Effect.fn("AuthProvider.invited")(function* (email: string) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.listUserInvitations({ query: { email } }),
+        catch: unavailable,
+      });
+      const invitations = yield* Schema.decodeUnknownEffect(ProviderInvitations)(result).pipe(
+        Effect.mapError(unavailable),
+      );
+      const now = yield* Clock.currentTimeMillis;
+
+      return invitations.some(({ expiresAt }) => expiresAt.getTime() > now);
+    });
+
     const invitationFailure = (cause: unknown) => {
       if (!isAPIError(cause)) return organizationsUnavailable(cause);
       // Better Auth answers every expired, cancelled, accepted, or unknown invitation with 400.
@@ -480,7 +537,7 @@ export const layer = Layer.effectContext(
       });
     });
 
-    return Context.make(Service, { authenticate, handle }).pipe(
+    return Context.make(Service, { signup, authenticate, handle }).pipe(
       Context.add(Organizations.Service, {
         role,
         list,
