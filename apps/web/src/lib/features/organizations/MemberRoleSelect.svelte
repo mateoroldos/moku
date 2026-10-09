@@ -76,7 +76,7 @@
   <input {...change.fields.organizationId.as('hidden', organizationId)} />
   <Select.Root type="single" name={change.fields.role.as('select').name} bind:value={selected} onValueChange={choose}
     disabled={change.pending > 0}>
-    <Select.Trigger class="w-28" aria-label={`Role for ${member.email}`}>{label}</Select.Trigger>
+    <Select.Trigger class="w-28 pointer-coarse:min-h-11" aria-label={`Role for ${member.email}`}>{label}</Select.Trigger>
     <Select.Content>
       <Select.Group>
         {#each roles as role (role)}
