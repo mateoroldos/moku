@@ -43,9 +43,9 @@ bun run db:migrate
 ```
 
 Edit [the task schema](src/human-task/schema.ts), generate and review the SQL, and commit
-the migration directory including its snapshot. Add a migration rather than editing
-one already applied. Disposable baselines follow the root
-[development status policy](../../AGENTS.md#development-status).
+the migration directory including its snapshot. Until release, keep one baseline, as the
+[development status policy](../../AGENTS.md#development-status) allows: delete `drizzle/`
+before generating, then [reset local data](#reset-local-data).
 `db:check` generates against a temporary copy and fails on drift. Apply checked-in migrations once per deployment
 before serving traffic; repeated migration runs leave applied migrations intact.
 

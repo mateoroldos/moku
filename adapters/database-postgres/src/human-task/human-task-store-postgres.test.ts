@@ -4,6 +4,7 @@ import { HumanTaskStoreContract } from "@moku/core/test/human-task-store-contrac
 import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Result } from "effect";
+import { organization } from "../auth/schema.ts";
 import { Database } from "../internal/database.ts";
 import { PersistencePglite } from "../test/persistence-pglite.ts";
 import { humanTasks } from "./schema.ts";
@@ -89,6 +90,21 @@ it.effect(
         yield* Effect.flip(store.list(organizationId)),
         HumanTaskStore.PersistenceError,
       );
+    }).pipe(Effect.provide(PersistencePglite.layer)),
+  { timeout: 15000 },
+);
+
+it.effect(
+  "deletes an organization's tasks with the organization",
+  () =>
+    Effect.gen(function* () {
+      const store = yield* HumanTaskStore.Service;
+      const database = yield* Database.Service;
+      yield* store.create(task);
+
+      yield* database.delete(organization).where(eq(organization.id, organizationId));
+
+      assert.instanceOf(yield* Effect.flip(store.get(ref(task.id))), HumanTaskStore.NotFound);
     }).pipe(Effect.provide(PersistencePglite.layer)),
   { timeout: 15000 },
 );
