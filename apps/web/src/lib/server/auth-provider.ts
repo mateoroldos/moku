@@ -31,6 +31,7 @@ const ProviderRole = Schema.Struct({ role: OrganizationRole });
 const ProviderMembers = Schema.Struct({
   members: Schema.Array(
     Schema.Struct({
+      id: Schema.String,
       userId: UserId,
       role: OrganizationRole,
       user: Schema.Struct({ name: Schema.String, email: Schema.String }),
@@ -208,7 +209,9 @@ export const layer = Layer.effectContext(
         Effect.mapError(organizationsUnavailable),
       );
 
-      return members.map(({ userId, role, user }) => ({ userId, role, ...user })).sort(memberOrder);
+      return members
+        .map(({ id, userId, role, user }) => ({ id, userId, role, ...user }))
+        .sort(memberOrder);
     });
 
     const create = Effect.fn("Organizations.create")(function* (
@@ -258,6 +261,30 @@ export const layer = Layer.effectContext(
             body: { organizationId, email, role, resend: true },
           }),
         catch: inviteFailure,
+      });
+    });
+
+    const changeRole = Effect.fn("Organizations.changeRole")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+      memberId: string,
+      role: OrganizationRole,
+    ) {
+      yield* Effect.tryPromise({
+        try: () => auth.api.updateMemberRole({ headers, body: { organizationId, memberId, role } }),
+        catch: (cause) => {
+          switch (isAPIError(cause) ? cause.body?.code : undefined) {
+            case "MEMBER_NOT_FOUND":
+              return new Organizations.MemberNotFound({});
+            // Better Auth's answer both to roles without member updates and to admins changing owners.
+            case "YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER":
+              return new Organizations.RoleNotAllowed({});
+            case "YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER":
+              return new Organizations.LastOwner({});
+            default:
+              return organizationsUnavailable(cause);
+          }
+        },
       });
     });
 
@@ -350,6 +377,7 @@ export const layer = Layer.effectContext(
         listMembers,
         create,
         invite,
+        changeRole,
         getInvitation,
         acceptInvitation,
         listInvitations,

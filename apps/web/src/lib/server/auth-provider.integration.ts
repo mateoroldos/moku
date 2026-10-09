@@ -351,8 +351,9 @@ it.live("scopes membership and member lists to members and rejects unsupported r
     const foreign = yield* peerOrganization("auth-members-foreign");
 
     assert.deepStrictEqual(yield* organizations.listMembers(headers, shared), [
-      { userId: other, name: "alex", email: "peer@moku.test", role: "owner" },
+      { id: shared, userId: other, name: "alex", email: "peer@moku.test", role: "owner" },
       {
+        id: "auth-members-viewer",
         userId: UserId.make("authentication-test"),
         name: "Reviewer",
         email: credentials.email,
@@ -452,6 +453,58 @@ it.live("lets owners and admins invite and rejects everyone else", () =>
       new Organizations.AlreadyMember({}),
     );
     yield* organizations.invite(headers, shared, { email: "new@moku.test", role: "member" });
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("changes roles under Better Auth's owner rules", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.52");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-role-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const own = yield* organizations.create(headers, { name: "auth-role-own" });
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-role-peer', ${own.id}, 'organization-peer', 'member', now())`;
+    const roles = (organizationId: OrganizationId) =>
+      Effect.map(organizations.listMembers(headers, organizationId), (members) =>
+        members.map(({ email, role }) => [email, role]),
+      );
+    const change = (organizationId: OrganizationId, memberId: string, role: "owner" | "admin") =>
+      Effect.flip(organizations.changeRole(headers, organizationId, memberId, role));
+
+    yield* organizations.changeRole(headers, own.id, "auth-role-peer", "admin");
+    assert.deepStrictEqual(yield* roles(own.id), [
+      ["peer@moku.test", "admin"],
+      [credentials.email, "owner"],
+    ]);
+    const self = (yield* organizations.listMembers(headers, own.id))[1]?.id ?? "";
+    assert.deepStrictEqual(yield* change(own.id, self, "admin"), new Organizations.LastOwner({}));
+    assert.deepStrictEqual(
+      yield* change(own.id, "auth-role-missing", "admin"),
+      new Organizations.MemberNotFound({}),
+    );
+
+    const shared = yield* peerOrganization("auth-role-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-role-caller', ${shared}, 'authentication-test', 'admin', now())`;
+    assert.deepStrictEqual(
+      yield* change(shared, shared, "admin"),
+      new Organizations.RoleNotAllowed({}),
+    );
+    assert.deepStrictEqual(
+      yield* change(shared, "auth-role-caller", "owner"),
+      new Organizations.RoleNotAllowed({}),
+    );
+    yield* sql`UPDATE member SET role = 'viewer' WHERE id = 'auth-role-caller'`;
+    assert.deepStrictEqual(
+      yield* change(shared, "auth-role-caller", "admin"),
+      new Organizations.RoleNotAllowed({}),
+    );
+    const foreign = yield* peerOrganization("auth-role-foreign");
+    assert.deepStrictEqual(
+      yield* change(foreign, foreign, "admin"),
+      new Organizations.MemberNotFound({}),
+    );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 

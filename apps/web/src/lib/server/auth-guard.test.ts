@@ -24,6 +24,7 @@ const dependencies = (
       listMembers: () => Effect.die("unused"),
       create: () => Effect.die("unused"),
       invite: () => Effect.die("unused"),
+      changeRole: () => Effect.die("unused"),
       getInvitation: () => Effect.die("unused"),
       acceptInvitation: () => Effect.die("unused"),
       listInvitations: () => Effect.die("unused"),
