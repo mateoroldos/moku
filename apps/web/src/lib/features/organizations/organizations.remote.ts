@@ -167,18 +167,21 @@ export const cancelInvitation = form(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
-            "Organizations.InvitationInvalid": () => undefined,
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
-          }),
-        ),
+        Result.match({
+          onSuccess: () => ({ cancelled: true }),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
+              // Already accepted, cancelled, or expired: the refreshed list shows it gone.
+              "Organizations.InvitationInvalid": () => ({ cancelled: true }),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t confirm the cancellation. Try again."),
+            }),
+        }),
       );
   },
 );
@@ -193,7 +196,7 @@ export const changeMemberRole = form(
     }),
     { parseOptions: { onExcessProperty: "error" } },
   ),
-  ({ id, organizationId, role }, issue) => {
+  ({ id, organizationId, role }) => {
     const event = getRequestEvent();
 
     return event.locals
@@ -207,26 +210,19 @@ export const changeMemberRole = form(
         }),
       )
       .then(
-        Result.match({
-          onSuccess: () => ({ changed: role }),
-          onFailure: (failure) =>
-            Match.valueTags(failure, {
-              "AuthGuard.Required": AuthGuard.reject,
-              "Access.UnverifiedEmail": AuthGuard.reject,
-              "AuthProvider.Unavailable": AuthGuard.reject,
-              // A successful form response refreshes Team without claiming a role change.
-              "Organizations.MemberNotFound": () => undefined,
-              "Organizations.RoleNotAllowed": () =>
-                invalid(issue.role("You can’t change this member’s role.")),
-              "Organizations.LastOwner": () =>
-                invalid(issue.role("Make someone else an owner first.")),
-              "Organizations.Unavailable": () =>
-                error(
-                  503,
-                  "We couldn’t confirm the role change. Refresh the team before trying again.",
-                ),
-            }),
-        }),
+        Result.getOrElse((failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
+            "AuthProvider.Unavailable": AuthGuard.reject,
+            // The refreshed list shows the member gone.
+            "Organizations.MemberNotFound": () => undefined,
+            "Organizations.RoleNotAllowed": () => invalid("You can’t change this member’s role."),
+            "Organizations.LastOwner": () => invalid("Make someone else an owner first."),
+            "Organizations.Unavailable": () =>
+              error(503, "We couldn’t confirm the role change. Try again."),
+          }),
+        ),
       );
   },
 );
@@ -251,18 +247,20 @@ export const removeMember = form(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            // A successful form response refreshes Team; the member is already gone.
-            "Organizations.MemberNotFound": () => undefined,
-            "Organizations.RemovalNotAllowed": () => invalid("You can’t remove this member."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t confirm the removal. Refresh the team before trying again."),
-          }),
-        ),
+        Result.match({
+          onSuccess: () => ({ removed: true }),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              // Already gone is what the caller asked for.
+              "Organizations.MemberNotFound": () => ({ removed: true }),
+              "Organizations.RemovalNotAllowed": () => invalid("You can’t remove this member."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t confirm the removal. Try again."),
+            }),
+        }),
       );
   },
 );

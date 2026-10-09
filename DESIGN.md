@@ -69,7 +69,9 @@ layout. Pair every status color with text or an icon.
 
 Use Sonner toasts for global action feedback, such as a failed sign-out. Keep
 validation beside its form, uncertain decision outcomes beside the task, and
-page failures in route error boundaries.
+page failures in route error boundaries. A row action shows its result in the row
+and its failure in a toast; a confirmed action shows its failure in its dialog.
+Confirm with a toast only when the result leaves the screen, such as a removed member.
 
 ## Voice
 

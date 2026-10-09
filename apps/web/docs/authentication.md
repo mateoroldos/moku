@@ -41,12 +41,12 @@ reveals invitation state only to a session.
 Team offers only what Better Auth allows: `organizationRoles` (Better Auth's role objects)
 grant invitation and member rights, and `assignableRoles` mirrors Better Auth's rule that
 only owners give the owner role or manage owners. Better Auth still enforces both; its
-rejections, such as after a role changed elsewhere, render beside the form. Any member
+rejections, such as after a role changed elsewhere, appear as toasts or in the
+confirmation dialog. Any member
 can read pending invitations through the remote, as Better Auth allows.
 
 Better Auth owns last-owner protection; races that leave an organization without an owner
 are accepted. Ownership transfer is promoting another owner, then demoting yourself.
-Without JavaScript, removing a member or changing your own role submits unconfirmed.
 
 Better Auth caps organizations, members, and listed invitations at 100 rows. A full
 organization rejects joins with a retryable 503, and past 100 invitations ever sent,

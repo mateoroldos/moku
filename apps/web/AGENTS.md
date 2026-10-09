@@ -47,6 +47,10 @@ Effect Schema.
   errors to the route boundary. Global actions, such as sign-out, use Sonner.
   Report locally caught unexpected errors; they bypass Kit's error hooks.
   Route error boundaries own failures that replace the page.
+- A list row's action is also a `form`, one per row via `.for(id)`, submitted by a
+  control outside it (`requestSubmit`, or a button's `form` attribute). The row shows
+  the result; refusals and failures use Sonner, or stay in the action's confirmation
+  dialog. A refusal means the page is stale: refresh once its message is shown.
 - Publish authoritative mutation results to detail queries. Secondary refresh
   failures must not undo confirmed mutations.
 - Use Kit query overrides for optimistic presentation and keep temporary variants

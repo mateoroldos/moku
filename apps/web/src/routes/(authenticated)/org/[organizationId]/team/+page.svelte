@@ -1,7 +1,7 @@
 <script lang="ts">
   import { listOrganizationMembers } from '#lib/features/organizations/organizations.remote.ts';
-  import MemberRemoveForm from '#lib/features/organizations/MemberRemoveForm.svelte';
-  import MemberRoleForm from '#lib/features/organizations/MemberRoleForm.svelte';
+  import MemberActions from '#lib/features/organizations/MemberActions.svelte';
+  import MemberRoleSelect from '#lib/features/organizations/MemberRoleSelect.svelte';
   import InviteTeammateForm from '#lib/features/organizations/InviteTeammateForm.svelte';
   import PendingInvitations from '#lib/features/organizations/PendingInvitations.svelte';
   import type { PageProps } from './$types';
@@ -28,10 +28,12 @@
           <p class="wrap-anywhere text-sm text-muted-foreground">{member.email}</p>
         </div>
         {#if data.memberRoles.includes(member.role)}
-          <div class="flex flex-col gap-1 sm:flex-row sm:items-start">
-            <MemberRoleForm organizationId={data.organizationId} {member} roles={data.memberRoles} self={member.userId === data.viewer.userId} />
-            {#if member.userId !== data.viewer.userId}
-              <MemberRemoveForm organizationId={data.organizationId} {member} />
+          <div class="flex items-center gap-2">
+            <MemberRoleSelect organizationId={data.organizationId} {member} roles={data.memberRoles} self={member.userId === data.viewer.userId} />
+            {#if member.userId === data.viewer.userId}
+              <span class="size-8" aria-hidden="true"></span>
+            {:else}
+              <MemberActions organizationId={data.organizationId} {member} />
             {/if}
           </div>
         {:else}
