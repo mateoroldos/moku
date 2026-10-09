@@ -1,30 +1,53 @@
 <script lang="ts">
+  import { refreshAll } from '$app/navigation';
+  import { isHttpError } from '@sveltejs/kit';
   import { toast } from 'svelte-sonner';
   import DotsThreeIcon from 'phosphor-svelte/lib/DotsThreeIcon';
   import type { OrganizationId } from '@moku/domain/organization';
   import { Button } from '@moku/ui/ui/button';
   import * as DropdownMenu from '@moku/ui/ui/dropdown-menu';
-  import { commandFailure } from './command-failure.ts';
   import ConfirmAction from './ConfirmAction.svelte';
-  import { listOrganizationMembers, removeMember } from './organizations.remote.ts';
+  import { removeMember } from './organizations.remote.ts';
 
   let { organizationId, member }: {
     organizationId: OrganizationId;
     member: { id: string; name: string; email: string };
   } = $props();
 
+  const removal = $derived(removeMember.for(member.id));
+  const formId = $derived(`remove-member-${member.id}`);
   let removing = $state(false);
+  let failure = $state<string>();
+  let refused = false;
 
-  /** Resolves to the failure to show in the dialog, or nothing once removed. */
-  const remove = async () => {
-    const failure = await commandFailure(
-      removeMember({ organizationId, memberId: member.id }).updates(listOrganizationMembers(organizationId)),
-    );
-    if (!failure) toast.success(`${member.name} removed.`);
-
-    return failure;
+  const close = () => {
+    // A refusal means this page is stale; refreshing while the dialog was open could remove it.
+    if (refused) void refreshAll();
+    refused = false;
+    failure = undefined;
   };
 </script>
+
+<form id={formId} {...removal.enhance(async (submission) => {
+  failure = undefined;
+
+  try {
+    if (await submission.submit()) {
+      // A redirect, such as to login, also settles the submission without a result.
+      if (removal.result) toast.success(`${member.name} removed.`);
+      return;
+    }
+    refused = true;
+    failure = removal.fields.allIssues()?.[0]?.message ?? 'You can’t remove this member.';
+  } catch (error) {
+    // Page failures belong to the route boundary.
+    if (isHttpError(error) && error.status < 500) throw error;
+    if (!isHttpError(error)) console.error('Member removal request failed');
+    failure = isHttpError(error) ? error.body.message : 'We couldn’t reach Moku. Check your connection and try again.';
+  }
+})}>
+  <input {...removal.fields.organizationId.as('hidden', organizationId)} />
+</form>
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
@@ -42,7 +65,7 @@
 </DropdownMenu.Root>
 
 <ConfirmAction bind:open={removing} title={`Remove ${member.name}?`} cancel="Keep member" action="Remove member"
-  pendingAction="Removing…" onconfirm={remove}>
+  pendingAction="Removing…" form={formId} pending={removal.pending > 0} {failure} onclose={close}>
   {#snippet description()}
     They lose access to this organization right away. Invite them again to restore it.
   {/snippet}

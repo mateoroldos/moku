@@ -1,50 +1,33 @@
 <script lang="ts">
-  import { refreshAll } from '$app/navigation';
   import * as AlertDialog from '@moku/ui/ui/alert-dialog';
   import * as Field from '@moku/ui/ui/field';
   import type { Snippet } from 'svelte';
-  import type { CommandFailure } from './command-failure.ts';
 
-  let { open = $bindable(false), title, description, cancel, action, pendingAction, onconfirm, oncancel }: {
+  let { open = $bindable(false), title, description, cancel, action, pendingAction, form, pending, failure, onclose }: {
     open?: boolean;
     title: string;
     description: Snippet;
     cancel: string;
     action: string;
     pendingAction: string;
-    /** Resolves to the failure to show in the dialog, or nothing once done. */
-    onconfirm: () => Promise<CommandFailure | undefined>;
-    oncancel?: () => void;
+    /** The id of the form the action submits; the dialog renders outside it. */
+    form: string;
+    pending: boolean;
+    failure: string | undefined;
+    onclose?: () => void;
   } = $props();
-
-  let pending = $state(false);
-  let failure = $state<CommandFailure>();
-
-  const confirm = async () => {
-    pending = true;
-    failure = await onconfirm();
-    pending = false;
-
-    if (!failure) open = false;
-  };
 </script>
 
-<AlertDialog.Root bind:open onOpenChange={(next) => {
-  if (next) return;
-  // Refreshing earlier could remove this dialog with its row.
-  if (failure?.refused) void refreshAll();
-  failure = undefined;
-  oncancel?.();
-}}>
+<AlertDialog.Root bind:open onOpenChange={(next) => { if (!next) onclose?.(); }}>
   <AlertDialog.Content escapeKeydownBehavior={pending ? 'ignore' : 'close'}>
     <AlertDialog.Header>
       <AlertDialog.Title class="wrap-anywhere">{title}</AlertDialog.Title>
       <AlertDialog.Description>{@render description()}</AlertDialog.Description>
     </AlertDialog.Header>
-    {#if failure}<Field.Error role="alert">{failure.message}</Field.Error>{/if}
+    {#if failure}<Field.Error role="alert">{failure}</Field.Error>{/if}
     <AlertDialog.Footer>
       <AlertDialog.Cancel disabled={pending}>{cancel}</AlertDialog.Cancel>
-      <AlertDialog.Action variant="destructive" disabled={pending} onclick={confirm}>{pending ? pendingAction : action}</AlertDialog.Action>
+      <AlertDialog.Action type="submit" {form} variant="destructive" disabled={pending}>{pending ? pendingAction : action}</AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>
