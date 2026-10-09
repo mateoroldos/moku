@@ -564,6 +564,41 @@ it.live("deletes organizations under Better Auth's owner rules", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
+it.live("deletes an account only once no organization depends on it as owner", () =>
+  Effect.gen(function* () {
+    const { auth, organizations, sql, headers } = yield* fixture("192.0.2.73");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-account-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    yield* organizations.create(headers, { name: "auth-account-solo" });
+    const shared = yield* organizations.create(headers, { name: "auth-account-shared" });
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-account-peer', ${shared.id}, 'organization-peer', 'member', now())`;
+    const deleteAccount = () =>
+      auth.handle(
+        request("delete-user", headers, JSON.stringify({ password: credentials.password })),
+        "192.0.2.73",
+      );
+
+    const refused = yield* deleteAccount();
+    assert.strictEqual(refused.status, 400);
+    assert.propertyVal(
+      yield* Effect.promise(() => refused.json()),
+      "code",
+      "ORGANIZATION_OWNER_REQUIRED",
+    );
+    assert.lengthOf(yield* organizations.list(headers), 2);
+
+    yield* sql`UPDATE member SET role = 'owner' WHERE id = 'auth-account-peer'`;
+    assert.strictEqual((yield* deleteAccount()).status, 200);
+    assert.deepStrictEqual(
+      yield* sql`SELECT name FROM organization WHERE name LIKE 'auth-account-%'`,
+      [{ name: "auth-account-shared" }],
+    );
+    assert.deepStrictEqual(yield* sql`SELECT id FROM "user" WHERE id = 'authentication-test'`, []);
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
 const peerInvitation = Effect.fnUntraced(function* (
   id: string,
   organizationId: OrganizationId,

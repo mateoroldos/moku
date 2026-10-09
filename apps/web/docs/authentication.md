@@ -48,6 +48,11 @@ can read pending invitations through the remote, as Better Auth allows.
 Better Auth owns last-owner protection; races that leave an organization without an owner
 are accepted. Ownership transfer is promoting another owner, then demoting yourself.
 
+Only owners delete an organization, and its tasks go with it. Account deletion requires the
+password. Its `beforeDelete` hook refuses while the account alone owns an organization with
+other members, then deletes the organizations only it belongs to; those deletions are not
+atomic with the account's. Deleting an account also deletes the invitations it sent.
+
 Better Auth caps organizations, members, and listed invitations at 100 rows. A full
 organization rejects joins with a retryable 503, and past 100 invitations ever sent,
 new pending invitations drop off Team. Its pending-invitation cap is the only invite

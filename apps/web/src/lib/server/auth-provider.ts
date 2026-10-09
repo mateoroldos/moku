@@ -4,9 +4,9 @@ import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
 import { Principal, UserId } from "@moku/domain/identity";
 import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
-import { isAPIError } from "better-auth/api";
+import { APIError, isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
-import { Clock, Config, Context, Effect, Layer, Order, Redacted, Schema } from "effect";
+import { Clock, Config, Context, Effect, Layer, Order, Redacted, Result, Schema } from "effect";
 import { betterAuthOptions, organizationPlugin } from "./better-auth-options.ts";
 import { Organizations } from "./organizations.ts";
 
@@ -39,6 +39,11 @@ const ProviderMembers = Schema.Struct({
   ),
 });
 
+const ProviderMemberTotal = Schema.Struct({
+  members: Schema.Array(Schema.Struct({ userId: UserId })),
+  total: Schema.Number,
+});
+
 const ProviderInvitations = Schema.Array(
   Schema.Struct({
     ...Organizations.PendingInvitation.fields,
@@ -56,6 +61,11 @@ const memberOrder = (a: Organizations.Member, b: Organizations.Member) =>
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("AuthProvider.Unavailable", {
   cause: Schema.Redacted(Schema.Unknown),
+}) {}
+
+/** Account deletion would leave these organizations, which have other members, without an owner. */
+class OwnerRequired extends Schema.TaggedError<OwnerRequired>()("AuthProvider.OwnerRequired", {
+  organizations: Schema.Array(Schema.String),
 }) {}
 
 export interface Interface {
@@ -114,6 +124,29 @@ export const layer = Layer.effectContext(
             "Reset your Moku password",
             `${url}\n\nChoose a new password. If you did not request this, ignore this email.`,
           ),
+      },
+      user: {
+        deleteUser: {
+          enabled: true,
+          beforeDelete: (user, request): Promise<void> =>
+            Effect.runPromise(
+              Effect.result(
+                releaseOrganizations(UserId.make(user.id), request?.headers ?? new Headers()),
+              ),
+            ).then(
+              Result.match({
+                onSuccess: () => undefined,
+                onFailure: (failure) => {
+                  throw failure._tag === "AuthProvider.OwnerRequired"
+                    ? APIError.from("BAD_REQUEST", {
+                        code: "ORGANIZATION_OWNER_REQUIRED",
+                        message: `Make someone else an owner of ${new Intl.ListFormat("en").format(failure.organizations)} first.`,
+                      })
+                    : failure;
+                },
+              }),
+            ),
+        },
       },
       rateLimit: {
         enabled: true,
@@ -327,6 +360,41 @@ export const layer = Layer.effectContext(
               return organizationsUnavailable(cause);
           }
         },
+      });
+    });
+
+    /** Better Auth deletes the user's memberships, so first keep every organization they own alone:
+     * refuse while one has other members, then delete the ones only they belong to. */
+    const releaseOrganizations = Effect.fn("AuthProvider.releaseOrganizations")(function* (
+      userId: UserId,
+      headers: Headers,
+    ) {
+      const members = (query: {
+        organizationId: OrganizationId;
+        limit: number;
+        filterField?: "role";
+        filterValue?: "owner";
+      }) =>
+        Effect.tryPromise({
+          try: () => auth.api.listMembers({ headers, query }),
+          catch: organizationsUnavailable,
+        }).pipe(
+          Effect.flatMap(Schema.decodeUnknownEffect(ProviderMemberTotal)),
+          Effect.mapError(organizationsUnavailable),
+        );
+      const ownedAlone = yield* Effect.filter(yield* list(headers), ({ id }) =>
+        members({ organizationId: id, limit: 2, filterField: "role", filterValue: "owner" }).pipe(
+          Effect.map(({ members, total }) => total === 1 && members[0]?.userId === userId),
+        ),
+      );
+      const shared = yield* Effect.filter(ownedAlone, ({ id }) =>
+        members({ organizationId: id, limit: 1 }).pipe(Effect.map(({ total }) => total > 1)),
+      );
+      if (shared.length > 0)
+        return yield* new OwnerRequired({ organizations: shared.map(({ name }) => name) });
+
+      yield* Effect.forEach(ownedAlone, ({ id }) => deleteOrganization(headers, id), {
+        discard: true,
       });
     });
 
