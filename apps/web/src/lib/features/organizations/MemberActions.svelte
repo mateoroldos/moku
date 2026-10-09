@@ -23,7 +23,7 @@
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
     {#snippet child({ props })}
-      <Button {...props} variant="ghost" size="icon" aria-label={`Actions for ${member.email}`}>
+      <Button {...props} variant="ghost" size="icon" class="pointer-coarse:size-11" aria-label={`Actions for ${member.email}`}>
         <DotsThreeIcon weight="regular" aria-hidden="true" />
       </Button>
     {/snippet}
