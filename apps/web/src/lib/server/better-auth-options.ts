@@ -2,10 +2,17 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { generateId } from "@better-auth/core/utils/id";
 import { organization, type OrganizationOptions } from "better-auth/plugins/organization";
 import { defaultRoles, memberAc } from "better-auth/plugins/organization/access";
+import { OrganizationRole } from "@moku/domain/organization";
 import { customAlphabet } from "nanoid";
 
 // Better Auth rejects unknown roles; viewers manage nothing, like members.
 export const organizationRoles = { ...defaultRoles, viewer: memberAc };
+
+/** Roles a member may give, and the members they may manage; mirrors Better Auth's owner-only `creatorRole` checks. */
+export const assignableRoles = (role: OrganizationRole): ReadonlyArray<OrganizationRole> =>
+  role === "owner"
+    ? OrganizationRole.literals
+    : OrganizationRole.literals.filter((r) => r !== "owner");
 
 const organizationId = customAlphabet("0123456789ABCDEFGHJKMNPQRSTVWXYZ", 12);
 

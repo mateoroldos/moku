@@ -27,9 +27,9 @@
           </p>
           <p class="wrap-anywhere text-sm text-muted-foreground">{member.email}</p>
         </div>
-        {#if data.canManageMembers}
+        {#if data.memberRoles.includes(member.role)}
           <div class="flex flex-col gap-1 sm:flex-row sm:items-start">
-            <MemberRoleForm organizationId={data.organizationId} {member} self={member.userId === data.viewer.userId} />
+            <MemberRoleForm organizationId={data.organizationId} {member} roles={data.memberRoles} self={member.userId === data.viewer.userId} />
             {#if member.userId !== data.viewer.userId}
               <MemberRemoveForm organizationId={data.organizationId} {member} />
             {/if}
@@ -43,8 +43,8 @@
     {/each}
   </ul>
 
-  {#if data.canManageInvitations}
-    <InviteTeammateForm organizationId={data.organizationId} />
+  {#if data.invitationRoles.length > 0}
+    <InviteTeammateForm organizationId={data.organizationId} roles={data.invitationRoles} />
     <PendingInvitations organizationId={data.organizationId} />
   {/if}
 </div>
