@@ -57,6 +57,14 @@ password. Its `beforeDelete` hook refuses while the account alone owns an organi
 other members, then deletes the organizations only it belongs to; those deletions are not
 atomic with the account's. Deleting an account also deletes the invitations it sent.
 
+Organization API keys belong to their organization, not to the member who created them.
+Owners and admins create, list, and revoke them through `OrganizationApiKeys`;
+`organizationRoles` grants them Better Auth's `apiKey` statement. The auth route does not
+expose the provider's key endpoints, so only the server records a key's creator. Keys
+are deleted with their organization. Because Better Auth lists only 100 keys, creation
+stops at 100, best-effort, so every key stays visible for revocation. Nothing accepts
+keys for requests yet.
+
 Better Auth caps organizations, members, and listed invitations at 100 rows. A full
 organization rejects joins with a retryable 503, and past 100 invitations ever sent,
 new pending invitations drop off Team. Its pending-invitation cap is the only invite

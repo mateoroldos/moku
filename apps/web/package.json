@@ -21,6 +21,7 @@
     "prepare": "svelte-kit sync"
   },
   "dependencies": {
+    "@better-auth/api-key": "1.7.4",
     "@effect/platform-node": "catalog:",
     "@effect/sql-pg": "catalog:",
     "@moku/core": "workspace:*",
