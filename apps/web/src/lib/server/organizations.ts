@@ -128,6 +128,11 @@ export interface Interface {
     organizationId: OrganizationId,
     memberId: string,
   ) => Effect.Effect<void, MemberNotFound | RemovalNotAllowed | Unavailable>;
+  /** Owners delete it with its tasks; other members get `Access.Denied`, anyone else `Access.NotFound`. */
+  readonly delete: (
+    headers: Headers,
+    organizationId: OrganizationId,
+  ) => Effect.Effect<void, Access.NotFound | Access.Denied | Unavailable>;
   /** Pending, unexpired invitations, by email; members see them, anyone else gets `Access.NotFound`. */
   readonly listInvitations: (
     headers: Headers,

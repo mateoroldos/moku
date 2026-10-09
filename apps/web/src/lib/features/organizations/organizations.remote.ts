@@ -1,5 +1,6 @@
 import { form, getRequestEvent, query } from "$app/server";
-import { OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import { Access } from "@moku/core/access";
+import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { error, invalid, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
@@ -259,6 +260,91 @@ export const removeMember = form(
               "Organizations.RemovalNotAllowed": () => invalid("You can’t remove this member."),
               "Organizations.Unavailable": () =>
                 error(503, "We couldn’t confirm the removal. Try again."),
+            }),
+        }),
+      );
+  },
+);
+
+export const getOrganization = query(
+  Schema.toStandardSchemaV1(OrganizationId),
+  (organizationId) => {
+    const event = getRequestEvent();
+
+    return event.locals
+      .run(
+        "Remote.getOrganization",
+        Effect.gen(function* () {
+          yield* event.locals.auth.principal;
+          const organizations = yield* Organizations.Service;
+          const organization = (yield* organizations.list(event.request.headers)).find(
+            ({ id }) => id === organizationId,
+          );
+
+          return organization ?? (yield* new Access.NotFound({}));
+        }),
+      )
+      .then(
+        Result.match({
+          onSuccess: Schema.encodeSync(Organization),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t load this organization. Try again."),
+            }),
+        }),
+      );
+  },
+);
+
+export const deleteOrganization = form(
+  Schema.toStandardSchemaV1(
+    Schema.Struct({ organizationId: OrganizationId, confirmation: Schema.String }),
+    { parseOptions: { onExcessProperty: "error" } },
+  ),
+  ({ organizationId, confirmation }, issue) => {
+    const event = getRequestEvent();
+
+    return event.locals
+      .run(
+        "Remote.deleteOrganization",
+        Effect.gen(function* () {
+          yield* event.locals.auth.principal;
+          const organizations = yield* Organizations.Service;
+          const organization = (yield* organizations.list(event.request.headers)).find(
+            ({ id }) => id === organizationId,
+          );
+
+          // Deleted already, or never a member: what the caller asked for.
+          if (organization === undefined) return "deleted";
+          if (organization.name !== confirmation) return "unconfirmed";
+
+          yield* organizations.delete(event.request.headers, organizationId);
+          return "deleted";
+        }),
+      )
+      .then(
+        Result.match({
+          onSuccess: (outcome) =>
+            outcome === "deleted"
+              ? redirect(303, "/")
+              : invalid(issue.confirmation("Type the organization’s name exactly.")),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => redirect(303, "/"),
+              "Access.Denied": () => invalid("Only owners can delete this organization."),
+              "Organizations.Unavailable": () =>
+                error(
+                  503,
+                  "We couldn’t confirm the deletion. Check your organizations before trying again.",
+                ),
             }),
         }),
       );

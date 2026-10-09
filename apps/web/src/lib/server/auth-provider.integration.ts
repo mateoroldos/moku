@@ -544,6 +544,26 @@ it.live("removes members under Better Auth's owner rules", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
+it.live("deletes organizations under Better Auth's owner rules", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.72");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-delete-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const own = yield* organizations.create(headers, { name: "auth-delete-own" });
+    const remove = (organizationId: OrganizationId) =>
+      Effect.flip(organizations.delete(headers, organizationId));
+
+    yield* organizations.delete(headers, own.id);
+    assert.deepStrictEqual(yield* remove(own.id), new Access.NotFound({}));
+
+    const shared = yield* peerOrganization("auth-delete-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-delete-caller', ${shared}, 'authentication-test', 'admin', now())`;
+    assert.deepStrictEqual(yield* remove(shared), new Access.Denied({}));
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
 const peerInvitation = Effect.fnUntraced(function* (
   id: string,
   organizationId: OrganizationId,
