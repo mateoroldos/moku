@@ -41,4 +41,12 @@ export const reject = (
     "AuthProvider.Unavailable": () => error(503, "We couldn’t verify your session. Try again."),
   });
 
+/** `reject` for commands, where Kit allows no redirect; the client's refresh reaches login. */
+export const rejectCommand = (
+  failure: Required | AuthProvider.Unavailable | Access.UnverifiedEmail,
+): never =>
+  failure._tag === "AuthGuard.Required"
+    ? error(401, "Your session ended. Sign in again.")
+    : reject(failure);
+
 export * as AuthGuard from "./auth-guard.ts";

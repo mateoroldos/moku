@@ -1,4 +1,4 @@
-import { form, getRequestEvent, query } from "$app/server";
+import { command, form, getRequestEvent, query, requested } from "$app/server";
 import { OrganizationId, OrganizationRole } from "@moku/domain/organization";
 import { error, invalid, redirect } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
@@ -147,12 +147,17 @@ export const inviteTeammate = form(
   },
 );
 
-export const cancelInvitation = form(
-  Schema.toStandardSchemaV1(
-    // `cancelInvitation.for(id)` fills `id`.
-    Schema.Struct({ id: Schema.NonEmptyString }),
-    { parseOptions: { onExcessProperty: "error" } },
-  ),
+/**
+ * A refusal the caller can't fix by retrying; the client shows its message. Commands refresh
+ * the client's requested list only on success, so a refusal leaves the row, and any dialog
+ * showing it, in place until the client refreshes.
+ */
+type Rejected = { readonly rejected: string };
+
+export const cancelInvitation = command(
+  Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.NonEmptyString }), {
+    parseOptions: { onExcessProperty: "error" },
+  }),
   ({ id }) => {
     const event = getRequestEvent();
 
@@ -167,33 +172,41 @@ export const cancelInvitation = form(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
-            "Organizations.InvitationInvalid": () => undefined,
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
-          }),
-        ),
-      );
+        Result.match({
+          onSuccess: () => undefined,
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.rejectCommand,
+              "Access.UnverifiedEmail": AuthGuard.rejectCommand,
+              "AuthProvider.Unavailable": AuthGuard.rejectCommand,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
+              // Already accepted, cancelled, or expired: the refreshed list shows it gone.
+              "Organizations.InvitationInvalid": () => undefined,
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t confirm the cancellation. Try again."),
+            }),
+        }),
+      )
+      .then(async (outcome) => {
+        const updates = requested(listInvitations, 1);
+        await (outcome ? updates.ignoreAll() : updates.refreshAll());
+
+        return outcome;
+      });
   },
 );
 
-export const changeMemberRole = form(
+export const changeMemberRole = command(
   Schema.toStandardSchemaV1(
-    // `changeMemberRole.for(memberId)` fills `id`.
     Schema.Struct({
-      id: Schema.NonEmptyString,
       organizationId: OrganizationId,
+      memberId: Schema.NonEmptyString,
       role: OrganizationRole,
     }),
     { parseOptions: { onExcessProperty: "error" } },
   ),
-  ({ id, organizationId, role }, issue) => {
+  ({ organizationId, memberId, role }): Promise<Rejected | undefined> => {
     const event = getRequestEvent();
 
     return event.locals
@@ -203,41 +216,48 @@ export const changeMemberRole = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.changeRole(event.request.headers, organizationId, id, role);
+          return yield* organizations.changeRole(
+            event.request.headers,
+            organizationId,
+            memberId,
+            role,
+          );
         }),
       )
       .then(
         Result.match({
-          onSuccess: () => ({ changed: role }),
+          onSuccess: () => undefined,
           onFailure: (failure) =>
             Match.valueTags(failure, {
-              "AuthGuard.Required": AuthGuard.reject,
-              "Access.UnverifiedEmail": AuthGuard.reject,
-              "AuthProvider.Unavailable": AuthGuard.reject,
-              // A successful form response refreshes Team without claiming a role change.
+              "AuthGuard.Required": AuthGuard.rejectCommand,
+              "Access.UnverifiedEmail": AuthGuard.rejectCommand,
+              "AuthProvider.Unavailable": AuthGuard.rejectCommand,
+              // The refreshed list shows the member gone.
               "Organizations.MemberNotFound": () => undefined,
-              "Organizations.RoleNotAllowed": () =>
-                invalid(issue.role("You can’t change this member’s role.")),
-              "Organizations.LastOwner": () =>
-                invalid(issue.role("Make someone else an owner first.")),
+              "Organizations.RoleNotAllowed": () => ({
+                rejected: "You can’t change this member’s role.",
+              }),
+              "Organizations.LastOwner": () => ({ rejected: "Make someone else an owner first." }),
               "Organizations.Unavailable": () =>
-                error(
-                  503,
-                  "We couldn’t confirm the role change. Refresh the team before trying again.",
-                ),
+                error(503, "We couldn’t confirm the role change. Try again."),
             }),
         }),
-      );
+      )
+      .then(async (outcome) => {
+        const updates = requested(listOrganizationMembers, 1);
+        await (outcome ? updates.ignoreAll() : updates.refreshAll());
+
+        return outcome;
+      });
   },
 );
 
-export const removeMember = form(
+export const removeMember = command(
   Schema.toStandardSchemaV1(
-    // `removeMember.for(memberId)` fills `id`.
-    Schema.Struct({ id: Schema.NonEmptyString, organizationId: OrganizationId }),
+    Schema.Struct({ organizationId: OrganizationId, memberId: Schema.NonEmptyString }),
     { parseOptions: { onExcessProperty: "error" } },
   ),
-  ({ id, organizationId }) => {
+  ({ organizationId, memberId }): Promise<Rejected | undefined> => {
     const event = getRequestEvent();
 
     return event.locals
@@ -247,22 +267,32 @@ export const removeMember = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.removeMember(event.request.headers, organizationId, id);
+          return yield* organizations.removeMember(event.request.headers, organizationId, memberId);
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            // A successful form response refreshes Team; the member is already gone.
-            "Organizations.MemberNotFound": () => undefined,
-            "Organizations.RemovalNotAllowed": () => invalid("You can’t remove this member."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t confirm the removal. Refresh the team before trying again."),
-          }),
-        ),
-      );
+        Result.match({
+          onSuccess: () => undefined,
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.rejectCommand,
+              "Access.UnverifiedEmail": AuthGuard.rejectCommand,
+              "AuthProvider.Unavailable": AuthGuard.rejectCommand,
+              // Already gone is what the caller asked for.
+              "Organizations.MemberNotFound": () => undefined,
+              "Organizations.RemovalNotAllowed": () => ({
+                rejected: "You can’t remove this member.",
+              }),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t confirm the removal. Try again."),
+            }),
+        }),
+      )
+      .then(async (outcome) => {
+        const updates = requested(listOrganizationMembers, 1);
+        await (outcome ? updates.ignoreAll() : updates.refreshAll());
+
+        return outcome;
+      });
   },
 );

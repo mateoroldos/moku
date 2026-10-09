@@ -45,6 +45,11 @@ Effect Schema.
   so they render beside the form, with or without JavaScript. In `enhance`, show
   5xx and network failures beside the form as unconfirmed, and rethrow 4xx HTTP
   errors to the route boundary. Global actions, such as sign-out, use Sonner.
+- A one-step action on a list row, such as a role change or cancelling an invitation,
+  is a `command` with no form fields. Commands cannot redirect: auth failures use
+  `AuthGuard.rejectCommand`, expected refusals return a message, and on a 4xx the
+  client refreshes so the route boundary decides. The row shows the result; failures
+  use Sonner, or stay inside the action's confirmation dialog.
   Report locally caught unexpected errors; they bypass Kit's error hooks.
   Route error boundaries own failures that replace the page.
 - Publish authoritative mutation results to detail queries. Secondary refresh
