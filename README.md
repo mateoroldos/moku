@@ -135,3 +135,8 @@ export TypeScript source; the Node build bundles internal packages into the serv
 - [PostgreSQL](adapters/database-postgres/README.md): persistence adapter and migrations.
 - [Web](apps/web/AGENTS.md) and [shared UI](packages/ui/AGENTS.md): frontend conventions.
 - [Agent instructions](AGENTS.md) and [architecture](.agents/skills/moku/references/architecture.md).
+
+## License
+
+[FSL-1.1-ALv2](LICENSE): use, modify, and self-host Moku for anything except a competing
+commercial product or service. Each version becomes Apache-2.0 two years after its release.
