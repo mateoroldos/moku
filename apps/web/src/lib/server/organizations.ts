@@ -23,7 +23,7 @@ export const InviteInput = Schema.Struct({
 export interface InviteInput extends Schema.Schema.Type<typeof InviteInput> {}
 
 export const Member = Schema.Struct({
-  /** Better Auth's member record; role changes address it. */
+  /** Better Auth's member record; role changes and removal address it. */
   id: Schema.String,
   userId: UserId,
   name: Schema.String,
@@ -75,6 +75,12 @@ export class MemberNotFound extends Schema.TaggedError<MemberNotFound>()(
   {},
 ) {}
 
+/** The caller's role can't remove members, or only owners remove owners. */
+export class RemovalNotAllowed extends Schema.TaggedError<RemovalNotAllowed>()(
+  "Organizations.RemovalNotAllowed",
+  {},
+) {}
+
 /** The change would leave the organization without an owner. */
 export class LastOwner extends Schema.TaggedError<LastOwner>()("Organizations.LastOwner", {}) {}
 
@@ -116,6 +122,12 @@ export interface Interface {
     memberId: string,
     role: OrganizationRole,
   ) => Effect.Effect<void, MemberNotFound | RoleNotAllowed | LastOwner | Unavailable>;
+  /** Owners and admins remove members; only owners remove owners. */
+  readonly removeMember: (
+    headers: Headers,
+    organizationId: OrganizationId,
+    memberId: string,
+  ) => Effect.Effect<void, MemberNotFound | RemovalNotAllowed | Unavailable>;
   /** Pending, unexpired invitations, by email; members see them, anyone else gets `Access.NotFound`. */
   readonly listInvitations: (
     headers: Headers,

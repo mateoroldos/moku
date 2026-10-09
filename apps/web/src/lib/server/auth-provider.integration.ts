@@ -508,6 +508,42 @@ it.live("changes roles under Better Auth's owner rules", () =>
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
+it.live("removes members under Better Auth's owner rules", () =>
+  Effect.gen(function* () {
+    const { organizations, sql, headers } = yield* fixture("192.0.2.53");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-remove-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const own = yield* organizations.create(headers, { name: "auth-remove-own" });
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-remove-peer', ${own.id}, 'organization-peer', 'member', now())`;
+    const remove = (organizationId: OrganizationId, memberId: string) =>
+      Effect.flip(organizations.removeMember(headers, organizationId, memberId));
+
+    yield* organizations.removeMember(headers, own.id, "auth-remove-peer");
+    assert.deepStrictEqual(
+      (yield* organizations.listMembers(headers, own.id)).map(({ email }) => email),
+      [credentials.email],
+    );
+    assert.deepStrictEqual(
+      yield* remove(own.id, "auth-remove-peer"),
+      new Organizations.MemberNotFound({}),
+    );
+
+    const shared = yield* peerOrganization("auth-remove-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-remove-caller', ${shared}, 'authentication-test', 'admin', now())`;
+    assert.deepStrictEqual(yield* remove(shared, shared), new Organizations.RemovalNotAllowed({}));
+    yield* sql`UPDATE member SET role = 'viewer' WHERE id = 'auth-remove-caller'`;
+    assert.deepStrictEqual(
+      yield* remove(shared, "auth-remove-caller"),
+      new Organizations.RemovalNotAllowed({}),
+    );
+    const foreign = yield* peerOrganization("auth-remove-foreign");
+    assert.deepStrictEqual(yield* remove(foreign, foreign), new Organizations.MemberNotFound({}));
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
 const peerInvitation = Effect.fnUntraced(function* (
   id: string,
   organizationId: OrganizationId,

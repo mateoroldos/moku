@@ -23,8 +23,9 @@ export const load: LayoutServerLoad = (event) => {
           canManageInvitations: organizationRoles[membership.role].authorize({
             invitation: ["create", "cancel"],
           }).success,
-          canManageMembers: organizationRoles[membership.role].authorize({ member: ["update"] })
-            .success,
+          canManageMembers: organizationRoles[membership.role].authorize({
+            member: ["update", "delete"],
+          }).success,
         };
       }),
     )

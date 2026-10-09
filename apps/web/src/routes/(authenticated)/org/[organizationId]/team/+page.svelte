@@ -1,5 +1,6 @@
 <script lang="ts">
   import { listOrganizationMembers } from '#lib/features/organizations/organizations.remote.ts';
+  import MemberRemoveForm from '#lib/features/organizations/MemberRemoveForm.svelte';
   import MemberRoleForm from '#lib/features/organizations/MemberRoleForm.svelte';
   import InviteTeammateForm from '#lib/features/organizations/InviteTeammateForm.svelte';
   import PendingInvitations from '#lib/features/organizations/PendingInvitations.svelte';
@@ -27,7 +28,12 @@
           <p class="wrap-anywhere text-sm text-muted-foreground">{member.email}</p>
         </div>
         {#if data.canManageMembers}
-          <MemberRoleForm organizationId={data.organizationId} {member} self={member.userId === data.viewer.userId} />
+          <div class="flex flex-col gap-1 sm:flex-row sm:items-start">
+            <MemberRoleForm organizationId={data.organizationId} {member} self={member.userId === data.viewer.userId} />
+            {#if member.userId !== data.viewer.userId}
+              <MemberRemoveForm organizationId={data.organizationId} {member} />
+            {/if}
+          </div>
         {:else}
           <p class="shrink-0 text-sm capitalize text-muted-foreground">{member.role}</p>
         {/if}

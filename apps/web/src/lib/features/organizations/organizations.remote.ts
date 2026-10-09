@@ -230,3 +230,39 @@ export const changeMemberRole = form(
       );
   },
 );
+
+export const removeMember = form(
+  Schema.toStandardSchemaV1(
+    // `removeMember.for(memberId)` fills `id`.
+    Schema.Struct({ id: Schema.NonEmptyString, organizationId: OrganizationId }),
+    { parseOptions: { onExcessProperty: "error" } },
+  ),
+  ({ id, organizationId }) => {
+    const event = getRequestEvent();
+
+    return event.locals
+      .run(
+        "Remote.removeMember",
+        Effect.gen(function* () {
+          yield* event.locals.auth.principal;
+          const organizations = yield* Organizations.Service;
+
+          return yield* organizations.removeMember(event.request.headers, organizationId, id);
+        }),
+      )
+      .then(
+        Result.getOrElse((failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
+            "AuthProvider.Unavailable": AuthGuard.reject,
+            // A successful form response refreshes Team; the member is already gone.
+            "Organizations.MemberNotFound": () => undefined,
+            "Organizations.RemovalNotAllowed": () => invalid("You can’t remove this member."),
+            "Organizations.Unavailable": () =>
+              error(503, "We couldn’t confirm the removal. Refresh the team before trying again."),
+          }),
+        ),
+      );
+  },
+);
