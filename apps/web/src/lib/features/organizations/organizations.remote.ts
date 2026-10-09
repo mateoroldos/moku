@@ -21,17 +21,19 @@ export const listOrganizationMembers = query(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Organizations.Unavailable": () => error(503, "We couldn’t load your team. Try again."),
-          }),
-        ),
-      )
-      .then(Schema.encodeSync(Schema.Array(Organizations.Member)));
+        Result.match({
+          onSuccess: Schema.encodeSync(Schema.Array(Organizations.Member)),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t load your team. Try again."),
+            }),
+        }),
+      );
   },
 );
 
@@ -53,20 +55,21 @@ export const createOrganization = form(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Organizations.Unavailable": () =>
-              error(
-                503,
-                "We couldn’t confirm creation. Check your organizations before trying again.",
-              ),
-          }),
-        ),
-      )
-      .then((organization) => redirect(303, `/org/${encodeURIComponent(organization.id)}`));
+        Result.match({
+          onSuccess: (organization) => redirect(303, `/org/${encodeURIComponent(organization.id)}`),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Organizations.Unavailable": () =>
+                error(
+                  503,
+                  "We couldn’t confirm creation. Check your organizations before trying again.",
+                ),
+            }),
+        }),
+      );
   },
 );
 
@@ -86,18 +89,19 @@ export const listInvitations = query(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t load pending invitations. Try again."),
-          }),
-        ),
-      )
-      .then(Schema.encodeSync(Schema.Array(Organizations.PendingInvitation)));
+        Result.match({
+          onSuccess: Schema.encodeSync(Schema.Array(Organizations.PendingInvitation)),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t load pending invitations. Try again."),
+            }),
+        }),
+      );
   },
 );
 
@@ -116,39 +120,28 @@ export const inviteTeammate = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.invite(event.request.headers, organizationId, input).pipe(
-            Effect.as({ _tag: "Invited" } as const),
-            // Correctable rejections are handled outcomes, not operation failures.
-            Effect.catchTags({
-              "Organizations.AlreadyMember": (rejection) => Effect.succeed(rejection),
-              "Organizations.RoleNotAllowed": (rejection) => Effect.succeed(rejection),
-              "Organizations.InvitationLimit": (rejection) => Effect.succeed(rejection),
-            }),
-          );
+          return yield* organizations.invite(event.request.headers, organizationId, input);
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This organization could not be found."),
-            "Access.Denied": () => error(403, "Your role can’t send invitations."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t confirm the invitation. Check pending invitations first."),
-          }),
-        ),
-      )
-      .then((outcome) =>
-        Match.valueTags(outcome, {
-          Invited: () => ({ invited: input.email }),
-          "Organizations.AlreadyMember": () =>
-            invalid(issue.email(`${input.email} is already a member.`)),
-          "Organizations.RoleNotAllowed": () =>
-            invalid(issue.role(`You can’t invite someone as ${input.role}.`)),
-          "Organizations.InvitationLimit": () =>
-            invalid("This organization has too many pending invitations. Cancel some first."),
+        Result.match({
+          onSuccess: () => ({ invited: input.email }),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This organization could not be found."),
+              "Access.Denied": () => error(403, "Your role can’t send invitations."),
+              "Organizations.AlreadyMember": () =>
+                invalid(issue.email(`${input.email} is already a member.`)),
+              "Organizations.RoleNotAllowed": () =>
+                invalid(issue.role(`You can’t invite someone as ${input.role}.`)),
+              "Organizations.InvitationLimit": () =>
+                invalid("This organization has too many pending invitations. Cancel some first."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t confirm the invitation. Check pending invitations first."),
+            }),
         }),
       );
   },
@@ -170,10 +163,7 @@ export const cancelInvitation = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.cancelInvitation(event.request.headers, id).pipe(
-            // Already accepted or cancelled elsewhere: the refreshed list shows the outcome.
-            Effect.catchTag("Organizations.InvitationInvalid", () => Effect.void),
-          );
+          return yield* organizations.cancelInvitation(event.request.headers, id);
         }),
       )
       .then(
@@ -184,6 +174,7 @@ export const cancelInvitation = form(
             "AuthProvider.Unavailable": AuthGuard.reject,
             "Access.NotFound": () => error(404, "This organization could not be found."),
             "Access.Denied": () => error(403, "Your role can’t cancel invitations."),
+            "Organizations.InvitationInvalid": () => undefined,
             "Organizations.Unavailable": () =>
               error(503, "We couldn’t confirm the cancellation. Check pending invitations first."),
           }),
@@ -212,41 +203,29 @@ export const changeMemberRole = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations
-            .changeRole(event.request.headers, organizationId, id, role)
-            .pipe(
-              Effect.as({ _tag: "Changed" } as const),
-              // Correctable rejections and a member already gone are handled outcomes.
-              Effect.catchTags({
-                "Organizations.MemberNotFound": (outcome) => Effect.succeed(outcome),
-                "Organizations.RoleNotAllowed": (rejection) => Effect.succeed(rejection),
-                "Organizations.LastOwner": (rejection) => Effect.succeed(rejection),
-              }),
-            );
+          return yield* organizations.changeRole(event.request.headers, organizationId, id, role);
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Organizations.Unavailable": () =>
-              error(
-                503,
-                "We couldn’t confirm the role change. Refresh the team before trying again.",
-              ),
-          }),
-        ),
-      )
-      .then((outcome) =>
-        Match.valueTags(outcome, {
-          Changed: () => ({ changed: role }),
-          // Kit refreshes the page: the row is gone, or the caller lost access.
-          "Organizations.MemberNotFound": () => undefined,
-          "Organizations.RoleNotAllowed": () =>
-            invalid(issue.role("You can’t change this member’s role.")),
-          "Organizations.LastOwner": () => invalid(issue.role("Make someone else an owner first.")),
+        Result.match({
+          onSuccess: () => ({ changed: role }),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              // A successful form response refreshes Team without claiming a role change.
+              "Organizations.MemberNotFound": () => undefined,
+              "Organizations.RoleNotAllowed": () =>
+                invalid(issue.role("You can’t change this member’s role.")),
+              "Organizations.LastOwner": () =>
+                invalid(issue.role("Make someone else an owner first.")),
+              "Organizations.Unavailable": () =>
+                error(
+                  503,
+                  "We couldn’t confirm the role change. Refresh the team before trying again.",
+                ),
+            }),
         }),
       );
   },

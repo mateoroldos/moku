@@ -1,6 +1,6 @@
 import { building, dev } from "$app/env";
 import type { Handle, HandleServerError, ServerInit } from "@sveltejs/kit/hooks";
-import { Cause, Config, Effect, Option, Result } from "effect";
+import { Config, Effect, Option, Result } from "effect";
 import { WebRuntime } from "#lib/server/runtime.ts";
 import { Observability } from "#lib/server/observability.ts";
 import { RequestRunner } from "#lib/server/request-runner.ts";
@@ -28,19 +28,8 @@ export const init: ServerInit = () => {
   return runtime.runPromise(Effect.void);
 };
 
-export const handleError: HandleServerError = ({ kind, error, event }) => {
-  if (kind !== "unknown") return;
-  const cancelled =
-    event.request.signal.aborted &&
-    error instanceof Error &&
-    Cause.isCause(error.cause) &&
-    Cause.hasInterruptsOnly(error.cause);
-  if (!cancelled) {
-    // oxlint-disable-next-line effecttsgo/global-console -- Report failures even when the application runtime is unavailable.
-    console.error(error);
-  }
-  return { message: "Something went wrong. Refresh before trying again." };
-};
+export const handleError: HandleServerError = ({ event, ...failure }) =>
+  Observability.handleError(failure, event.request.signal, event.locals.reportError);
 
 export const handle: Handle = ({ event, resolve }) => {
   const active = runtime;
@@ -54,6 +43,8 @@ export const handle: Handle = ({ event, resolve }) => {
     (span) =>
       Effect.gen(function* () {
         event.locals.run = RequestRunner.make(active, event.request.signal, span);
+        event.locals.reportError = (failure) =>
+          active.runPromise(Observability.reportError(span, failure));
         event.locals.auth = yield* AuthGuard.make(event.request.headers);
         return yield* Effect.tryPromise({
           try: () => resolve(event),

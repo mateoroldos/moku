@@ -33,8 +33,13 @@ Effect Schema.
   operation observability, and conversion to Results; remotes map typed failures
   to safe Kit errors afterward.
 - Inline exhaustive failure mapping and operation-specific messages in each remote
-  after `locals.run`. Delegate auth failures to `AuthGuard.reject`; recover expected
-  operation outcomes inside the Effect.
+  after `locals.run`, using `Result.match` when success needs translation. Delegate
+  auth failures to `AuthGuard.reject`. Keep correctable rejections in the error
+  channel; recover inside Effect only to compute a meaningful replacement result,
+  such as rereading an already-completed task.
+  Operation summaries are INFO with their outcome and error tag. The server error
+  hook reports unexpected failures and app/framework 5xx errors at ERROR with the
+  request's trace context; Kit can carry remote errors inside HTTP 200 responses.
 - Keep validation inline and preserve form input on submission failure. Map
   expected, correctable form failures to `invalid(issue.<field>(…))` or `invalid(…)`
   so they render beside the form, with or without JavaScript. In `enhance`, show

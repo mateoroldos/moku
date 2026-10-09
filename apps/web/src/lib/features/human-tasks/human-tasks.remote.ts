@@ -22,22 +22,23 @@ export const getHumanTask = query(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This task could not be found."),
-            "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t verify your access. Try again."),
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
-            "HumanTaskStore.PersistenceError": () =>
-              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
-          }),
-        ),
-      )
-      .then(Schema.encodeSync(HumanTask));
+        Result.match({
+          onSuccess: Schema.encodeSync(HumanTask),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This task could not be found."),
+              "Access.Denied": () => error(403, "Your role does not allow viewing this task."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t verify your access. Try again."),
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
+              "HumanTaskStore.PersistenceError": () =>
+                error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
+            }),
+        }),
+      );
   },
 );
 
@@ -54,21 +55,22 @@ export const listHumanTasks = query(Schema.toStandardSchemaV1(OrganizationId), (
       }),
     )
     .then(
-      Result.getOrElse((failure) =>
-        Match.valueTags(failure, {
-          "AuthGuard.Required": AuthGuard.reject,
-          "Access.UnverifiedEmail": AuthGuard.reject,
-          "Access.NotFound": () => error(404, "This organization could not be found."),
-          "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
-          "Organizations.Unavailable": () =>
-            error(503, "We couldn’t verify your access. Try again."),
-          "AuthProvider.Unavailable": AuthGuard.reject,
-          "HumanTaskStore.PersistenceError": () =>
-            error(503, "We couldn’t load your tasks. Try again."),
-        }),
-      ),
-    )
-    .then(Schema.encodeSync(Schema.Array(HumanTask)));
+      Result.match({
+        onSuccess: Schema.encodeSync(Schema.Array(HumanTask)),
+        onFailure: (failure) =>
+          Match.valueTags(failure, {
+            "AuthGuard.Required": AuthGuard.reject,
+            "Access.UnverifiedEmail": AuthGuard.reject,
+            "Access.NotFound": () => error(404, "This organization could not be found."),
+            "Access.Denied": () => error(403, "Your role does not allow viewing tasks."),
+            "Organizations.Unavailable": () =>
+              error(503, "We couldn’t verify your access. Try again."),
+            "AuthProvider.Unavailable": AuthGuard.reject,
+            "HumanTaskStore.PersistenceError": () =>
+              error(503, "We couldn’t load your tasks. Try again."),
+          }),
+      }),
+    );
 });
 
 export const respondToHumanTask = form(
@@ -99,27 +101,29 @@ export const respondToHumanTask = form(
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": AuthGuard.reject,
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "Access.NotFound": () => error(404, "This task could not be found."),
-            "Access.Denied": () =>
-              error(403, "Your role allows viewing tasks, but not answering them."),
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t verify your access. Try again."),
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
-            "HumanTaskStore.PersistenceError": () =>
-              error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
-          }),
-        ),
-      )
-      .then(({ outcome, task }) => {
-        getHumanTask(ref).set(Schema.encodeSync(HumanTask)(task));
-        return listHumanTasks(organizationId)
-          .refresh()
-          .then(() => outcome);
-      });
+        Result.match({
+          onSuccess: ({ outcome, task }) => {
+            getHumanTask(ref).set(Schema.encodeSync(HumanTask)(task));
+
+            return listHumanTasks(organizationId)
+              .refresh()
+              .then(() => outcome);
+          },
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": AuthGuard.reject,
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "Access.NotFound": () => error(404, "This task could not be found."),
+              "Access.Denied": () =>
+                error(403, "Your role allows viewing tasks, but not answering them."),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t verify your access. Try again."),
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "HumanTaskStore.NotFound": () => error(404, "This task could not be found."),
+              "HumanTaskStore.PersistenceError": () =>
+                error(503, "We couldn’t confirm the task’s state. Refresh before trying again."),
+            }),
+        }),
+      );
   },
 );
