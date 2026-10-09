@@ -7,9 +7,10 @@
   import { changeMemberRole, listOrganizationMembers } from './organizations.remote.ts';
   import RoleSelect from './RoleSelect.svelte';
 
-  let { organizationId, member, self }: {
+  let { organizationId, member, roles, self }: {
     organizationId: OrganizationId;
     member: { id: string; email: string; role: OrganizationRole };
+    roles: ReadonlyArray<OrganizationRole>;
     self: boolean;
   } = $props();
 
@@ -57,7 +58,7 @@
   <input {...change.fields.organizationId.as('hidden', organizationId)} />
   <div class="flex items-center gap-2">
     <div class="w-32">
-      <RoleSelect {...change.fields.role.as('select', member.role)} aria-label={`Role for ${member.email}`}
+      <RoleSelect {...change.fields.role.as('select', member.role)} {roles} aria-label={`Role for ${member.email}`}
         aria-invalid={!!change.fields.role.issues()?.length} aria-describedby={errorsId} disabled={change.pending > 0} />
     </div>
     <Button type="submit" variant="outline" class="min-h-11" disabled={change.pending > 0}

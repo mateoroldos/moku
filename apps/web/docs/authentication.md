@@ -38,10 +38,11 @@ past 100 of them, stop the cap counting.
 Signed-out visitors see the invite screen even for an invalid invitation; Better Auth
 reveals invitation state only to a session.
 
-Team shows invitation and member controls when `organizationRoles` (Better Auth's role
-objects) grant the caller's role those rights; do not restate that policy in the UI.
-Better Auth's rejections, such as an admin changing or removing an owner, render beside
-the row. Any member can read pending invitations through the remote, as Better Auth allows.
+Team offers only what Better Auth allows: `organizationRoles` (Better Auth's role objects)
+grant invitation and member rights, and `assignableRoles` mirrors Better Auth's rule that
+only owners give the owner role or manage owners. Better Auth still enforces both; its
+rejections, such as after a role changed elsewhere, render beside the form. Any member
+can read pending invitations through the remote, as Better Auth allows.
 
 Better Auth owns last-owner protection; races that leave an organization without an owner
 are accepted. Ownership transfer is promoting another owner, then demoting yourself.

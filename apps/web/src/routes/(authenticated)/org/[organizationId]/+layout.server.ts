@@ -4,7 +4,7 @@ import { OrganizationId } from "@moku/domain/organization";
 import { error } from "@sveltejs/kit";
 import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
-import { organizationRoles } from "#lib/server/better-auth-options.ts";
+import { assignableRoles, organizationRoles } from "#lib/server/better-auth-options.ts";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = (event) => {
@@ -17,15 +17,16 @@ export const load: LayoutServerLoad = (event) => {
       Effect.gen(function* () {
         const membership = yield* event.locals.auth.membership(organizationId);
         yield* Access.requireRole(HumanTasks.allowedRoles.list, membership.role);
+        const role = organizationRoles[membership.role];
+        const assignable = assignableRoles(membership.role);
+
         return {
           organizationId,
           canRespondToHumanTasks: Access.allows(HumanTasks.allowedRoles.respond, membership.role),
-          canManageInvitations: organizationRoles[membership.role].authorize({
-            invitation: ["create", "cancel"],
-          }).success,
-          canManageMembers: organizationRoles[membership.role].authorize({
-            member: ["update", "delete"],
-          }).success,
+          invitationRoles: role.authorize({ invitation: ["create", "cancel"] }).success
+            ? assignable
+            : [],
+          memberRoles: role.authorize({ member: ["update", "delete"] }).success ? assignable : [],
         };
       }),
     )

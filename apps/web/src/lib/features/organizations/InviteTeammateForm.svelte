@@ -1,13 +1,16 @@
 <script lang="ts">
   import { isHttpError } from '@sveltejs/kit';
-  import type { OrganizationId } from '@moku/domain/organization';
+  import type { OrganizationId, OrganizationRole } from '@moku/domain/organization';
   import { Button } from '@moku/ui/ui/button';
   import { Input } from '@moku/ui/ui/input';
   import * as Field from '@moku/ui/ui/field';
   import { inviteTeammate } from './organizations.remote.ts';
   import RoleSelect from './RoleSelect.svelte';
 
-  let { organizationId }: { organizationId: OrganizationId } = $props();
+  let { organizationId, roles }: {
+    organizationId: OrganizationId;
+    roles: ReadonlyArray<OrganizationRole>;
+  } = $props();
 
   let unconfirmed = $state(false);
 </script>
@@ -38,7 +41,7 @@
         </Field.Field>
         <Field.Field class="sm:w-40" data-invalid={!!inviteTeammate.fields.role.issues()?.length}>
           <Field.Label for="invite-role">Role</Field.Label>
-          <RoleSelect {...inviteTeammate.fields.role.as('select', 'member')} id="invite-role"
+          <RoleSelect {...inviteTeammate.fields.role.as('select', 'member')} {roles} id="invite-role"
             aria-invalid={!!inviteTeammate.fields.role.issues()?.length} aria-describedby="invite-role-errors"
             disabled={inviteTeammate.pending > 0} />
           <Field.Error id="invite-role-errors" errors={inviteTeammate.fields.role.issues() ?? []} />
