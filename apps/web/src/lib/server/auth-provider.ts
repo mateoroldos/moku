@@ -288,6 +288,29 @@ export const layer = Layer.effectContext(
       });
     });
 
+    const removeMember = Effect.fn("Organizations.removeMember")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+      memberId: string,
+    ) {
+      yield* Effect.tryPromise({
+        try: () =>
+          auth.api.removeMember({ headers, body: { organizationId, memberIdOrEmail: memberId } }),
+        catch: (cause) => {
+          switch (isAPIError(cause) ? cause.body?.code : undefined) {
+            case "MEMBER_NOT_FOUND":
+              return new Organizations.MemberNotFound({});
+            // Better Auth checks owners first, so admins removing owners get the only-owner code.
+            case "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER":
+            case "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER":
+              return new Organizations.RemovalNotAllowed({});
+            default:
+              return organizationsUnavailable(cause);
+          }
+        },
+      });
+    });
+
     const invitationFailure = (cause: unknown) => {
       if (!isAPIError(cause)) return organizationsUnavailable(cause);
       // Better Auth answers every expired, cancelled, accepted, or unknown invitation with 400.
@@ -378,6 +401,7 @@ export const layer = Layer.effectContext(
         create,
         invite,
         changeRole,
+        removeMember,
         getInvitation,
         acceptInvitation,
         listInvitations,
