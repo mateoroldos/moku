@@ -35,8 +35,26 @@ Better Auth; a wrong account sees the unavailable state, with a way to switch ac
 Better Auth's 100-pending invitation cap is best-effort: expired invitations stay pending and,
 past 100 of them, stop the cap counting.
 
-Team shows invitation controls when `organizationRoles` (Better Auth's role objects)
-grant the caller's role invitation rights; do not restate that policy in the UI.
+Signed-out visitors see the invite screen even for an invalid invitation; Better Auth
+reveals invitation state only to a session.
+
+Team shows invitation and member controls when `organizationRoles` (Better Auth's role
+objects) grant the caller's role those rights; do not restate that policy in the UI.
+Better Auth's rejections, such as an admin changing or removing an owner, render beside
+the row. Any member can read pending invitations through the remote, as Better Auth allows.
+
+Better Auth owns last-owner protection; races that leave an organization without an owner
+are accepted. Ownership transfer is promoting another owner, then demoting yourself.
+Removing a member, or changing your own role, asks for confirmation in an Alert Dialog;
+without JavaScript the change submits unconfirmed. Leaving an organization is not offered.
+
+Better Auth caps organizations, members, and listed invitations at 100 rows. A full
+organization rejects joins with a retryable 503, and past 100 invitations ever sent,
+new pending invitations drop off Team. Its pending-invitation cap is the only invite
+limit: server-side `auth.api` calls skip Better Auth's rate limiter.
+
+A session revoked between identity lookup and a Better Auth read surfaces as 503,
+not a login redirect.
 
 Better Auth swallows invitation email failures, so they are only logged; inviting the
 address again resends its invitation.
