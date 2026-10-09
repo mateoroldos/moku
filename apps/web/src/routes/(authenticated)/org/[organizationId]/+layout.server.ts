@@ -23,6 +23,7 @@ export const load: LayoutServerLoad = (event) => {
         return {
           organizationId,
           canRespondToHumanTasks: Access.allows(HumanTasks.allowedRoles.respond, membership.role),
+          canDeleteOrganization: role.authorize({ organization: ["delete"] }).success,
           invitationRoles: role.authorize({ invitation: ["create", "cancel"] }).success
             ? assignable
             : [],

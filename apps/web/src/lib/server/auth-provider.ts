@@ -311,6 +311,25 @@ export const layer = Layer.effectContext(
       });
     });
 
+    const deleteOrganization = Effect.fn("Organizations.delete")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+    ) {
+      yield* Effect.tryPromise({
+        try: () => auth.api.deleteOrganization({ headers, body: { organizationId } }),
+        catch: (cause) => {
+          switch (isAPIError(cause) ? cause.body?.code : undefined) {
+            case "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION":
+              return new Access.NotFound({});
+            case "YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION":
+              return new Access.Denied({});
+            default:
+              return organizationsUnavailable(cause);
+          }
+        },
+      });
+    });
+
     const invitationFailure = (cause: unknown) => {
       if (!isAPIError(cause)) return organizationsUnavailable(cause);
       // Better Auth answers every expired, cancelled, accepted, or unknown invitation with 400.
@@ -402,6 +421,7 @@ export const layer = Layer.effectContext(
         invite,
         changeRole,
         removeMember,
+        delete: deleteOrganization,
         getInvitation,
         acceptInvitation,
         listInvitations,

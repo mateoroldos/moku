@@ -13,6 +13,7 @@
   import CheckIcon from 'phosphor-svelte/lib/CheckIcon';
   import TrayIcon from 'phosphor-svelte/lib/TrayIcon';
   import UsersIcon from 'phosphor-svelte/lib/UsersIcon';
+  import GearIcon from 'phosphor-svelte/lib/GearIcon';
   import CircleHalfIcon from 'phosphor-svelte/lib/CircleHalfIcon';
   import SignOutIcon from 'phosphor-svelte/lib/SignOutIcon';
   import { authClient } from '#lib/features/auth/client.ts';
@@ -29,6 +30,7 @@
   const inbox = $derived(current ? `/org/${encodeURIComponent(current.id)}` : undefined);
   const inboxActive = $derived(inbox !== undefined && (page.url.pathname === inbox || page.url.pathname.startsWith(`${inbox}/tasks/`)));
   const team = $derived(inbox ? `${inbox}/team` : undefined);
+  const settings = $derived(inbox && page.data.canDeleteOrganization ? `${inbox}/settings` : undefined);
   let signingOut = $state(false);
   let switcherOpen = $state(false);
 
@@ -139,6 +141,17 @@
                   {#snippet child({ props })}
                     <a {...props} href={team} aria-current={page.url.pathname === team ? 'page' : undefined}>
                       <UsersIcon weight="regular" aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">Team</span>
+                    </a>
+                  {/snippet}
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+            {/if}
+            {#if settings}
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton isActive={page.url.pathname === settings} tooltipContent="Settings">
+                  {#snippet child({ props })}
+                    <a {...props} href={settings} aria-current={page.url.pathname === settings ? 'page' : undefined}>
+                      <GearIcon weight="regular" aria-hidden="true" /><span class="group-data-[collapsible=icon]:sr-only">Settings</span>
                     </a>
                   {/snippet}
                 </Sidebar.MenuButton>
