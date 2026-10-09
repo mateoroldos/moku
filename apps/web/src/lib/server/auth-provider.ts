@@ -7,7 +7,8 @@ import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/org
 import { APIError, isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { Clock, Config, Context, Effect, Layer, Order, Redacted, Result, Schema } from "effect";
-import { betterAuthOptions, organizationPlugin } from "./better-auth-options.ts";
+import { apiKeyPlugin, betterAuthOptions, organizationPlugin } from "./better-auth-options.ts";
+import { OrganizationApiKeys } from "./organization-api-keys.ts";
 import { Organizations } from "./organizations.ts";
 
 const ProviderSession = Schema.NullOr(
@@ -54,6 +55,29 @@ const ProviderInvitations = Schema.Array(
 
 const ProviderAcceptance = Schema.Struct({
   member: Schema.Struct({ organizationId: OrganizationId }),
+});
+
+const ProviderApiKey = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  start: Schema.String,
+  metadata: Schema.Struct({ createdBy: UserId }),
+  createdAt: Schema.DateTimeUtcFromDate,
+  lastRequest: Schema.NullOr(Schema.DateTimeUtcFromDate),
+});
+
+const ProviderCreatedApiKey = Schema.Struct({ ...ProviderApiKey.fields, key: Schema.String });
+
+const ProviderApiKeys = Schema.Struct({ apiKeys: Schema.Array(ProviderApiKey) });
+
+const apiKeyFrom = ({
+  metadata,
+  lastRequest,
+  ...apiKey
+}: typeof ProviderApiKey.Type): OrganizationApiKeys.ApiKey => ({
+  ...apiKey,
+  createdBy: metadata.createdBy,
+  lastUsedAt: lastRequest,
 });
 
 const memberOrder = (a: Organizations.Member, b: Organizations.Member) =>
@@ -116,6 +140,7 @@ export const layer = Layer.effectContext(
               `${new URL(`/invitations/${encodeURIComponent(id)}`, origin).href}\n\n${inviter.user.name} invited you to join ${organization.name} on Moku as ${role}.`,
             ),
         }),
+        apiKeyPlugin(),
       ],
       emailVerification: {
         sendOnSignUp: true,
@@ -541,6 +566,74 @@ export const layer = Layer.effectContext(
       });
     });
 
+    const apiKeysUnavailable = (cause: unknown) =>
+      new OrganizationApiKeys.Unavailable({ cause: Redacted.make(cause) });
+
+    const apiKeyFailure = (cause: unknown) => {
+      switch (isAPIError(cause) ? cause.body?.code : undefined) {
+        case "USER_NOT_MEMBER_OF_ORGANIZATION":
+        case "KEY_NOT_FOUND":
+          return new Access.NotFound({});
+        case "INSUFFICIENT_API_KEY_PERMISSIONS":
+          return new Access.Denied({});
+        default:
+          return apiKeysUnavailable(cause);
+      }
+    };
+
+    const listApiKeys = Effect.fn("OrganizationApiKeys.list")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () =>
+          auth.api.listApiKeys({
+            headers,
+            query: { organizationId, sortBy: "createdAt", sortDirection: "desc" },
+          }),
+        catch: apiKeyFailure,
+      });
+      const { apiKeys } = yield* Schema.decodeUnknownEffect(ProviderApiKeys)(result).pipe(
+        Effect.mapError(apiKeysUnavailable),
+      );
+
+      return apiKeys.map(apiKeyFrom);
+    });
+
+    const createApiKey = Effect.fn("OrganizationApiKeys.create")(function* (
+      headers: Headers,
+      organizationId: OrganizationId,
+      createdBy: UserId,
+      { name }: OrganizationApiKeys.CreateInput,
+    ) {
+      // Best-effort, like Better Auth's invitation cap: concurrent creations can pass it together.
+      if ((yield* listApiKeys(headers, organizationId)).length >= 100)
+        return yield* new OrganizationApiKeys.KeyLimit({});
+      const result: unknown = yield* Effect.tryPromise({
+        try: () =>
+          auth.api.createApiKey({
+            headers,
+            body: { organizationId, name, metadata: { createdBy } },
+          }),
+        catch: apiKeyFailure,
+      });
+      const { key, ...created } = yield* Schema.decodeUnknownEffect(ProviderCreatedApiKey)(
+        result,
+      ).pipe(Effect.mapError(apiKeysUnavailable));
+
+      return { apiKey: apiKeyFrom(created), secret: Redacted.make(key) };
+    });
+
+    const revokeApiKey = Effect.fn("OrganizationApiKeys.revoke")(function* (
+      headers: Headers,
+      keyId: string,
+    ) {
+      yield* Effect.tryPromise({
+        try: () => auth.api.deleteApiKey({ headers, body: { keyId } }),
+        catch: apiKeyFailure,
+      });
+    });
+
     return Context.make(Service, { signup, authenticate, handle }).pipe(
       Context.add(Organizations.Service, {
         role,
@@ -555,6 +648,11 @@ export const layer = Layer.effectContext(
         acceptInvitation,
         listInvitations,
         cancelInvitation,
+      }),
+      Context.add(OrganizationApiKeys.Service, {
+        create: createApiKey,
+        list: listApiKeys,
+        revoke: revokeApiKey,
       }),
     );
   }),

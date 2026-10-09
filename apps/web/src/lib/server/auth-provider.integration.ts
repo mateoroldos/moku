@@ -10,6 +10,7 @@ import { PostgresConnection } from "@moku/database-postgres/postgres-connection"
 import { hashPassword } from "better-auth/crypto";
 import { Config, ConfigProvider, Effect, Layer, Logger, Redacted } from "effect";
 import { AuthProvider } from "./auth-provider.ts";
+import { OrganizationApiKeys } from "./organization-api-keys.ts";
 import { Organizations } from "./organizations.ts";
 
 const origin = "http://localhost:3000";
@@ -45,11 +46,12 @@ const fixture = Effect.fnUntraced(function* (
         unavailable ? Promise.reject(new Error("private storage failure")) : adapter.findOne(input),
     };
   });
-  const { auth, organizations } = yield* Effect.gen(function* () {
+  const { auth, organizations, apiKeys } = yield* Effect.gen(function* () {
     const auth = yield* AuthProvider.Service;
     const organizations = yield* Organizations.Service;
+    const apiKeys = yield* OrganizationApiKeys.Service;
 
-    return { auth, organizations };
+    return { auth, organizations, apiKeys };
   }).pipe(
     Effect.provide(
       AuthProvider.layer.pipe(
@@ -88,6 +90,7 @@ const fixture = Effect.fnUntraced(function* (
   return {
     auth,
     organizations,
+    apiKeys,
     sql,
     headers,
     setUnavailable: (value: boolean) => {
@@ -96,6 +99,7 @@ const fixture = Effect.fnUntraced(function* (
   };
 });
 
+const caller = UserId.make("authentication-test");
 const verifiedPrincipal = { userId: "authentication-test", emailVerified: true };
 const signup = {
   name: "New reviewer",
@@ -796,6 +800,110 @@ it.live("stops inviting at Better Auth's pending-invitation limit", () =>
         organizations.invite(headers, own.id, { email: "one-more@moku.test", role: "member" }),
       ),
       new Organizations.InvitationLimit({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live(
+  "creates, lists, and revokes organization keys, and deletes them with the organization",
+  () =>
+    Effect.gen(function* () {
+      const { organizations, apiKeys, sql, headers } = yield* fixture("192.0.2.80");
+      const cleanup = sql`DELETE FROM organization WHERE name = 'auth-keys-own'`;
+      yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+      const own = yield* organizations.create(headers, { name: "auth-keys-own" });
+
+      const { apiKey, secret } = yield* apiKeys.create(headers, own.id, caller, {
+        name: "Trading bot",
+      });
+
+      assert.match(Redacted.value(secret), /^moku_.{64}$/);
+      assert.strictEqual(apiKey.start, Redacted.value(secret).slice(0, 9));
+      assert.deepInclude(apiKey, {
+        name: "Trading bot",
+        createdBy: caller,
+        lastUsedAt: null,
+      });
+      const [stored] = yield* sql<{ key: string }>`SELECT key FROM apikey WHERE id = ${apiKey.id}`;
+      assert.notStrictEqual(stored?.key, Redacted.value(secret));
+      assert.deepStrictEqual(yield* apiKeys.list(headers, own.id), [apiKey]);
+
+      yield* apiKeys.revoke(headers, apiKey.id);
+      assert.deepStrictEqual(yield* apiKeys.list(headers, own.id), []);
+      assert.deepStrictEqual(
+        yield* Effect.flip(apiKeys.revoke(headers, apiKey.id)),
+        new Access.NotFound({}),
+      );
+
+      yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, metadata, created_at, updated_at)
+        SELECT 'auth-keys-' || n, 'Agent ' || n, 'moku_Abcd', ${own.id}, 'hash-' || n,
+          '{"createdBy":"authentication-test"}', now(), now() FROM generate_series(1, 99) n`;
+      yield* apiKeys.create(headers, own.id, caller, { name: "Hundredth" });
+      assert.lengthOf(yield* apiKeys.list(headers, own.id), 100);
+      assert.deepStrictEqual(
+        yield* Effect.flip(apiKeys.create(headers, own.id, caller, { name: "Past the limit" })),
+        new OrganizationApiKeys.KeyLimit({}),
+      );
+
+      yield* organizations.delete(headers, own.id);
+      assert.deepStrictEqual(yield* sql`SELECT id FROM apikey WHERE reference_id = ${own.id}`, []);
+    }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("lets only owners and admins manage keys, and only their organization's", () =>
+  Effect.gen(function* () {
+    const { apiKeys, sql, headers } = yield* fixture("192.0.2.81");
+    const cleanup = sql`DELETE FROM organization WHERE name LIKE 'auth-key-roles-%'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    yield* peer();
+    const shared = yield* peerOrganization("auth-key-roles-shared");
+    yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
+      VALUES ('auth-key-roles-caller', ${shared}, 'authentication-test', 'admin', now())`;
+    const foreign = yield* peerOrganization("auth-key-roles-foreign");
+    yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, metadata, created_at, updated_at)
+      VALUES ('auth-key-roles-foreign', 'Foreign', 'moku_Abcd', ${foreign}, 'hash',
+        '{"createdBy":"organization-peer"}', now(), now())`;
+
+    const { apiKey } = yield* apiKeys.create(headers, shared, caller, { name: "Admin key" });
+
+    assert.deepStrictEqual(yield* apiKeys.list(headers, shared), [apiKey]);
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.create(headers, foreign, caller, { name: "Outsider key" })),
+      new Access.NotFound({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.list(headers, foreign)),
+      new Access.NotFound({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.revoke(headers, "auth-key-roles-foreign")),
+      new Access.NotFound({}),
+    );
+
+    yield* sql`UPDATE member SET role = 'member' WHERE id = 'auth-key-roles-caller'`;
+
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.create(headers, shared, caller, { name: "Member key" })),
+      new Access.Denied({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.list(headers, shared)),
+      new Access.Denied({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.revoke(headers, apiKey.id)),
+      new Access.Denied({}),
+    );
+
+    yield* sql`UPDATE member SET role = 'viewer' WHERE id = 'auth-key-roles-caller'`;
+
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.create(headers, shared, caller, { name: "Viewer key" })),
+      new Access.Denied({}),
+    );
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.list(headers, shared)),
+      new Access.Denied({}),
     );
   }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
