@@ -6,41 +6,33 @@ Verified membership scopes every task operation. Better Auth implements organiza
 
 ## Pull requests
 
-| #   | Trunk gains                                                                           | Approach         | Done   |
-| --- | ------------------------------------------------------------------------------------- | ---------------- | ------ |
-| 1   | Read-only Team page listing members and roles                                         | design           | ✅ #25 |
-| 2   | Better Auth manages organizations; core takes a resolved `Membership`                 | design           | ✅ #27 |
-| 3   | `Organizations.invite` under Better Auth's invitation policy and email; no caller yet | design           | ✅ #28 |
-| 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design           | ✅ #29 |
-| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design           | ✅ #30 |
-| 6   | Owners and admins change members' roles on Team                                       | design           |        |
-| 7   | Direct remote failure handling, request-level error reporting, and web guidance       | design           |        |
-| 8   | Owners and admins remove members on Team; retire this plan                            | design when next |        |
+| #   | Trunk gains                                                                           | Approach | Done   |
+| --- | ------------------------------------------------------------------------------------- | -------- | ------ |
+| 1   | Read-only Team page listing members and roles                                         | design   | ✅ #25 |
+| 2   | Better Auth manages organizations; core takes a resolved `Membership`                 | design   | ✅ #27 |
+| 3   | `Organizations.invite` under Better Auth's invitation policy and email; no caller yet | design   | ✅ #28 |
+| 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design   | ✅ #29 |
+| 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design   | ✅ #30 |
+| 6   | Owners and admins change members' roles on Team                                       | design   | ✅ #33 |
+| 7   | Direct remote failure handling, request-level error reporting, and web guidance       | design   | ✅ #35 |
+| 8   | Owners and admins remove members on Team; retire this plan                            | design   |        |
 
-## Design: PR 6
+## Design: PR 8
 
 ```text
-Team row (canManageMembers = organizationRoles[role].authorize({ member: ["update"] }))
-  changeMemberRole.for(member.id): RoleSelect + Save        works without JS
-  → Organizations.changeRole(headers, orgId, memberId, role)  auth.api.updateMemberRole
-      MEMBER_NOT_FOUND                                    → MemberNotFound → settled: Kit refreshes the page
-      YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER           → RoleNotAllowed → invalid(issue.role(…))
-      YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER  → LastOwner      → invalid(issue.role(…))
-      other                                               → Unavailable    → 503: the row shows "couldn’t confirm" + refresh
-  → success: "Role updated."; Kit refreshes the page, so a self-demotion drops the controls
+Team row (canManageMembers = organizationRoles[role].authorize({ member: ["update", "delete"] }); not your own row)
+  Remove → Alert Dialog "Remove {name}?" → removeMember.for(member.id) submits     works without JS, unconfirmed
+  → Organizations.removeMember(headers, orgId, memberId)  auth.api.removeMember
+      MEMBER_NOT_FOUND                                     → MemberNotFound    → settled: Kit refreshes the page
+      YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER            ┐
+      YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER  ┘→ RemovalNotAllowed → invalid(…) beside the row
+      other                                                → Unavailable       → 503: the row shows "couldn’t confirm" + refresh
+  → success: Kit refreshes the page and the row is gone
 ```
 
-- `Member` gains `id`, Better Auth's member row id; `updateMemberRole` takes it, not the user id.
-- `MEMBER_NOT_FOUND` also answers a caller who is no longer a member; the refreshed page then shows 404.
-- Better Auth uses one code for "your role can't update members" and "only owners change owners"; both render beside the row, so the UI does not restate the owner rule.
-- Changing your own role asks for confirmation in an Alert Dialog; ownership transfer is promoting another owner, then demoting yourself. Without JavaScript the change submits unconfirmed.
-- `RoleSelect` owns the role options and select styling for the invite and role forms. shadcn-svelte's native select fixes its height below the 44px touch target.
-
-## Design: PR 7
-
-- Apply the [web boundary conventions](../apps/web/AGENTS.md) across the remote functions; retain the invitation view and authoritative task reconciliation.
-- Keep request cancellation and mixed causes in `RequestRunner`. Bind the server error reporter to the request span; classify incidents from Kit's caught error, not the transport status.
-- Verify rejection summaries, semantic 5xx reporting, trace correlation, and cancellation. Member removal follows this boundary.
+- Better Auth checks owner protection before permissions, so an admin removing an owner gets the only-owner code. Your own row has no Remove, so one message covers both codes.
+- Better Auth's owner and admin roles both update and delete members; one `canManageMembers` covers role changes and removal.
+- Retiring the plan moves the Decided lines that still hold into `apps/web/docs/organizations.md` and closes #10.
 
 ## Decided
 
@@ -62,5 +54,9 @@ Team row (canManageMembers = organizationRoles[role].authorize({ member: ["updat
 - A session revoked between identity lookup and a Better Auth read surfaces as 503, not a login redirect; accepted.
 - Task writes are not ordered against membership changes; a removed member's in-flight request may finish.
 - Last-owner protection is Better Auth's check; concurrent races are accepted.
-- Removing a member, or changing your own role, asks for confirmation in an Alert Dialog.
+- Removing a member, or changing your own role, asks for confirmation in an Alert Dialog. Without JavaScript the change submits unconfirmed.
+- Role changes and removal address Better Auth's member record id, not the user id.
+- Better Auth uses one code for "your role can't update members" and "only owners change owners"; both render beside the row, so the UI does not restate the owner rule.
+- Ownership transfer is promoting another owner, then demoting yourself.
+- `RoleSelect` owns the role options and select styling; shadcn-svelte's native select fixes its height below the 44px touch target.
 - Invitation links carry the invitation ID; acceptance requires the signed-in, verified recipient email.
