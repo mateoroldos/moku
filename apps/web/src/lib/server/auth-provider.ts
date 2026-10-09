@@ -146,6 +146,10 @@ export const layer = Layer.effectContext(
                 : runPromise(
                     Effect.result(
                       invited(email).pipe(
+                        // Omits the address: operators match the attempt by its time.
+                        Effect.tap((invited) =>
+                          invited ? Effect.void : Effect.logInfo("signup.not_invited"),
+                        ),
                         Effect.tapCause(() => Effect.logError("signup.invitations.failed")),
                       ),
                     ),

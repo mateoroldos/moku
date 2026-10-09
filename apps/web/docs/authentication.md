@@ -30,7 +30,7 @@ atomic: a failed owner write can leave an organization without members.
 
 `SIGNUP_MODE=invite-only`, the default, lets an email sign up only with a pending, unexpired
 invitation or a listing in `SIGNUP_EMAILS`. Other emails get the same response as an existing
-account: no account, no email. A failed invitation lookup answers 503. The seed bypasses the gate.
+account: no account, no email, and the server logs `signup.not_invited`. A failed invitation lookup answers 503. The seed bypasses the gate.
 
 Login and signup return only to `/invitations/<id>`, from `?invitation=<id>`; never
 redirect to a caller-supplied path. The invitation page checks the recipient through

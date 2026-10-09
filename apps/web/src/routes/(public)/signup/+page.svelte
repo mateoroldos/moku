@@ -27,7 +27,12 @@
 <section class="mx-auto max-w-sm py-12 sm:py-20" aria-labelledby="auth-heading">
   <h1 id="auth-heading" bind:this={heading} tabindex="-1" class="font-serif text-4xl tracking-tight">{email ? 'Check your email' : 'Create your account'}</h1>
   {#if email}
-    <p class="mt-3 text-sm text-muted-foreground">Check <span class="break-all text-foreground">{email}</span> for a verification link. If you already have an account, sign in or reset your password.{#if data.signup === 'invite-only'} If you were invited, use the invited address.{/if}</p>
+    {#if data.signup === 'invite-only'}
+      <p class="mt-3 text-sm text-muted-foreground">If <span class="break-all text-foreground">{email}</span> is invited, we sent it a verification link. If you already have an account, sign in or reset your password.</p>
+      <p class="mt-3 text-sm text-muted-foreground">No email? Ask whoever invited you to check the address. If you run this Moku server, add the address to <span class="font-mono">SIGNUP_EMAILS</span> or invite it from your organization’s Team page.</p>
+    {:else}
+      <p class="mt-3 text-sm text-muted-foreground">Check <span class="break-all text-foreground">{email}</span> for a verification link. If you already have an account, sign in or reset your password.</p>
+    {/if}
     <p class="mt-6 text-sm"><a href="/verify-email" class="text-primary underline underline-offset-4">Request another link</a></p>
   {:else}
     {#if data.signup === 'invite-only' && !page.url.searchParams.has('invitation')}
