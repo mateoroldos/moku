@@ -1,0 +1,14 @@
+# Moves the pinned action SHAs. Packages are bumped by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories: ["/", "/.github/actions/*"]
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+    cooldown:
+      default-days: 7
