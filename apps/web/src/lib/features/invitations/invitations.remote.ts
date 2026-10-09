@@ -1,6 +1,6 @@
 import { form, getRequestEvent, query } from "$app/server";
 import { error, redirect } from "@sveltejs/kit";
-import { Effect, Match, Option, Result, Schema } from "effect";
+import { Effect, Match, Result, Schema } from "effect";
 import { AuthGuard } from "#lib/server/auth-guard.ts";
 import { Organizations } from "#lib/server/organizations.ts";
 import { withInvitation } from "./invitation-return.ts";
@@ -48,28 +48,22 @@ export const acceptInvitation = form(
           yield* event.locals.auth.principal;
           const organizations = yield* Organizations.Service;
 
-          return yield* organizations.acceptInvitation(event.request.headers, id).pipe(
-            Effect.asSome,
-            // The page shows the unavailable state after the refresh below.
-            Effect.catchTag("Organizations.InvitationInvalid", () => Effect.succeedNone),
-          );
+          return yield* organizations.acceptInvitation(event.request.headers, id);
         }),
       )
       .then(
-        Result.getOrElse((failure) =>
-          Match.valueTags(failure, {
-            "AuthGuard.Required": () => redirect(303, withInvitation("/login", id)),
-            "Access.UnverifiedEmail": AuthGuard.reject,
-            "AuthProvider.Unavailable": AuthGuard.reject,
-            "Organizations.Unavailable": () =>
-              error(503, "We couldn’t accept this invitation. Try again."),
-          }),
-        ),
-      )
-      .then((joined) =>
-        Option.match(joined, {
-          onNone: () => getInvitation(id).refresh(),
-          onSome: (organizationId) => redirect(303, `/org/${encodeURIComponent(organizationId)}`),
+        Result.match({
+          onSuccess: (organizationId) =>
+            redirect(303, `/org/${encodeURIComponent(organizationId)}`),
+          onFailure: (failure) =>
+            Match.valueTags(failure, {
+              "AuthGuard.Required": () => redirect(303, withInvitation("/login", id)),
+              "Access.UnverifiedEmail": AuthGuard.reject,
+              "AuthProvider.Unavailable": AuthGuard.reject,
+              "Organizations.InvitationInvalid": () => getInvitation(id).refresh(),
+              "Organizations.Unavailable": () =>
+                error(503, "We couldn’t accept this invitation. Try again."),
+            }),
         }),
       );
   },

@@ -14,7 +14,8 @@ Verified membership scopes every task operation. Better Auth implements organiza
 | 4   | `/invitations/[id]`: sign in or sign up, return, accept, open the organization        | design           | ✅ #29 |
 | 5   | Team: invite form, pending invitations, cancellation, invite limit; owners and admins | design           | ✅ #30 |
 | 6   | Owners and admins change members' roles on Team                                       | design           |        |
-| 7   | Owners and admins remove members on Team; retire this plan                            | design when next |        |
+| 7   | Direct remote failure handling, request-level error reporting, and web guidance       | design           |        |
+| 8   | Owners and admins remove members on Team; retire this plan                            | design when next |        |
 
 ## Design: PR 6
 
@@ -34,6 +35,12 @@ Team row (canManageMembers = organizationRoles[role].authorize({ member: ["updat
 - Better Auth uses one code for "your role can't update members" and "only owners change owners"; both render beside the row, so the UI does not restate the owner rule.
 - Changing your own role asks for confirmation in an Alert Dialog; ownership transfer is promoting another owner, then demoting yourself. Without JavaScript the change submits unconfirmed.
 - `RoleSelect` owns the role options and select styling for the invite and role forms. shadcn-svelte's native select fixes its height below the 44px touch target.
+
+## Design: PR 7
+
+- Apply the [web boundary conventions](../apps/web/AGENTS.md) across the remote functions; retain the invitation view and authoritative task reconciliation.
+- Keep request cancellation and mixed causes in `RequestRunner`. Bind the server error reporter to the request span; classify incidents from Kit's caught error, not the transport status.
+- Verify rejection summaries, semantic 5xx reporting, trace correlation, and cancellation. Member removal follows this boundary.
 
 ## Decided
 

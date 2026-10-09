@@ -82,7 +82,7 @@ describe("RequestRunner", () => {
         },
       },
       {
-        level: "ERROR",
+        level: "INFO",
         annotations: {
           operation: "Test.denied",
           outcome: "failure",
@@ -160,7 +160,7 @@ describe("RequestRunner", () => {
     });
 
     expect(entries).toMatchObject([
-      { level: "ERROR", annotations: { outcome: "failure", "error.kind": "defect" } },
+      { level: "INFO", annotations: { outcome: "failure", "error.kind": "defect" } },
     ]);
     expect(JSON.stringify(entries)).not.toContain("private cleanup defect");
   });
