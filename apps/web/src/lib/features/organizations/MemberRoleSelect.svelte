@@ -4,8 +4,9 @@
   import { tick } from 'svelte';
   import { toast } from 'svelte-sonner';
   import type { OrganizationId, OrganizationRole } from '@moku/domain/organization';
+  import * as AlertDialog from '@moku/ui/ui/alert-dialog';
+  import * as Field from '@moku/ui/ui/field';
   import * as Select from '@moku/ui/ui/select';
-  import ConfirmAction from './ConfirmAction.svelte';
   import { changeMemberRole } from './organizations.remote.ts';
   import { roleLabel } from './role-label.ts';
 
@@ -23,8 +24,7 @@
   const label = $derived(roleLabel(roles.find((role) => role === selected) ?? member.role));
   /** Your own role change awaiting confirmation; the dialog is open while it exists. */
   let requested = $state<OrganizationRole>();
-  let failure = $state<string>();
-  let refused = false;
+  let unconfirmed = $state<string>();
 
   const choose = async (value: string) => {
     const role = roles.find((option) => option === value);
@@ -40,42 +40,37 @@
     form?.requestSubmit();
   };
 
-  /** Shows a failure in the open dialog, or as a toast with the select reverted. */
-  const show = (message: string) => {
-    if (requested) {
-      failure = message;
-      return;
-    }
-    selected = member.role;
-    toast.error(message);
-  };
-
   const close = () => {
     // A refusal means this page is stale; refreshing while the dialog was open could remove it.
-    if (refused) void refreshAll();
-    refused = false;
-    failure = undefined;
+    if (change.fields.allIssues()?.length) void refreshAll();
+    unconfirmed = undefined;
     requested = undefined;
     selected = member.role;
   };
 </script>
 
 <form bind:this={form} id={formId} {...change.enhance(async (submission) => {
-  failure = undefined;
+  unconfirmed = undefined;
 
   try {
     if (await submission.submit()) {
       requested = undefined;
       return;
     }
-    refused = true;
-    show(change.fields.allIssues()?.[0]?.message ?? 'You can’t change this member’s role.');
-    if (!requested) close();
+    // The open dialog shows the refusal itself.
+    if (requested) return;
+    toast.error(change.fields.allIssues()?.[0]?.message ?? 'You can’t change this member’s role.');
+    close();
   } catch (error) {
     // Page failures belong to the route boundary.
     if (isHttpError(error) && error.status < 500) throw error;
     if (!isHttpError(error)) console.error('Member role change request failed');
-    show(isHttpError(error) ? error.body.message : 'We couldn’t reach Moku. Check your connection and try again.');
+    const message = isHttpError(error) ? error.body.message : 'We couldn’t reach Moku. Check your connection and try again.';
+    if (requested) unconfirmed = message;
+    else {
+      selected = member.role;
+      toast.error(message);
+    }
   }
 })}>
   <input {...change.fields.organizationId.as('hidden', organizationId)} />
@@ -94,11 +89,23 @@
 
 {#if requested}
   {@const role = requested}
-  <ConfirmAction bind:open={() => true, (open) => { if (!open) close(); }} title="Change your own role?"
-    cancel="Keep my role" action="Change my role" pendingAction="Changing…" form={formId}
-    pending={change.pending > 0} {failure}>
-    {#snippet description()}
-      Your role becomes {roleLabel(role)}. You may lose permissions you can’t restore yourself.
-    {/snippet}
-  </ConfirmAction>
+  <AlertDialog.Root bind:open={() => true, (open) => { if (!open) close(); }}>
+    <AlertDialog.Content escapeKeydownBehavior={change.pending > 0 ? 'ignore' : 'close'}>
+      <AlertDialog.Header>
+        <AlertDialog.Title>Change your own role?</AlertDialog.Title>
+        <AlertDialog.Description>
+          Your role becomes {roleLabel(role)}. You may lose permissions you can’t restore yourself.
+        </AlertDialog.Description>
+      </AlertDialog.Header>
+      <Field.Error errors={change.fields.allIssues() ?? []} />
+      {#if unconfirmed}<Field.Error role="alert">{unconfirmed}</Field.Error>{/if}
+      <AlertDialog.Footer>
+        <AlertDialog.Cancel disabled={change.pending > 0}>Keep my role</AlertDialog.Cancel>
+        <!-- The dialog renders outside the row's form; `form` submits it. -->
+        <AlertDialog.Action type="submit" form={formId} variant="destructive" disabled={change.pending > 0}>
+          {change.pending > 0 ? 'Changing…' : 'Change my role'}
+        </AlertDialog.Action>
+      </AlertDialog.Footer>
+    </AlertDialog.Content>
+  </AlertDialog.Root>
 {/if}
