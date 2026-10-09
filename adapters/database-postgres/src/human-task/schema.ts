@@ -6,9 +6,11 @@ export const humanTasks = pgTable(
   "human_tasks",
   {
     id: uuid("id").primaryKey(),
+    // Better Auth deletes an organization in one transaction and runs its hooks outside it;
+    // the cascade deletes its tasks inside that transaction.
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id),
+      .references(() => organization.id, { onDelete: "cascade" }),
     intent: text("intent").notNull(),
     subject: jsonb("subject").notNull(),
     context: text("context"),

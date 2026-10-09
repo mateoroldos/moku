@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "bd233822-edde-4346-b7d0-deadb0281e8a",
+  "id": "646fa759-98da-4d82-b552-1075d4245365",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -1100,7 +1100,7 @@
       "tableTo": "organization",
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
-      "onDelete": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "human_tasks_organization_id_organization_id_fkey",
       "entityType": "fks",
       "schema": "public",
