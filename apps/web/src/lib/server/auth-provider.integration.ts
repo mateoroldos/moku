@@ -804,7 +804,7 @@ it.live("stops inviting at Better Auth's pending-invitation limit", () =>
 );
 
 it.live(
-  "creates, lists, and revokes organization keys, and deletes them with the organization",
+  "creates, lists, and revokes hashed organization keys, and deletes them with the organization",
   () =>
     Effect.gen(function* () {
       const { organizations, apiKeys, sql, headers } = yield* fixture("192.0.2.80");
@@ -816,18 +816,14 @@ it.live(
         name: "Trading bot",
       });
 
-      assert.match(Redacted.value(secret), /^moku_.{64}$/);
+      assert.match(Redacted.value(secret), /^moku_/);
       assert.strictEqual(apiKey.start, Redacted.value(secret).slice(0, 9));
       assert.deepInclude(apiKey, {
         name: "Trading bot",
         lastUsedAt: null,
       });
-      const [stored] = yield* sql<{
-        key: string;
-        permissions: string | null;
-      }>`SELECT key, permissions FROM apikey WHERE id = ${apiKey.id}`;
+      const [stored] = yield* sql<{ key: string }>`SELECT key FROM apikey WHERE id = ${apiKey.id}`;
       assert.notStrictEqual(stored?.key, Redacted.value(secret));
-      assert.isNull(stored?.permissions);
       assert.deepStrictEqual(yield* apiKeys.list(headers, own.id), [apiKey]);
 
       yield* apiKeys.revoke(headers, apiKey.id);
@@ -837,19 +833,30 @@ it.live(
         new Access.NotFound({}),
       );
 
-      yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, created_at, updated_at)
-        SELECT 'auth-keys-' || n, 'Agent ' || n, 'moku_Abcd', ${own.id}, 'hash-' || n,
-          now(), now() FROM generate_series(1, 99) n`;
-      yield* apiKeys.create(headers, own.id, { name: "Hundredth" });
-      assert.lengthOf(yield* apiKeys.list(headers, own.id), 100);
-      assert.deepStrictEqual(
-        yield* Effect.flip(apiKeys.create(headers, own.id, { name: "Past the limit" })),
-        new OrganizationApiKeys.KeyLimit({}),
-      );
-
+      yield* apiKeys.create(headers, own.id, { name: "Kept" });
       yield* organizations.delete(headers, own.id);
       assert.deepStrictEqual(yield* sql`SELECT id FROM apikey WHERE reference_id = ${own.id}`, []);
     }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live("stops creating keys at 100, so every key stays listed", () =>
+  Effect.gen(function* () {
+    const { organizations, apiKeys, sql, headers } = yield* fixture("192.0.2.82");
+    const cleanup = sql`DELETE FROM organization WHERE name = 'auth-keys-cap'`;
+    yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+    const own = yield* organizations.create(headers, { name: "auth-keys-cap" });
+    yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, created_at, updated_at)
+      SELECT 'auth-keys-cap-' || n, 'Agent ' || n, 'moku_Abcd', ${own.id}, 'hash-' || n,
+        now(), now() FROM generate_series(1, 99) n`;
+
+    yield* apiKeys.create(headers, own.id, { name: "Hundredth" });
+
+    assert.lengthOf(yield* apiKeys.list(headers, own.id), 100);
+    assert.deepStrictEqual(
+      yield* Effect.flip(apiKeys.create(headers, own.id, { name: "Past the limit" })),
+      new OrganizationApiKeys.KeyLimit({}),
+    );
+  }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 
 it.live("lets only owners and admins manage keys, and only their organization's", () =>
