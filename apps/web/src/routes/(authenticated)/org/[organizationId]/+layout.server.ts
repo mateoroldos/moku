@@ -28,6 +28,7 @@ export const load: LayoutServerLoad = (event) => {
             ? assignable
             : [],
           memberRoles: role.authorize({ member: ["update", "delete"] }).success ? assignable : [],
+          canManageApiKeys: role.authorize({ apiKey: ["create", "read", "delete"] }).success,
         };
       }),
     )
