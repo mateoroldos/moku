@@ -17,8 +17,8 @@ export const ApiKey = Schema.Struct({
   name: Schema.String,
   /** The key's first characters, to recognize it without the secret. */
   start: Schema.String,
-  createdAt: Schema.DateTimeUtc,
-  lastUsedAt: Schema.NullOr(Schema.DateTimeUtc),
+  createdAt: Schema.DateTimeUtcFromString,
+  lastUsedAt: Schema.NullOr(Schema.DateTimeUtcFromString),
 });
 export interface ApiKey extends Schema.Schema.Type<typeof ApiKey> {}
 

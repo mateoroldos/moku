@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as Table from '@moku/ui/ui/table';
+  import ApiKeys from '#lib/features/api-keys/ApiKeys.svelte';
   import { listOrganizationMembers } from '#lib/features/organizations/organizations.remote.ts';
   import InvitedRows from '#lib/features/organizations/InvitedRows.svelte';
   import InviteTeammateDialog from '#lib/features/organizations/InviteTeammateDialog.svelte';
@@ -69,4 +70,8 @@
       {/if}
     </Table.Body>
   </Table.Root>
+
+  {#if data.canManageApiKeys}
+    <ApiKeys organizationId={data.organizationId} />
+  {/if}
 </div>
