@@ -25,7 +25,3 @@ Moku is pre-release. All Moku development data is disposable. Changes may reset
 development databases, replace migration baselines, and remove obsolete APIs or
 compatibility code. Prefer a coherent current implementation over compatibility
 with previous development versions.
-
-## Roadmap
-
-The roadmap is the [Moku roadmap](https://github.com/users/mateoroldos/projects/3) board: project `3`, owner `mateoroldos`.
