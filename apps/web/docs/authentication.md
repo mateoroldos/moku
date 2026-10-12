@@ -60,7 +60,7 @@ atomic with the account's. Deleting an account also deletes the invitations it s
 Organization API keys belong to their organization, not to the member who created them.
 Owners and admins create, list, and revoke them through `OrganizationApiKeys`;
 `organizationRoles` grants them Better Auth's `apiKey` statement. The auth route does not
-expose the provider's key endpoints, so only the server records a key's creator. Keys
+expose the provider's key endpoints, so only the server creates keys. Keys
 are deleted with their organization. Because Better Auth lists only 100 keys, creation
 stops at 100, best-effort, so every key stays visible for revocation. Nothing accepts
 keys for requests yet.

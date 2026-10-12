@@ -1,5 +1,4 @@
 import type { Access } from "@moku/core/access";
-import { UserId } from "@moku/domain/identity";
 import type { OrganizationId } from "@moku/domain/organization";
 import { Context, type Effect, type Redacted, Schema } from "effect";
 
@@ -18,7 +17,6 @@ export const ApiKey = Schema.Struct({
   name: Schema.String,
   /** The key's first characters, to recognize it without the secret. */
   start: Schema.String,
-  createdBy: UserId,
   createdAt: Schema.DateTimeUtc,
   lastUsedAt: Schema.NullOr(Schema.DateTimeUtc),
 });
@@ -40,11 +38,10 @@ export class KeyLimit extends Schema.TaggedError<KeyLimit>()("OrganizationApiKey
 
 /** Owners and admins manage keys; other members get `Access.Denied`, anyone else `Access.NotFound`. */
 export interface Interface {
-  /** A key that can create and read the organization's tasks; `createdBy` is the session owner. */
+  /** A key for the organization. */
   readonly create: (
     headers: Headers,
     organizationId: OrganizationId,
-    createdBy: UserId,
     input: CreateInput,
   ) => Effect.Effect<CreatedApiKey, Access.NotFound | Access.Denied | KeyLimit | Unavailable>;
   /** Every key of the organization, newest first. */

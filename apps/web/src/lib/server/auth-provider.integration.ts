@@ -99,7 +99,6 @@ const fixture = Effect.fnUntraced(function* (
   };
 });
 
-const caller = UserId.make("authentication-test");
 const verifiedPrincipal = { userId: "authentication-test", emailVerified: true };
 const signup = {
   name: "New reviewer",
@@ -813,7 +812,7 @@ it.live(
       yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
       const own = yield* organizations.create(headers, { name: "auth-keys-own" });
 
-      const { apiKey, secret } = yield* apiKeys.create(headers, own.id, caller, {
+      const { apiKey, secret } = yield* apiKeys.create(headers, own.id, {
         name: "Trading bot",
       });
 
@@ -821,11 +820,14 @@ it.live(
       assert.strictEqual(apiKey.start, Redacted.value(secret).slice(0, 9));
       assert.deepInclude(apiKey, {
         name: "Trading bot",
-        createdBy: caller,
         lastUsedAt: null,
       });
-      const [stored] = yield* sql<{ key: string }>`SELECT key FROM apikey WHERE id = ${apiKey.id}`;
+      const [stored] = yield* sql<{
+        key: string;
+        permissions: string | null;
+      }>`SELECT key, permissions FROM apikey WHERE id = ${apiKey.id}`;
       assert.notStrictEqual(stored?.key, Redacted.value(secret));
+      assert.isNull(stored?.permissions);
       assert.deepStrictEqual(yield* apiKeys.list(headers, own.id), [apiKey]);
 
       yield* apiKeys.revoke(headers, apiKey.id);
@@ -835,13 +837,13 @@ it.live(
         new Access.NotFound({}),
       );
 
-      yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, metadata, created_at, updated_at)
+      yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, created_at, updated_at)
         SELECT 'auth-keys-' || n, 'Agent ' || n, 'moku_Abcd', ${own.id}, 'hash-' || n,
-          '{"createdBy":"authentication-test"}', now(), now() FROM generate_series(1, 99) n`;
-      yield* apiKeys.create(headers, own.id, caller, { name: "Hundredth" });
+          now(), now() FROM generate_series(1, 99) n`;
+      yield* apiKeys.create(headers, own.id, { name: "Hundredth" });
       assert.lengthOf(yield* apiKeys.list(headers, own.id), 100);
       assert.deepStrictEqual(
-        yield* Effect.flip(apiKeys.create(headers, own.id, caller, { name: "Past the limit" })),
+        yield* Effect.flip(apiKeys.create(headers, own.id, { name: "Past the limit" })),
         new OrganizationApiKeys.KeyLimit({}),
       );
 
@@ -860,15 +862,14 @@ it.live("lets only owners and admins manage keys, and only their organization's"
     yield* sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
       VALUES ('auth-key-roles-caller', ${shared}, 'authentication-test', 'admin', now())`;
     const foreign = yield* peerOrganization("auth-key-roles-foreign");
-    yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, metadata, created_at, updated_at)
-      VALUES ('auth-key-roles-foreign', 'Foreign', 'moku_Abcd', ${foreign}, 'hash',
-        '{"createdBy":"organization-peer"}', now(), now())`;
+    yield* sql`INSERT INTO apikey (id, name, start, reference_id, key, created_at, updated_at)
+      VALUES ('auth-key-roles-foreign', 'Foreign', 'moku_Abcd', ${foreign}, 'hash', now(), now())`;
 
-    const { apiKey } = yield* apiKeys.create(headers, shared, caller, { name: "Admin key" });
+    const { apiKey } = yield* apiKeys.create(headers, shared, { name: "Admin key" });
 
     assert.deepStrictEqual(yield* apiKeys.list(headers, shared), [apiKey]);
     assert.deepStrictEqual(
-      yield* Effect.flip(apiKeys.create(headers, foreign, caller, { name: "Outsider key" })),
+      yield* Effect.flip(apiKeys.create(headers, foreign, { name: "Outsider key" })),
       new Access.NotFound({}),
     );
     assert.deepStrictEqual(
@@ -883,7 +884,7 @@ it.live("lets only owners and admins manage keys, and only their organization's"
     yield* sql`UPDATE member SET role = 'member' WHERE id = 'auth-key-roles-caller'`;
 
     assert.deepStrictEqual(
-      yield* Effect.flip(apiKeys.create(headers, shared, caller, { name: "Member key" })),
+      yield* Effect.flip(apiKeys.create(headers, shared, { name: "Member key" })),
       new Access.Denied({}),
     );
     assert.deepStrictEqual(
@@ -898,7 +899,7 @@ it.live("lets only owners and admins manage keys, and only their organization's"
     yield* sql`UPDATE member SET role = 'viewer' WHERE id = 'auth-key-roles-caller'`;
 
     assert.deepStrictEqual(
-      yield* Effect.flip(apiKeys.create(headers, shared, caller, { name: "Viewer key" })),
+      yield* Effect.flip(apiKeys.create(headers, shared, { name: "Viewer key" })),
       new Access.Denied({}),
     );
     assert.deepStrictEqual(

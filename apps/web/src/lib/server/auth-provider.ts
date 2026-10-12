@@ -61,7 +61,6 @@ const ProviderApiKey = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   start: Schema.String,
-  metadata: Schema.Struct({ createdBy: UserId }),
   createdAt: Schema.DateTimeUtcFromDate,
   lastRequest: Schema.NullOr(Schema.DateTimeUtcFromDate),
 });
@@ -71,12 +70,10 @@ const ProviderCreatedApiKey = Schema.Struct({ ...ProviderApiKey.fields, key: Sch
 const ProviderApiKeys = Schema.Struct({ apiKeys: Schema.Array(ProviderApiKey) });
 
 const apiKeyFrom = ({
-  metadata,
   lastRequest,
   ...apiKey
 }: typeof ProviderApiKey.Type): OrganizationApiKeys.ApiKey => ({
   ...apiKey,
-  createdBy: metadata.createdBy,
   lastUsedAt: lastRequest,
 });
 
@@ -603,18 +600,13 @@ export const layer = Layer.effectContext(
     const createApiKey = Effect.fn("OrganizationApiKeys.create")(function* (
       headers: Headers,
       organizationId: OrganizationId,
-      createdBy: UserId,
       { name }: OrganizationApiKeys.CreateInput,
     ) {
       // Best-effort, like Better Auth's invitation cap: concurrent creations can pass it together.
       if ((yield* listApiKeys(headers, organizationId)).length >= 100)
         return yield* new OrganizationApiKeys.KeyLimit({});
       const result: unknown = yield* Effect.tryPromise({
-        try: () =>
-          auth.api.createApiKey({
-            headers,
-            body: { organizationId, name, metadata: { createdBy } },
-          }),
+        try: () => auth.api.createApiKey({ headers, body: { organizationId, name } }),
         catch: apiKeyFailure,
       });
       const { key, ...created } = yield* Schema.decodeUnknownEffect(ProviderCreatedApiKey)(
