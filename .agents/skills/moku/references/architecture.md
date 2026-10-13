@@ -4,6 +4,7 @@
 | ---------------------------- | -------------------------------------------------------- | ----------------------------------------------- |
 | `packages/domain`            | Shared values, schemas, and domain decisions             | None                                            |
 | `packages/core`              | Application policy, operation inputs, and required ports | Domain                                          |
+| `packages/api`               | The public HTTP contract agents call                     | Core, domain                                    |
 | `packages/ui`                | Shared Svelte components and visual vocabulary           | None                                            |
 | `adapters/database-postgres` | PostgreSQL persistence and migrations                    | Core, domain                                    |
 | `adapters/email-cloudflare`  | Cloudflare email delivery                                | Core                                            |
