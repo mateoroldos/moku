@@ -103,6 +103,7 @@ it.live("migrates repeatedly, preserves the winning insert, and survives reconne
       intent: "authorize",
       subject: { title: HumanTaskTitle.make("Concurrent PostgreSQL review") },
       response: { type: "approval" },
+      requester: HumanTaskStoreContract.requester,
       createdAt: DateTime.makeUnsafe("2026-09-28T12:00:00.123Z"),
       status: "pending",
     });
@@ -184,6 +185,7 @@ it.live("rechecks pending status after a competing transaction releases its row 
       intent: "authorize",
       subject: { title: HumanTaskTitle.make("Locked proposal") },
       response: { type: "approval" },
+      requester: HumanTaskStoreContract.requester,
       createdAt: DateTime.makeUnsafe(0),
       status: "pending",
     });

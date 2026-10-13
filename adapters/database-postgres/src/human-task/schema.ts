@@ -15,6 +15,9 @@ export const humanTasks = pgTable(
     subject: jsonb("subject").notNull(),
     context: text("context"),
     response: jsonb("response").notNull(),
+    // No foreign key: revoking deletes the key, and the task keeps who requested it.
+    requesterKeyId: text("requester_key_id").notNull(),
+    requesterKeyName: text("requester_key_name").notNull(),
     createdAt: timestamp("created_at", {
       mode: "string",
       withTimezone: true,

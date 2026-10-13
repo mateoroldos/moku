@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d75e4606-dd81-4ce2-813a-fb10434c1bad",
+  "id": "ee2fa612-02c9-495e-bd5f-ac13778ce5b8",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -132,6 +132,32 @@
       "generated": null,
       "identity": null,
       "name": "response",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "requester_key_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "requester_key_name",
       "entityType": "columns",
       "schema": "public",
       "table": "human_tasks"

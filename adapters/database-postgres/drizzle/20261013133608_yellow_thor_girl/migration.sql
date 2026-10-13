@@ -5,6 +5,8 @@ CREATE TABLE "human_tasks" (
 	"subject" jsonb NOT NULL,
 	"context" text,
 	"response" jsonb NOT NULL,
+	"requester_key_id" text NOT NULL,
+	"requester_key_name" text NOT NULL,
 	"created_at" timestamp(3) with time zone NOT NULL,
 	"status" text NOT NULL,
 	"result" jsonb,

@@ -16,13 +16,22 @@ import { humanTasks } from "./schema.ts";
 type Row = typeof humanTasks.$inferSelect;
 
 const normalizeRow = (row: Row) => {
-  const { context, result, completedAt, attribution, ...request } = row;
+  const {
+    context,
+    result,
+    completedAt,
+    attribution,
+    requesterKeyId,
+    requesterKeyName,
+    ...request
+  } = row;
   const normalized: typeof request & {
+    requester: { id: string; name: string };
     context?: string;
     result?: Row["result"];
     completedAt?: string;
     attribution?: Row["attribution"];
-  } = { ...request };
+  } = { ...request, requester: { id: requesterKeyId, name: requesterKeyName } };
   if (context !== null) normalized.context = context;
   if (result !== null) normalized.result = result;
   if (completedAt !== null) normalized.completedAt = completedAt;
@@ -39,7 +48,11 @@ export const layer = Layer.effect(
 
     const create = Effect.fn("HumanTaskStorePostgres.create")((task: PendingHumanTask) =>
       Schema.encodeEffect(PendingHumanTask)(task).pipe(
-        Effect.flatMap((encoded) => database.insert(humanTasks).values(encoded)),
+        Effect.flatMap(({ requester, ...encoded }) =>
+          database
+            .insert(humanTasks)
+            .values({ ...encoded, requesterKeyId: requester.id, requesterKeyName: requester.name }),
+        ),
         Effect.as(task),
         Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),
       ),

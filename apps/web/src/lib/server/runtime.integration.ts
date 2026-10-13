@@ -2,7 +2,7 @@ import { PgClient } from "@effect/sql-pg";
 import { assert, it } from "@effect/vitest";
 import { HumanTasks } from "@moku/core/human-tasks";
 import { UserId } from "@moku/domain/identity";
-import { Membership, OrganizationId } from "@moku/domain/organization";
+import { ApiKeyId, Membership, OrganizationId, OrganizationKey } from "@moku/domain/organization";
 import { Config, Effect, Layer, Schedule, Schema } from "effect";
 import { WebRuntime } from "./runtime.ts";
 
@@ -14,6 +14,11 @@ const membership = Membership.make({
   userId: UserId.make("runtime-user"),
   organizationId,
   role: "owner",
+});
+const key = OrganizationKey.make({
+  id: ApiKeyId.make("runtime-key"),
+  organizationId,
+  name: "Runtime agent",
 });
 
 it.live("persists across server runtimes and releases their PostgreSQL connections", () =>
@@ -53,9 +58,7 @@ it.live("persists across server runtimes and releases their PostgreSQL connectio
       Effect.gen(function* () {
         const runtime = yield* acquire;
         return yield* Effect.promise(() =>
-          runtime.runPromise(
-            HumanTasks.Service.use((humanTasks) => humanTasks.create(membership, input)),
-          ),
+          runtime.runPromise(HumanTasks.Service.use((humanTasks) => humanTasks.create(key, input))),
         );
       }),
     );
