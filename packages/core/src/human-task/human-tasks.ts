@@ -24,14 +24,6 @@ export const allowedRoles = {
   respond: ["owner", "admin", "member"],
 } as const satisfies Record<"get" | "list" | "respond", Access.AllowedRoles>;
 
-/** A member acts by role; an organization key alone creates tasks and may read them, never answer or list. */
-export type Caller = Membership | OrganizationKey;
-
-const authorize = (allowedRoles: Access.AllowedRoles, caller: Caller) =>
-  Predicate.isTagged(caller, "OrganizationKey")
-    ? Effect.void
-    : Access.requireRole(allowedRoles, caller.role);
-
 /** Operations act inside the caller's organization; entrypoints resolve the caller. */
 export interface Interface {
   readonly create: (
@@ -49,8 +41,9 @@ export interface Interface {
     | HumanTaskStore.NotFound
     | HumanTaskStore.AlreadyCompleted
   >;
+  /** A member reads by role; an organization key reads any task in its organization. */
   readonly get: (
-    caller: Caller,
+    caller: Membership | OrganizationKey,
     taskId: HumanTaskId,
   ) => Effect.Effect<
     HumanTask,
@@ -112,8 +105,12 @@ export const layer = Layer.effect(
       );
     });
 
-    const get = Effect.fn("HumanTasks.get")(function* (caller: Caller, taskId: HumanTaskId) {
-      yield* authorize(allowedRoles.get, caller);
+    const get = Effect.fn("HumanTasks.get")(function* (
+      caller: Membership | OrganizationKey,
+      taskId: HumanTaskId,
+    ) {
+      if (!Predicate.isTagged(caller, "OrganizationKey"))
+        yield* Access.requireRole(allowedRoles.get, caller.role);
 
       return yield* store.get({ organizationId: caller.organizationId, taskId });
     });
