@@ -1,5 +1,6 @@
 import {
   type ApprovalResult,
+  type CallbackUrl,
   type CompletedHumanTask,
   type HumanTask,
   HumanTaskId,
@@ -26,9 +27,11 @@ export const allowedRoles = {
 
 /** Operations act inside the caller's organization; entrypoints resolve the caller. */
 export interface Interface {
+  /** The callback URL, when given, receives the task once it completes. */
   readonly create: (
     key: OrganizationKey,
     input: CreateInput,
+    callbackUrl?: CallbackUrl,
   ) => Effect.Effect<PendingHumanTask, HumanTaskStore.PersistenceError | IdGenerationError>;
   readonly respond: (
     membership: Membership,
@@ -70,6 +73,7 @@ export const layer = Layer.effect(
     const create = Effect.fn("HumanTasks.create")(function* (
       key: OrganizationKey,
       { subject, ...input }: CreateInput,
+      callbackUrl?: CallbackUrl,
     ) {
       const id = yield* crypto.randomUUIDv4.pipe(
         Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
@@ -86,6 +90,7 @@ export const layer = Layer.effect(
           createdAt,
           status: "pending",
         }),
+        callbackUrl,
       );
     });
 
