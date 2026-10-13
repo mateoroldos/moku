@@ -21,6 +21,7 @@ export interface Interface {
     attribution: ResponseAttribution,
   ) => Effect.Effect<CompletedHumanTask, NotFound | AlreadyCompleted | PersistenceError>;
   readonly get: (ref: TaskRef) => Effect.Effect<HumanTask, NotFound | PersistenceError>;
+  /** Newest first; tasks created in the same millisecond are ordered by ID. */
   readonly list: (
     organizationId: OrganizationId,
   ) => Effect.Effect<ReadonlyArray<HumanTask>, PersistenceError>;

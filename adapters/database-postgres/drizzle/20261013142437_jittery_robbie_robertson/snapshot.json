@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "17fc8125-b206-4764-8691-f51bc414c6b0",
+  "id": "681760d8-cd51-40bb-835c-8b43e19aea32",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -1201,6 +1201,34 @@
       "entityType": "columns",
       "schema": "public",
       "table": "verification"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "human_tasks_organization_id_created_at_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "human_tasks"
     },
     {
       "nameExplicit": true,

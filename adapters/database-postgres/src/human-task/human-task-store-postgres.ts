@@ -8,7 +8,7 @@ import {
   PendingHumanTask,
 } from "@moku/domain/human-task";
 import type { OrganizationId } from "@moku/domain/organization";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Schema } from "effect";
 import { Database } from "../internal/database.ts";
 import { humanTasks } from "./schema.ts";
@@ -65,6 +65,7 @@ export const layer = Layer.effect(
         .select()
         .from(humanTasks)
         .where(eq(humanTasks.organizationId, organizationId))
+        .orderBy(desc(humanTasks.createdAt), desc(humanTasks.id))
         .pipe(
           Effect.flatMap((rows) => Effect.forEach(rows, decodeRow)),
           Effect.mapError((cause) => new HumanTaskStore.PersistenceError({ cause })),

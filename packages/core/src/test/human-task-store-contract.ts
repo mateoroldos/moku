@@ -114,4 +114,33 @@ export const isolation = Effect.gen(function* () {
   assert.deepStrictEqual(yield* store.list(otherOrganizationId), [completed]);
 });
 
+export const ordering = Effect.gen(function* () {
+  const store = yield* HumanTaskStore.Service;
+  const task = (id: string, createdAt: number) =>
+    PendingHumanTask.make({
+      id: HumanTaskId.make(`00000000-0000-4000-8000-00000000000${id}`),
+      organizationId,
+      intent: "authorize",
+      subject: { title: HumanTaskTitle.make(`Proposal ${id}`) },
+      response: { type: "approval" },
+      requester,
+      createdAt: DateTime.makeUnsafe(createdAt),
+      status: "pending",
+    });
+  const oldest = task("1", 1_000);
+  const newest = task("2", 3_000);
+  const sameTimeLowerId = task("3", 2_000);
+  const sameTimeHigherId = task("4", 2_000);
+
+  for (const created of [sameTimeLowerId, oldest, newest, sameTimeHigherId])
+    yield* store.create(created);
+
+  assert.deepStrictEqual(yield* store.list(organizationId), [
+    newest,
+    sameTimeHigherId,
+    sameTimeLowerId,
+    oldest,
+  ]);
+});
+
 export * as HumanTaskStoreContract from "./human-task-store-contract.ts";

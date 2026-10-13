@@ -15,6 +15,10 @@ it.effect("isolates reads and completion by task ID", () =>
   HumanTaskStoreContract.isolation.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );
 
+it.effect("lists an organization's tasks newest first", () =>
+  HumanTaskStoreContract.ordering.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
+
 it.effect("shares persisted tasks within a build and isolates separate builds", () =>
   Effect.gen(function* () {
     yield* Effect.gen(function* () {
