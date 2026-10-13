@@ -19,6 +19,14 @@ it.effect("lists an organization's tasks newest first", () =>
   HumanTaskStoreContract.ordering.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
 );
 
+it.effect("queues a delivery for a completed task's callback until it is delivered", () =>
+  HumanTaskStoreContract.callbacks.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
+
+it.effect("sends each delivery once at a time and keeps it due when sending fails", () =>
+  HumanTaskStoreContract.deliveryClaims.pipe(Effect.provide(HumanTaskStoreMemory.layer)),
+);
+
 it.effect("shares persisted tasks within a build and isolates separate builds", () =>
   Effect.gen(function* () {
     yield* Effect.gen(function* () {

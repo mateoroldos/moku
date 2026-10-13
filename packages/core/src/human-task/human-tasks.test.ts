@@ -1,5 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
+import {
+  CallbackUrl,
+  HumanTaskId,
+  HumanTaskTitle,
+  PendingHumanTask,
+} from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
 import {
   ApiKeyId,
@@ -11,6 +16,7 @@ import {
 import { DateTime, Effect, Layer, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
+import { CallbackOutbox } from "./callback-outbox.ts";
 import { HumanTasks } from "./human-tasks.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 import { HumanTaskStoreMemory } from "./human-task-store-memory.ts";
@@ -137,6 +143,23 @@ it.effect("lets an organization key create and read tasks in its own organizatio
       (yield* Effect.flip(humanTasks.get(agent, task.id)))._tag,
       "HumanTaskStore.NotFound",
     );
+  }).pipe(Effect.provide(testLayer)),
+);
+
+it.effect("queues the callback of a key's task once a member answers it", () =>
+  Effect.gen(function* () {
+    const humanTasks = yield* HumanTasks.Service;
+    const outbox = yield* CallbackOutbox.Service;
+    const url = CallbackUrl.make("https://agent.example/resume/token");
+    const task = yield* humanTasks.create(agent, input, url);
+    const completed = yield* humanTasks.respond(member, task.id, { decision: "approved" });
+    const sent: Array<CallbackOutbox.Delivery> = [];
+
+    yield* outbox.deliverDue(completed.completedAt, (delivery) =>
+      Effect.sync(() => sent.push(delivery)).pipe(Effect.as(CallbackOutbox.Outcome.Delivered())),
+    );
+
+    assert.deepStrictEqual(sent, [{ task: completed, url, attempts: 0 }]);
   }).pipe(Effect.provide(testLayer)),
 );
 

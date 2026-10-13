@@ -1,5 +1,6 @@
 import {
   type ApprovalResult,
+  type CallbackUrl,
   type CompletedHumanTask,
   type HumanTask,
   TaskRef,
@@ -10,9 +11,14 @@ import type { OrganizationId } from "@moku/domain/organization";
 import { Context, type DateTime, Effect, Schema } from "effect";
 
 export interface Interface {
-  /** Insert only: duplicate IDs fail with PersistenceError and never overwrite a task. */
-  readonly create: (task: PendingHumanTask) => Effect.Effect<PendingHumanTask, PersistenceError>;
-  /** Atomically complete a pending task, preserving its request. First response wins;
+  /** Insert only: duplicate IDs fail with PersistenceError and never overwrite a task.
+   * The callback URL is kept beside the task, never returned with it. */
+  readonly create: (
+    task: PendingHumanTask,
+    callbackUrl?: CallbackUrl,
+  ) => Effect.Effect<PendingHumanTask, PersistenceError>;
+  /** Atomically complete a pending task, preserving its request, and queue its
+   * `CallbackOutbox` delivery when it has a callback URL. First response wins;
    * later attempts fail with AlreadyCompleted, including identical retries. */
   readonly complete: (
     ref: TaskRef,

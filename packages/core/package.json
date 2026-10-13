@@ -6,6 +6,7 @@
   "exports": {
     "./email": "./src/email.ts",
     "./access": "./src/access/access.ts",
+    "./callback-outbox": "./src/human-task/callback-outbox.ts",
     "./human-tasks": "./src/human-task/human-tasks.ts",
     "./human-task-store": "./src/human-task/human-task-store.ts",
     "./test/crypto-deterministic": "./src/test/crypto-deterministic.ts",

@@ -1,8 +1,14 @@
 import { assert } from "@effect/vitest";
-import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
+import {
+  CallbackUrl,
+  HumanTaskId,
+  HumanTaskTitle,
+  PendingHumanTask,
+} from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
 import { ApiKeyId, OrganizationId } from "@moku/domain/organization";
-import { DateTime, Effect } from "effect";
+import { DateTime, Deferred, Effect, Fiber, Ref } from "effect";
+import { CallbackOutbox } from "../human-task/callback-outbox.ts";
 import { HumanTaskStore } from "../human-task/human-task-store.ts";
 
 export const organizationId = OrganizationId.make("test-org");
@@ -140,6 +146,94 @@ export const ordering = Effect.gen(function* () {
     sameTimeHigherId,
     sameTimeLowerId,
     oldest,
+  ]);
+});
+
+const callbackTask = (id: string) =>
+  PendingHumanTask.make({
+    id: HumanTaskId.make(`00000000-0000-4000-8000-00000000000${id}`),
+    organizationId,
+    intent: "authorize",
+    subject: { title: HumanTaskTitle.make(`Proposal ${id}`) },
+    response: { type: "approval" },
+    requester,
+    createdAt: DateTime.makeUnsafe(0),
+    status: "pending",
+  });
+const callbackUrl = CallbackUrl.make("https://agent.example/resume/secret-token");
+const result = { decision: "approved" } as const;
+
+/** Sends the deliveries due at `now`, answering each with `outcome`; returns what was sent. */
+const deliverDue = (now: number, outcome: CallbackOutbox.Outcome) =>
+  Effect.gen(function* () {
+    const outbox = yield* CallbackOutbox.Service;
+    const sent = yield* Ref.make<ReadonlyArray<CallbackOutbox.Delivery>>([]);
+    yield* outbox.deliverDue(DateTime.makeUnsafe(now), (delivery) =>
+      Ref.update(sent, (all) => [...all, delivery]).pipe(Effect.as(outcome)),
+    );
+    return yield* Ref.get(sent);
+  });
+
+/** Run against isolated stores that also provide the callback outbox. */
+export const callbacks = Effect.gen(function* () {
+  const store = yield* HumanTaskStore.Service;
+  const withCallback = callbackTask("1");
+  const withoutCallback = callbackTask("2");
+  const { Delivered, Retry } = CallbackOutbox.Outcome;
+
+  yield* store.create(withCallback, callbackUrl);
+  yield* store.create(withoutCallback);
+  assert.deepStrictEqual(yield* store.get(ref(withCallback.id)), withCallback);
+  assert.deepStrictEqual(yield* deliverDue(10_000, Delivered()), []);
+
+  const completed = yield* store.complete(
+    ref(withCallback.id),
+    result,
+    DateTime.makeUnsafe(1_000),
+    attribution,
+  );
+  yield* store.complete(ref(withoutCallback.id), result, DateTime.makeUnsafe(1_000), attribution);
+  assert.deepStrictEqual(yield* store.get(ref(withCallback.id)), completed);
+
+  const retryAt = Retry({ at: DateTime.makeUnsafe(5_000) });
+  assert.deepStrictEqual(yield* deliverDue(999, retryAt), []);
+  assert.deepStrictEqual(yield* deliverDue(1_000, retryAt), [
+    { task: completed, url: callbackUrl, attempts: 0 },
+  ]);
+  assert.deepStrictEqual(yield* deliverDue(4_999, Delivered()), []);
+  assert.deepStrictEqual(yield* deliverDue(5_000, Delivered()), [
+    { task: completed, url: callbackUrl, attempts: 1 },
+  ]);
+  assert.deepStrictEqual(yield* deliverDue(10_000, Delivered()), []);
+});
+
+/** Run against isolated stores that also provide the callback outbox. */
+export const deliveryClaims = Effect.gen(function* () {
+  const store = yield* HumanTaskStore.Service;
+  const outbox = yield* CallbackOutbox.Service;
+  const task = callbackTask("1");
+  const now = DateTime.makeUnsafe(1_000);
+  const sending = yield* Deferred.make<void>();
+  const release = yield* Deferred.make<void>();
+
+  yield* store.create(task, callbackUrl);
+  const completed = yield* store.complete(ref(task.id), result, now, attribution);
+
+  const first = yield* outbox
+    .deliverDue(now, () =>
+      Deferred.succeed(sending, undefined).pipe(
+        Effect.andThen(Deferred.await(release)),
+        Effect.andThen(Effect.die("Receiver crashed")),
+      ),
+    )
+    .pipe(Effect.forkChild);
+  yield* Deferred.await(sending);
+  assert.deepStrictEqual(yield* deliverDue(1_000, CallbackOutbox.Outcome.Delivered()), []);
+
+  yield* Deferred.succeed(release, undefined);
+  yield* Fiber.await(first);
+  assert.deepStrictEqual(yield* deliverDue(1_000, CallbackOutbox.Outcome.Delivered()), [
+    { task: completed, url: callbackUrl, attempts: 0 },
   ]);
 });
 

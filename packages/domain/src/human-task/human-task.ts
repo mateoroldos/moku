@@ -21,6 +21,14 @@ export const TaskRequester = Schema.Struct({
 });
 export interface TaskRequester extends Schema.Schema.Type<typeof TaskRequester> {}
 
+/** Where Moku sends a task once it completes. Anyone holding it can act on the
+ * requester's behalf, so it never leaves the server. */
+export const CallbackUrl = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^https?:\/\/\S+$/)),
+  Schema.brand("CallbackUrl"),
+);
+export type CallbackUrl = typeof CallbackUrl.Type;
+
 export const HumanTaskTitle = Schema.String.pipe(
   Schema.check(Schema.isTrimmed(), Schema.isMinLength(1)),
   Schema.brand("HumanTaskTitle"),
