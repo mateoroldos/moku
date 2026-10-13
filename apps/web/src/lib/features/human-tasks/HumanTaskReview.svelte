@@ -17,7 +17,7 @@
     <span class="font-mono text-xs uppercase tracking-wider text-muted-foreground">Approval request</span>
     <h1 class="wrap-anywhere font-serif text-3xl leading-tight tracking-tight sm:text-5xl">{task.subject.title}</h1>
     <p class="text-xs text-muted-foreground">
-      Requested <time datetime={task.createdAt}>{formatUtcDateTime(task.createdAt)} UTC</time>
+      Requested by {task.requester.name} · <time datetime={task.createdAt}>{formatUtcDateTime(task.createdAt)} UTC</time>
     </p>
   </header>
 

@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { UserId } from "../identity/identity.ts";
-import { OrganizationId, OrganizationRole } from "../organization/organization.ts";
+import { OrganizationId, OrganizationKey, OrganizationRole } from "../organization/organization.ts";
 
 export const HumanTaskId = Schema.String.pipe(
   Schema.check(Schema.isUUID(4)),
@@ -13,6 +13,13 @@ export interface TaskRef extends Schema.Schema.Type<typeof TaskRef> {}
 
 export const ResponseAttribution = Schema.Struct({ userId: UserId, role: OrganizationRole });
 export interface ResponseAttribution extends Schema.Schema.Type<typeof ResponseAttribution> {}
+
+/** The API key that created the task; its name is kept so the task still shows it after revocation. */
+export const TaskRequester = Schema.Struct({
+  id: OrganizationKey.fields.id,
+  name: OrganizationKey.fields.name,
+});
+export interface TaskRequester extends Schema.Schema.Type<typeof TaskRequester> {}
 
 export const HumanTaskTitle = Schema.String.pipe(
   Schema.check(Schema.isTrimmed(), Schema.isMinLength(1)),
@@ -44,6 +51,7 @@ const fields = {
   subject: HumanTaskSubject,
   context: Schema.optionalKey(Schema.String),
   response: ApprovalResponse,
+  requester: TaskRequester,
   createdAt: Schema.DateTimeUtcFromString,
 };
 

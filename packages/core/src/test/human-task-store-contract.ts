@@ -1,13 +1,14 @@
 import { assert } from "@effect/vitest";
 import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
-import { OrganizationId } from "@moku/domain/organization";
+import { ApiKeyId, OrganizationId } from "@moku/domain/organization";
 import { DateTime, Effect } from "effect";
 import { HumanTaskStore } from "../human-task/human-task-store.ts";
 
 export const organizationId = OrganizationId.make("test-org");
 export const otherOrganizationId = OrganizationId.make("other-org");
 export const attribution = { userId: UserId.make("test-user"), role: "member" } as const;
+export const requester = { id: ApiKeyId.make("test-key"), name: "Deploy bot" } as const;
 export const ref = (taskId: HumanTaskId) => ({ organizationId, taskId });
 
 /** Run against isolated stores with test-org and other-org present. */
@@ -20,6 +21,7 @@ export const lifecycle = Effect.gen(function* () {
     subject: { title: HumanTaskTitle.make("Publish report"), description: "Line one\nLine two" },
     context: "",
     response: { type: "approval" },
+    requester,
     createdAt: DateTime.makeUnsafe("2026-09-28T12:34:56.789Z"),
     status: "pending",
   });
@@ -67,6 +69,7 @@ export const isolation = Effect.gen(function* () {
     intent: "authorize",
     subject: { title: HumanTaskTitle.make("First proposal") },
     response: { type: "approval" },
+    requester,
     createdAt: DateTime.makeUnsafe(0),
     status: "pending",
   });

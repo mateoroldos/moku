@@ -60,7 +60,7 @@
                       {task.result.decision === 'approved' ? 'Approval recorded' : 'Rejection recorded'} ·
                       <time datetime={task.completedAt}>{formatUtcDateTime(task.completedAt)} UTC</time>
                     {:else}
-                      Requested <time datetime={task.createdAt}>{formatUtcDateTime(task.createdAt)} UTC</time>
+                      Requested by {task.requester.name} · <time datetime={task.createdAt}>{formatUtcDateTime(task.createdAt)} UTC</time>
                     {/if}
                   </p>
                 </div>

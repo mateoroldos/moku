@@ -18,6 +18,7 @@ const task = PendingHumanTask.make({
   subject: { title: HumanTaskTitle.make("Publish report"), description: "Line one\nLine two" },
   context: "",
   response: { type: "approval" },
+  requester: HumanTaskStoreContract.requester,
   createdAt: DateTime.makeUnsafe("2026-09-28T12:34:56.789Z"),
   status: "pending",
 });

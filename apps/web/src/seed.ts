@@ -6,7 +6,13 @@ import { PersistencePostgres } from "@moku/database-postgres";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { ApprovalResult } from "@moku/domain/human-task";
 import { Principal } from "@moku/domain/identity";
-import { Membership, OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import {
+  ApiKeyId,
+  Membership,
+  OrganizationId,
+  OrganizationKey,
+  OrganizationRole,
+} from "@moku/domain/organization";
 import { betterAuth } from "better-auth/minimal";
 import { Config, Console, Effect, Layer, Redacted, Schema } from "effect";
 import { betterAuthOptions } from "#lib/server/better-auth-options.ts";
@@ -185,9 +191,15 @@ NodeRuntime.runMain(
     if (baseUrl === undefined) return;
 
     const humanTasks = yield* HumanTasks.Service;
+    // Example tasks need no working key; a revoked key's tasks look the same.
+    const agent = OrganizationKey.make({
+      id: ApiKeyId.make("seed-agent"),
+      organizationId: membership.organizationId,
+      name: "Example agent",
+    });
 
     for (const { request, result } of examples) {
-      const pending = yield* humanTasks.create(membership, request);
+      const pending = yield* humanTasks.create(agent, request);
       const task =
         result === undefined ? pending : yield* humanTasks.respond(membership, pending.id, result);
 

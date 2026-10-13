@@ -23,8 +23,12 @@ const input = HumanTasks.CreateInput.make({
   context: "Send the reviewed report to leadership.",
   response: { type: "approval" },
 });
+const key = (organization = organizationId) =>
+  OrganizationKey.make({ id: ApiKeyId.make("key"), organizationId: organization, name: "Agent" });
+const agent = key();
 const pending = PendingHumanTask.make({
   ...input,
+  requester: { id: ApiKeyId.make("key"), name: "Agent" },
   id: taskId,
   organizationId,
   status: "pending",
@@ -42,12 +46,13 @@ it.effect("creates distinct pending tasks with server-owned IDs, times, and requ
   Effect.gen(function* () {
     const humanTasks = yield* HumanTasks.Service;
     yield* TestClock.setTime(1_000);
-    const first = yield* humanTasks.create(member, input);
+    const first = yield* humanTasks.create(agent, input);
     yield* TestClock.setTime(2_000);
-    const second = yield* humanTasks.create(member, input);
+    const second = yield* humanTasks.create(agent, input);
     assert.deepStrictEqual(first, {
       ...input,
       organizationId,
+      requester: { id: ApiKeyId.make("key"), name: "Agent" },
       id: HumanTaskId.make("00000000-0000-4000-8000-000000000001"),
       status: "pending",
       createdAt: DateTime.makeUnsafe(1_000),
@@ -70,11 +75,11 @@ it.effect.each(["owner", "admin", "member", "viewer"] as const)(
 );
 
 it.effect.each(["owner", "admin", "member"] as const)(
-  "allows %s to create and records its checked role and server time when answering",
+  "allows %s to answer and records its checked role and server time",
   (role) =>
     Effect.gen(function* () {
       const humanTasks = yield* HumanTasks.Service;
-      const task = yield* humanTasks.create(membership(role), input);
+      const task = yield* humanTasks.create(agent, input);
       const result = { decision: "approved", feedback: "Reviewed" } as const;
       yield* TestClock.setTime(2_000);
       const completed = yield* humanTasks.respond(membership(role), task.id, result);
@@ -89,16 +94,12 @@ it.effect.each(["owner", "admin", "member"] as const)(
     }).pipe(Effect.provide(testLayer)),
 );
 
-it.effect("denies viewer creates and answers without changing tasks", () =>
+it.effect("denies viewer answers without changing tasks", () =>
   Effect.gen(function* () {
     const store = yield* HumanTaskStore.Service;
     const humanTasks = yield* HumanTasks.Service;
     const viewer = membership("viewer");
     yield* store.create(pending);
-    assert.strictEqual(
-      (yield* Effect.flip(humanTasks.create(viewer, input)))._tag,
-      "Access.Denied",
-    );
     assert.strictEqual(
       (yield* Effect.flip(humanTasks.respond(viewer, taskId, { decision: "approved" })))._tag,
       "Access.Denied",
@@ -122,7 +123,6 @@ it.effect("scopes every operation to the membership's organization", () =>
       "HumanTaskStore.NotFound",
     );
     assert.deepStrictEqual(yield* humanTasks.list(outsider), []);
-    assert.strictEqual((yield* humanTasks.create(outsider, input)).organizationId, "other");
     assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
   }).pipe(Effect.provide(testLayer)),
 );
@@ -130,17 +130,11 @@ it.effect("scopes every operation to the membership's organization", () =>
 it.effect("lets an organization key create and read tasks in its own organization only", () =>
   Effect.gen(function* () {
     const humanTasks = yield* HumanTasks.Service;
-    const key = (organization: OrganizationId) =>
-      OrganizationKey.make({
-        id: ApiKeyId.make("key"),
-        organizationId: organization,
-        name: "Agent",
-      });
-    const task = yield* humanTasks.create(key(organizationId), input);
-    assert.strictEqual(task.organizationId, organizationId);
-    assert.deepStrictEqual(yield* humanTasks.get(key(organizationId), task.id), task);
+    const task = yield* humanTasks.create(key(OrganizationId.make("other")), input);
+    assert.strictEqual(task.organizationId, "other");
+    assert.deepStrictEqual(yield* humanTasks.get(key(OrganizationId.make("other")), task.id), task);
     assert.strictEqual(
-      (yield* Effect.flip(humanTasks.get(key(OrganizationId.make("other")), task.id)))._tag,
+      (yield* Effect.flip(humanTasks.get(agent, task.id)))._tag,
       "HumanTaskStore.NotFound",
     );
   }).pipe(Effect.provide(testLayer)),
@@ -156,7 +150,7 @@ it.effect("preserves storage failures rather than reporting a successful operati
   });
   return Effect.gen(function* () {
     const humanTasks = yield* HumanTasks.Service;
-    assert.strictEqual(yield* Effect.flip(humanTasks.create(member, input)), failure);
+    assert.strictEqual(yield* Effect.flip(humanTasks.create(agent, input)), failure);
     assert.strictEqual(
       yield* Effect.flip(humanTasks.respond(member, taskId, { decision: "approved" })),
       failure,
@@ -183,7 +177,7 @@ it.effect.each([
     const humanTasks = yield* HumanTasks.Service;
     const store = yield* HumanTaskStore.Service;
     assert.instanceOf(
-      yield* Effect.flip(humanTasks.create(member, input)),
+      yield* Effect.flip(humanTasks.create(agent, input)),
       HumanTasks.IdGenerationError,
     );
     assert.deepStrictEqual(yield* store.list(organizationId), []);

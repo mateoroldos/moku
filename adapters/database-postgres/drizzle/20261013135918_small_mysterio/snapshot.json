@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d75e4606-dd81-4ce2-813a-fb10434c1bad",
+  "id": "cfd2ae9c-ddcb-4c7b-9b28-ebceb75fb7d9",
   "prevIds": ["00000000-0000-0000-0000-000000000000"],
   "ddl": [
     {
@@ -132,6 +132,19 @@
       "generated": null,
       "identity": null,
       "name": "response",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "human_tasks"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "requester",
       "entityType": "columns",
       "schema": "public",
       "table": "human_tasks"

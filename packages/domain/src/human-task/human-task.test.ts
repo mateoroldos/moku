@@ -22,6 +22,7 @@ it.effect("round-trips pending tasks and rejects invalid time or unsupported sta
       subject: { title: "Publish the weekly report", description: "The report to distribute." },
       context: "Leadership requested this summary.",
       response: { type: "approval" },
+      requester: { id: "key", name: "Deploy bot" },
       createdAt: "2026-09-25T12:00:00.000Z",
       status: "pending",
     } as const;
@@ -60,6 +61,7 @@ it.effect("round-trips completed tasks with structured results and requires comp
       intent: "authorize",
       subject: { title: "Publish the report" },
       response: { type: "approval" },
+      requester: { id: "key", name: "Deploy bot" },
       createdAt: "2026-09-25T12:00:00.000Z",
       status: "completed",
       result: {

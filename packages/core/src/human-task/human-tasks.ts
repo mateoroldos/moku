@@ -21,27 +21,15 @@ export interface CreateInput extends Schema.Schema.Type<typeof CreateInput> {}
 export const allowedRoles = {
   get: ["owner", "admin", "member", "viewer"],
   list: ["owner", "admin", "member", "viewer"],
-  create: ["owner", "admin", "member"],
   respond: ["owner", "admin", "member"],
-} as const satisfies Record<"get" | "list" | "create" | "respond", Access.AllowedRoles>;
-
-/** A member acts by role; an organization key may create and read, never answer or list. */
-export type Caller = Membership | OrganizationKey;
-
-const authorize = (allowedRoles: Access.AllowedRoles, caller: Caller) =>
-  Predicate.isTagged(caller, "OrganizationKey")
-    ? Effect.void
-    : Access.requireRole(allowedRoles, caller.role);
+} as const satisfies Record<"get" | "list" | "respond", Access.AllowedRoles>;
 
 /** Operations act inside the caller's organization; entrypoints resolve the caller. */
 export interface Interface {
   readonly create: (
-    caller: Caller,
+    key: OrganizationKey,
     input: CreateInput,
-  ) => Effect.Effect<
-    PendingHumanTask,
-    Access.Denied | HumanTaskStore.PersistenceError | IdGenerationError
-  >;
+  ) => Effect.Effect<PendingHumanTask, HumanTaskStore.PersistenceError | IdGenerationError>;
   readonly respond: (
     membership: Membership,
     taskId: HumanTaskId,
@@ -53,8 +41,9 @@ export interface Interface {
     | HumanTaskStore.NotFound
     | HumanTaskStore.AlreadyCompleted
   >;
+  /** A member reads by role; an organization key reads any task in its organization. */
   readonly get: (
-    caller: Caller,
+    caller: Membership | OrganizationKey,
     taskId: HumanTaskId,
   ) => Effect.Effect<
     HumanTask,
@@ -79,11 +68,9 @@ export const layer = Layer.effect(
     const crypto = yield* Crypto.Crypto;
 
     const create = Effect.fn("HumanTasks.create")(function* (
-      caller: Caller,
+      key: OrganizationKey,
       { subject, ...input }: CreateInput,
     ) {
-      yield* authorize(allowedRoles.create, caller);
-
       const id = yield* crypto.randomUUIDv4.pipe(
         Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
         Effect.mapError((cause) => new IdGenerationError({ cause })),
@@ -94,7 +81,8 @@ export const layer = Layer.effect(
           ...input,
           subject,
           id,
-          organizationId: caller.organizationId,
+          organizationId: key.organizationId,
+          requester: { id: key.id, name: key.name },
           createdAt,
           status: "pending",
         }),
@@ -117,8 +105,12 @@ export const layer = Layer.effect(
       );
     });
 
-    const get = Effect.fn("HumanTasks.get")(function* (caller: Caller, taskId: HumanTaskId) {
-      yield* authorize(allowedRoles.get, caller);
+    const get = Effect.fn("HumanTasks.get")(function* (
+      caller: Membership | OrganizationKey,
+      taskId: HumanTaskId,
+    ) {
+      if (!Predicate.isTagged(caller, "OrganizationKey"))
+        yield* Access.requireRole(allowedRoles.get, caller.role);
 
       return yield* store.get({ organizationId: caller.organizationId, taskId });
     });

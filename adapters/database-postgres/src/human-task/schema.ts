@@ -15,6 +15,7 @@ export const humanTasks = pgTable(
     subject: jsonb("subject").notNull(),
     context: text("context"),
     response: jsonb("response").notNull(),
+    requester: jsonb("requester").notNull(),
     createdAt: timestamp("created_at", {
       mode: "string",
       withTimezone: true,
