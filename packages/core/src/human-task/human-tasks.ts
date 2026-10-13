@@ -5,8 +5,8 @@ import {
   HumanTaskId,
   PendingHumanTask,
 } from "@moku/domain/human-task";
-import type { Membership } from "@moku/domain/organization";
-import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import type { Membership, OrganizationKey } from "@moku/domain/organization";
+import { Context, Crypto, DateTime, Effect, Layer, Predicate, Schema } from "effect";
 import { Access } from "../access/access.ts";
 import { HumanTaskStore } from "./human-task-store.ts";
 
@@ -25,10 +25,18 @@ export const allowedRoles = {
   respond: ["owner", "admin", "member"],
 } as const satisfies Record<"get" | "list" | "create" | "respond", Access.AllowedRoles>;
 
-/** Operations act inside the membership's organization; callers resolve the membership. */
+/** A member acts by role; an organization key may create and read, never answer or list. */
+export type Caller = Membership | OrganizationKey;
+
+const authorize = (allowedRoles: Access.AllowedRoles, caller: Caller) =>
+  Predicate.isTagged(caller, "OrganizationKey")
+    ? Effect.void
+    : Access.requireRole(allowedRoles, caller.role);
+
+/** Operations act inside the caller's organization; entrypoints resolve the caller. */
 export interface Interface {
   readonly create: (
-    membership: Membership,
+    caller: Caller,
     input: CreateInput,
   ) => Effect.Effect<
     PendingHumanTask,
@@ -46,7 +54,7 @@ export interface Interface {
     | HumanTaskStore.AlreadyCompleted
   >;
   readonly get: (
-    membership: Membership,
+    caller: Caller,
     taskId: HumanTaskId,
   ) => Effect.Effect<
     HumanTask,
@@ -71,10 +79,10 @@ export const layer = Layer.effect(
     const crypto = yield* Crypto.Crypto;
 
     const create = Effect.fn("HumanTasks.create")(function* (
-      membership: Membership,
+      caller: Caller,
       { subject, ...input }: CreateInput,
     ) {
-      yield* Access.requireRole(allowedRoles.create, membership.role);
+      yield* authorize(allowedRoles.create, caller);
 
       const id = yield* crypto.randomUUIDv4.pipe(
         Effect.flatMap(Schema.decodeEffect(HumanTaskId)),
@@ -86,7 +94,7 @@ export const layer = Layer.effect(
           ...input,
           subject,
           id,
-          organizationId: membership.organizationId,
+          organizationId: caller.organizationId,
           createdAt,
           status: "pending",
         }),
@@ -109,13 +117,10 @@ export const layer = Layer.effect(
       );
     });
 
-    const get = Effect.fn("HumanTasks.get")(function* (
-      membership: Membership,
-      taskId: HumanTaskId,
-    ) {
-      yield* Access.requireRole(allowedRoles.get, membership.role);
+    const get = Effect.fn("HumanTasks.get")(function* (caller: Caller, taskId: HumanTaskId) {
+      yield* authorize(allowedRoles.get, caller);
 
-      return yield* store.get({ organizationId: membership.organizationId, taskId });
+      return yield* store.get({ organizationId: caller.organizationId, taskId });
     });
 
     const list = Effect.fn("HumanTasks.list")(function* (membership: Membership) {

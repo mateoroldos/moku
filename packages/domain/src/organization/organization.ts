@@ -16,3 +16,14 @@ export const Membership = Schema.Struct({
   role: OrganizationRole,
 });
 export interface Membership extends Schema.Schema.Type<typeof Membership> {}
+
+export const ApiKeyId = Schema.NonEmptyString.pipe(Schema.brand("ApiKeyId"));
+export type ApiKeyId = typeof ApiKeyId.Type;
+
+/** An organization's API key, acting for the agent it is named after. */
+export const OrganizationKey = Schema.TaggedStruct("OrganizationKey", {
+  id: ApiKeyId,
+  organizationId: OrganizationId,
+  name: Schema.NonEmptyString,
+});
+export interface OrganizationKey extends Schema.Schema.Type<typeof OrganizationKey> {}

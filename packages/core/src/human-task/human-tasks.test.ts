@@ -1,7 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import { HumanTaskId, HumanTaskTitle, PendingHumanTask } from "@moku/domain/human-task";
 import { UserId } from "@moku/domain/identity";
-import { Membership, OrganizationId, type OrganizationRole } from "@moku/domain/organization";
+import {
+  ApiKeyId,
+  Membership,
+  OrganizationId,
+  OrganizationKey,
+  type OrganizationRole,
+} from "@moku/domain/organization";
 import { DateTime, Effect, Layer, PlatformError } from "effect";
 import { TestClock } from "effect/testing";
 import { CryptoDeterministic } from "../test/crypto-deterministic.ts";
@@ -118,6 +124,25 @@ it.effect("scopes every operation to the membership's organization", () =>
     assert.deepStrictEqual(yield* humanTasks.list(outsider), []);
     assert.strictEqual((yield* humanTasks.create(outsider, input)).organizationId, "other");
     assert.deepStrictEqual(yield* store.list(organizationId), [pending]);
+  }).pipe(Effect.provide(testLayer)),
+);
+
+it.effect("lets an organization key create and read tasks in its own organization only", () =>
+  Effect.gen(function* () {
+    const humanTasks = yield* HumanTasks.Service;
+    const key = (organization: OrganizationId) =>
+      OrganizationKey.make({
+        id: ApiKeyId.make("key"),
+        organizationId: organization,
+        name: "Agent",
+      });
+    const task = yield* humanTasks.create(key(organizationId), input);
+    assert.strictEqual(task.organizationId, organizationId);
+    assert.deepStrictEqual(yield* humanTasks.get(key(organizationId), task.id), task);
+    assert.strictEqual(
+      (yield* Effect.flip(humanTasks.get(key(OrganizationId.make("other")), task.id)))._tag,
+      "HumanTaskStore.NotFound",
+    );
   }).pipe(Effect.provide(testLayer)),
 );
 
