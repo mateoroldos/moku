@@ -1,5 +1,5 @@
 import type { Access } from "@moku/core/access";
-import type { OrganizationId } from "@moku/domain/organization";
+import type { OrganizationId, OrganizationKey } from "@moku/domain/organization";
 import { Context, type Effect, type Redacted, Schema } from "effect";
 
 export const CreateInput = Schema.Struct({
@@ -36,6 +36,18 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()(
 /** Better Auth lists at most 100 keys; a key past them couldn't be found to revoke. */
 export class KeyLimit extends Schema.TaggedError<KeyLimit>()("OrganizationApiKeys.KeyLimit", {}) {}
 
+/** The secret is unknown, revoked, or malformed. */
+export class InvalidKey extends Schema.TaggedError<InvalidKey>()(
+  "OrganizationApiKeys.InvalidKey",
+  {},
+) {}
+
+/** The key spent its requests for the current window. */
+export class RateLimited extends Schema.TaggedError<RateLimited>()(
+  "OrganizationApiKeys.RateLimited",
+  {},
+) {}
+
 /** Owners and admins manage keys; other members get `Access.Denied`, anyone else `Access.NotFound`. */
 export interface Interface {
   /** A key for the organization. */
@@ -54,6 +66,10 @@ export interface Interface {
     headers: Headers,
     keyId: string,
   ) => Effect.Effect<void, Access.NotFound | Access.Denied | Unavailable>;
+  /** The key a secret belongs to, counted against its rate limit. Needs no session. */
+  readonly verify: (
+    secret: Redacted.Redacted<string>,
+  ) => Effect.Effect<OrganizationKey, InvalidKey | RateLimited | Unavailable>;
 }
 
 export class Service extends Context.Service<Service, Interface>()(
