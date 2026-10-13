@@ -23,6 +23,11 @@ export const workspaces: ReadonlyArray<Workspace> = [
     directory: "adapters/database-postgres",
     dependencies: ["@moku/core", "@moku/domain"],
   },
+  {
+    name: "@moku/api",
+    directory: "packages/api",
+    dependencies: ["@moku/core", "@moku/domain"],
+  },
   { name: "@moku/ui", directory: "packages/ui", dependencies: [] },
   { name: "@moku/domain", directory: "packages/domain", dependencies: [] },
   { name: "@moku/core", directory: "packages/core", dependencies: ["@moku/domain"] },

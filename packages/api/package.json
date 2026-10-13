@@ -1,0 +1,17 @@
+{
+  "name": "@moku/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/moku-api.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moku/core": "workspace:*",
+    "@moku/domain": "workspace:*",
+    "effect": "catalog:"
+  }
+}

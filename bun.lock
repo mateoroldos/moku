@@ -94,6 +94,15 @@
         "vitest": "catalog:",
       },
     },
+    "packages/api": {
+      "name": "@moku/api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@moku/core": "workspace:*",
+        "@moku/domain": "workspace:*",
+        "effect": "catalog:",
+      },
+    },
     "packages/core": {
       "name": "@moku/core",
       "version": "0.0.0",
@@ -416,6 +425,8 @@
     "@keyv/bigmap": ["@keyv/bigmap@1.3.1", "", { "dependencies": { "hashery": "^1.4.0", "hookified": "^1.15.0" }, "peerDependencies": { "keyv": "^5.6.0" } }, "sha512-WbzE9sdmQtKy8vrNPa9BRnwZh5UF4s1KTmSK0KUVLo3eff5BlQNNWDnFOouNpKfPKDnms9xynJjsMYjMaT/aFQ=="],
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
+
+    "@moku/api": ["@moku/api@workspace:packages/api"],
 
     "@moku/core": ["@moku/core@workspace:packages/core"],
 
