@@ -59,7 +59,8 @@ export const apiKeyPlugin = () => {
     defaultPrefix: "moku_",
     // The prefix plus four characters identify a key in lists.
     startingCharactersConfig: { charactersLength: 9 },
-    rateLimit: { enabled: false },
+    // Stored on each key when it is created; keys made earlier keep their own limit.
+    rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
   });
 
   return {

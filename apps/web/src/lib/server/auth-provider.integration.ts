@@ -5,7 +5,7 @@ import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
 import { AuthStorage } from "@moku/database-postgres/auth-storage";
 import { UserId } from "@moku/domain/identity";
-import { OrganizationId } from "@moku/domain/organization";
+import { ApiKeyId, OrganizationId, OrganizationKey } from "@moku/domain/organization";
 import { PostgresConnection } from "@moku/database-postgres/postgres-connection";
 import { hashPassword } from "better-auth/crypto";
 import { Config, ConfigProvider, Effect, Layer, Logger, Redacted } from "effect";
@@ -836,6 +836,42 @@ it.live(
       yield* apiKeys.create(headers, own.id, { name: "Kept" });
       yield* organizations.delete(headers, own.id);
       assert.deepStrictEqual(yield* sql`SELECT id FROM apikey WHERE reference_id = ${own.id}`, []);
+    }).pipe(Effect.scoped, Effect.provide(postgres)),
+);
+
+it.live(
+  "verifies a key as its organization's, limits it per minute, and rejects it once revoked",
+  () =>
+    Effect.gen(function* () {
+      const { organizations, apiKeys, sql, headers } = yield* fixture("192.0.2.83");
+      const cleanup = sql`DELETE FROM organization WHERE name = 'auth-keys-verify'`;
+      yield* Effect.acquireRelease(cleanup, () => cleanup.pipe(Effect.orDie));
+      const own = yield* organizations.create(headers, { name: "auth-keys-verify" });
+      const { apiKey, secret } = yield* apiKeys.create(headers, own.id, { name: "Trading bot" });
+
+      assert.deepStrictEqual(
+        yield* apiKeys.verify(secret),
+        OrganizationKey.make({
+          id: ApiKeyId.make(apiKey.id),
+          organizationId: own.id,
+          name: "Trading bot",
+        }),
+      );
+      yield* Effect.forEach(Array.from({ length: 119 }), () => apiKeys.verify(secret), {
+        discard: true,
+      });
+      assert.deepStrictEqual(
+        yield* Effect.flip(apiKeys.verify(secret)),
+        new OrganizationApiKeys.RateLimited({}),
+      );
+
+      yield* apiKeys.revoke(headers, apiKey.id);
+      for (const rejected of [secret, Redacted.make("moku_unknown"), Redacted.make("")]) {
+        assert.deepStrictEqual(
+          yield* Effect.flip(apiKeys.verify(rejected)),
+          new OrganizationApiKeys.InvalidKey({}),
+        );
+      }
     }).pipe(Effect.scoped, Effect.provide(postgres)),
 );
 

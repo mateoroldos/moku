@@ -3,7 +3,12 @@ import { generateId } from "@better-auth/core/utils/id";
 import { Access } from "@moku/core/access";
 import { Email } from "@moku/core/email";
 import { Principal, UserId } from "@moku/domain/identity";
-import { Organization, OrganizationId, OrganizationRole } from "@moku/domain/organization";
+import {
+  Organization,
+  OrganizationId,
+  OrganizationKey,
+  OrganizationRole,
+} from "@moku/domain/organization";
 import { APIError, isAPIError } from "better-auth/api";
 import { betterAuth } from "better-auth/minimal";
 import { Clock, Config, Context, Effect, Layer, Order, Redacted, Result, Schema } from "effect";
@@ -68,6 +73,18 @@ const ProviderApiKey = Schema.Struct({
 const ProviderCreatedApiKey = Schema.Struct({ ...ProviderApiKey.fields, key: Schema.String });
 
 const ProviderApiKeys = Schema.Struct({ apiKeys: Schema.Array(ProviderApiKey) });
+
+const ProviderVerification = Schema.Union([
+  Schema.Struct({
+    valid: Schema.Literal(true),
+    key: Schema.Struct({
+      id: OrganizationKey.fields.id,
+      name: OrganizationKey.fields.name,
+      referenceId: OrganizationId,
+    }),
+  }),
+  Schema.Struct({ valid: Schema.Literal(false), error: Schema.Struct({ code: Schema.String }) }),
+]);
 
 const apiKeyFrom = ({
   lastRequest,
@@ -626,6 +643,29 @@ export const layer = Layer.effectContext(
       });
     });
 
+    const verifyApiKey = Effect.fn("OrganizationApiKeys.verify")(function* (
+      secret: Redacted.Redacted<string>,
+    ) {
+      const result: unknown = yield* Effect.tryPromise({
+        try: () => auth.api.verifyApiKey({ body: { key: Redacted.value(secret) } }),
+        // Better Auth rejects a malformed key before looking it up.
+        catch: (cause) =>
+          isAPIError(cause) && cause.statusCode < 500
+            ? new OrganizationApiKeys.InvalidKey({})
+            : apiKeysUnavailable(cause),
+      });
+      const verification = yield* Schema.decodeUnknownEffect(ProviderVerification)(result).pipe(
+        Effect.mapError(apiKeysUnavailable),
+      );
+
+      if (!verification.valid)
+        return yield* verification.error.code === "RATE_LIMITED"
+          ? new OrganizationApiKeys.RateLimited({})
+          : new OrganizationApiKeys.InvalidKey({});
+      const { id, name, referenceId } = verification.key;
+      return OrganizationKey.make({ id, name, organizationId: referenceId });
+    });
+
     return Context.make(Service, { signup, authenticate, handle }).pipe(
       Context.add(Organizations.Service, {
         role,
@@ -645,6 +685,7 @@ export const layer = Layer.effectContext(
         create: createApiKey,
         list: listApiKeys,
         revoke: revokeApiKey,
+        verify: verifyApiKey,
       }),
     );
   }),
