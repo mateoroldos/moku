@@ -4,8 +4,15 @@ import {
   type HumanTaskId,
   type PendingHumanTask,
 } from "@moku/domain/human-task";
-import { Effect, Layer, Ref } from "effect";
+import { Array, DateTime, Effect, Layer, Order, Ref } from "effect";
 import { HumanTaskStore } from "./human-task-store.ts";
+
+const newestFirst = Order.flip(
+  Order.combine(
+    Order.mapInput(DateTime.Order, (task: HumanTask) => task.createdAt),
+    Order.mapInput(Order.String, (task: HumanTask) => task.id),
+  ),
+);
 
 /** Test persistence with atomic writes and fresh state per layer build. */
 export const layer = Layer.effect(
@@ -69,7 +76,10 @@ export const layer = Layer.effect(
       list: (organizationId) =>
         Ref.get(state).pipe(
           Effect.map((tasks) =>
-            [...tasks.values()].filter((task) => task.organizationId === organizationId),
+            Array.sort(
+              [...tasks.values()].filter((task) => task.organizationId === organizationId),
+              newestFirst,
+            ),
           ),
         ),
     });

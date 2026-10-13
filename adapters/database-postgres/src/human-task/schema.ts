@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { organization } from "../auth/schema.ts";
 
 export const humanTasks = pgTable(
@@ -27,6 +27,7 @@ export const humanTasks = pgTable(
     completedAt: timestamp("completed_at", { mode: "string", withTimezone: true, precision: 3 }),
   },
   (table) => [
+    index("human_tasks_organization_id_created_at_idx").on(table.organizationId, table.createdAt),
     check(
       "human_tasks_lifecycle",
       sql`(

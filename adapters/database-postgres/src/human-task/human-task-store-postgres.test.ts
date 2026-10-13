@@ -36,6 +36,12 @@ it.effect(
 );
 
 it.effect(
+  "lists an organization's tasks newest first",
+  () => HumanTaskStoreContract.ordering.pipe(Effect.provide(PersistencePglite.layer)),
+  { timeout: 15000 },
+);
+
+it.effect(
   "omits absent optional fields when decoding stored tasks",
   () =>
     Effect.gen(function* () {
