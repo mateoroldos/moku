@@ -24,6 +24,7 @@
     "@better-auth/api-key": "1.7.4",
     "@effect/platform-node": "catalog:",
     "@effect/sql-pg": "catalog:",
+    "@moku/api": "workspace:*",
     "@moku/core": "workspace:*",
     "@moku/database-postgres": "workspace:*",
     "@moku/domain": "workspace:*",

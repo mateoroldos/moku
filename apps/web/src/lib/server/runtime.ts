@@ -9,6 +9,7 @@ import { Observability } from "./observability.ts";
 import { RequestRunner } from "./request-runner.ts";
 import { AuthProvider } from "./auth-provider.ts";
 import { EmailConsole } from "./email-console.ts";
+import { HttpApi } from "./http-api.ts";
 
 const email = Layer.unwrap(
   Effect.gen(function* () {
@@ -42,7 +43,8 @@ const application = HumanTasks.layer.pipe(
 );
 
 export const layer = (url: Redacted.Redacted) =>
-  application.pipe(
+  HttpApi.layer.pipe(
+    Layer.provideMerge(application),
     Layer.provideMerge(AuthProvider.layer),
     Layer.provide(email),
     Layer.provide(postgres(url)),
